@@ -54,3 +54,12 @@ val MimeType.isMedia: Boolean
 
 val MimeType.isPdf: Boolean
     get() = this == MimeType.PDF
+
+val MimeType.isSqlite: Boolean
+    get() = this in sqliteMimeTypes
+
+private val sqliteMimeTypes = mutableListOf(
+    "application/vnd.sqlite3",
+    "application/x-sqlite3",
+    "application/geopackage+sqlite3"
+).map { it.asMimeType() }.toSet()

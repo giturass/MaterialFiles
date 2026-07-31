@@ -6,7 +6,6 @@
 package me.zhanghai.android.files.viewer.text
 
 import android.content.Context
-import android.os.Parcelable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import java8.nio.file.Path
@@ -38,6 +37,10 @@ import java.nio.charset.StandardCharsets
 class TextEditorViewModel(file: Path) : ViewModel() {
     private val _file = MutableStateFlow(file)
     val file = _file.asStateFlow()
+
+    // Keep a manual language choice while the fragment's view is recreated (rotation, split
+    // screen, or returning from another activity).
+    var languageId: String = TextEditorLanguage.detect(file.fileName.toString()).id
 
     private val _bytesState = MutableStateFlow<DataState<ByteArray>>(DataState.Loading())
 
@@ -131,7 +134,9 @@ class TextEditorViewModel(file: Path) : ViewModel() {
 
     fun writeFile(path: Path, text: String, context: Context) {
         viewModelScope.launch {
-            check(_writeFileState.value.isReady)
+            if (!_writeFileState.value.isReady) {
+                return@launch
+            }
             val argument = path to text
             _writeFileState.value = ActionState.Running(argument)
             val bytes = withContext(Dispatchers.Default) {
@@ -161,17 +166,27 @@ class TextEditorViewModel(file: Path) : ViewModel() {
         }
     }
 
-    private var editTextSavedState: Parcelable? = null
+    private var editorState: EditorState? = null
 
-    fun setEditTextSavedState(editTextSavedState: Parcelable?) {
-        this.editTextSavedState = editTextSavedState
+    fun setEditorState(editorState: EditorState) {
+        this.editorState = editorState
     }
 
-    fun removeEditTextSavedState(): Parcelable? {
-        val savedState = editTextSavedState
-        editTextSavedState = null
+    fun removeEditorState(): EditorState? {
+        val savedState = editorState
+        editorState = null
         return savedState
     }
+
+    data class EditorState(
+        val text: String,
+        val leftLine: Int,
+        val leftColumn: Int,
+        val rightLine: Int,
+        val rightColumn: Int,
+        val offsetX: Int,
+        val offsetY: Int
+    )
 
     companion object {
         private const val MAX_FILE_SIZE = 1024 * 1024.toLong()

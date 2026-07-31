@@ -24,7 +24,7 @@
             android:layout_height="wrap_content"
             app:layout_scrollFlags="@integer/file_list_toolbar_scroll_flags">
 
-            <me.zhanghai.android.files.ui.CrossfadeSubtitleToolbar
+            <androidx.appcompat.widget.Toolbar
                 android:id="@+id/toolbar"
                 android:layout_width="match_parent"
                 android:layout_height="?actionBarSize"
@@ -32,8 +32,7 @@
                 android:paddingEnd="@dimen/file_list_toolbar_padding_end_with_overflow"
                 app:navigationIcon="@drawable/menu_icon_control_normal_24dp"
                 app:navigationContentDescription="@string/open_navigation_drawer"
-                app:popupTheme="?actionBarPopupTheme"
-                app:subtitleTextAppearance="@style/TextAppearance.AppCompat.Widget.ActionBar.Subtitle.Small" />
+                app:popupTheme="?actionBarPopupTheme" />
 
             <me.zhanghai.android.files.ui.OverlayToolbar
                 android:id="@+id/overlayToolbar"
@@ -51,7 +50,7 @@
             android:id="@+id/breadcrumbLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingStart="@dimen/content_start_margin_minus_12dp"
+            android:paddingStart="@dimen/file_list_toolbar_padding_start"
             android:paddingEnd="@dimen/screen_edge_margin_minus_12dp" />
     </me.zhanghai.android.files.ui.CoordinatorAppBarLayout>
 </merge>

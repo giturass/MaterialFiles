@@ -12,6 +12,7 @@ import java8.nio.file.Paths
 import me.zhanghai.android.files.R
 import me.zhanghai.android.files.app.application
 import me.zhanghai.android.files.compat.EnvironmentCompat2
+import me.zhanghai.android.files.filelist.CreateArchiveType
 import me.zhanghai.android.files.filelist.FileSortOptions
 import me.zhanghai.android.files.filelist.FileViewType
 import me.zhanghai.android.files.filelist.OpenApkDefaultAction
@@ -21,7 +22,6 @@ import me.zhanghai.android.files.provider.root.RootStrategy
 import me.zhanghai.android.files.storage.FileSystemRoot
 import me.zhanghai.android.files.storage.PrimaryStorageVolume
 import me.zhanghai.android.files.storage.Storage
-import me.zhanghai.android.files.theme.custom.ThemeColor
 import me.zhanghai.android.files.theme.night.NightMode
 import java.io.File
 
@@ -51,6 +51,12 @@ object Settings {
             R.bool.pref_default_value_file_list_show_hidden_files
         )
 
+    val FILE_LIST_SHOW_FOLDER_APP_ICONS: SettingLiveData<Boolean> =
+        BooleanSettingLiveData(
+            R.string.pref_key_file_list_show_folder_app_icons,
+            R.bool.pref_default_value_file_list_show_folder_app_icons
+        )
+
     val FILE_LIST_VIEW_TYPE: SettingLiveData<FileViewType> =
         EnumSettingLiveData(
             R.string.pref_key_file_list_view_type, R.string.pref_default_value_file_list_view_type,
@@ -63,8 +69,11 @@ object Settings {
             FileSortOptions(FileSortOptions.By.NAME, FileSortOptions.Order.ASCENDING, true)
         )
 
-    val CREATE_ARCHIVE_TYPE: SettingLiveData<Int> =
-        ResourceIdSettingLiveData(R.string.pref_key_create_archive_type, R.id.zipRadio)
+    val CREATE_ARCHIVE_TYPE: SettingLiveData<CreateArchiveType> =
+        EnumSettingLiveData(
+            R.string.pref_key_create_archive_type,
+            R.string.pref_default_value_create_archive_type, CreateArchiveType::class.java
+        )
 
     val FTP_SERVER_ANONYMOUS_LOGIN: SettingLiveData<Boolean> =
         BooleanSettingLiveData(
@@ -97,17 +106,6 @@ object Settings {
     val FTP_SERVER_WRITABLE: SettingLiveData<Boolean> =
         BooleanSettingLiveData(
             R.string.pref_key_ftp_server_writable, R.bool.pref_default_value_ftp_server_writable
-        )
-
-    val THEME_COLOR: SettingLiveData<ThemeColor> =
-        EnumSettingLiveData(
-            R.string.pref_key_theme_color, R.string.pref_default_value_theme_color,
-            ThemeColor::class.java
-        )
-
-    val MATERIAL_DESIGN_3: SettingLiveData<Boolean> =
-        BooleanSettingLiveData(
-            R.string.pref_key_material_design_3, R.bool.pref_default_value_material_design_3
         )
 
     val NIGHT_MODE: SettingLiveData<NightMode> =
@@ -158,6 +156,41 @@ object Settings {
             RootStrategy::class.java
         )
 
+    val SHIZUKU_ENABLED: SettingLiveData<Boolean> =
+        BooleanSettingLiveData(
+            R.string.pref_key_shizuku_enabled, R.bool.pref_default_value_shizuku_enabled
+        )
+
+    val TEXT_EDITOR_FONT_SIZE: SettingLiveData<Int> =
+        IntegerSettingLiveData(
+            R.string.pref_key_text_editor_font_size,
+            R.integer.pref_default_value_text_editor_font_size
+        )
+
+    val TEXT_EDITOR_WORD_WRAP: SettingLiveData<Boolean> =
+        BooleanSettingLiveData(
+            R.string.pref_key_text_editor_word_wrap,
+            R.bool.pref_default_value_text_editor_word_wrap
+        )
+
+    val TEXT_EDITOR_LINE_NUMBERS: SettingLiveData<Boolean> =
+        BooleanSettingLiveData(
+            R.string.pref_key_text_editor_line_numbers,
+            R.bool.pref_default_value_text_editor_line_numbers
+        )
+
+    val MEDIA_PLAYER_BACKGROUND_PLAYBACK: SettingLiveData<Boolean> =
+        BooleanSettingLiveData(
+            R.string.pref_key_media_player_background_playback,
+            R.bool.pref_default_value_media_player_background_playback
+        )
+
+    val MEDIA_PLAYER_HARDWARE_DECODING: SettingLiveData<Boolean> =
+        BooleanSettingLiveData(
+            R.string.pref_key_media_player_hardware_decoding,
+            R.bool.pref_default_value_media_player_hardware_decoding
+        )
+
     val ARCHIVE_FILE_NAME_ENCODING: SettingLiveData<String> =
         StringSettingLiveData(
             R.string.pref_key_archive_file_name_encoding,
@@ -181,4 +214,24 @@ object Settings {
             R.string.pref_key_read_remote_files_for_thumbnail,
             R.bool.pref_default_value_read_remote_files_for_thumbnail
         )
+
+    // Only the keystore location and alias are remembered; passwords are never written to disk.
+    val SIGN_APK_KEY_STORE: SettingLiveData<String> =
+        StringSettingLiveData(
+            R.string.pref_key_sign_apk_key_store, R.string.pref_default_value_empty
+        )
+
+    val SIGN_APK_KEY_ALIAS: SettingLiveData<String> =
+        StringSettingLiveData(
+            R.string.pref_key_sign_apk_key_alias, R.string.pref_default_value_empty
+        )
+
+    val SIGN_APK_V1: SettingLiveData<Boolean> =
+        BooleanSettingLiveData(R.string.pref_key_sign_apk_v1, R.bool.pref_default_value_sign_apk_v1)
+
+    val SIGN_APK_V2: SettingLiveData<Boolean> =
+        BooleanSettingLiveData(R.string.pref_key_sign_apk_v2, R.bool.pref_default_value_sign_apk_v2)
+
+    val SIGN_APK_V3: SettingLiveData<Boolean> =
+        BooleanSettingLiveData(R.string.pref_key_sign_apk_v3, R.bool.pref_default_value_sign_apk_v3)
 }

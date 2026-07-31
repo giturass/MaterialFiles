@@ -58,7 +58,7 @@
                 android:id="@+id/recyclerView"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:paddingBottom="@dimen/list_bottom_padding_with_fab"
+                android:paddingBottom="@dimen/list_vertical_padding"
                 android:clipToPadding="false"
                 android:fitsSystemWindows="true"
                 tools:listitem="@layout/file_item_list" />

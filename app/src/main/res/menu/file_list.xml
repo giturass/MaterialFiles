@@ -74,16 +74,21 @@
         app:showAsAction="never" />
 
     <item
-        android:id="@+id/action_navigate_up"
+        android:id="@+id/action_create_file"
         android:orderInCategory="100"
-        android:title="@string/file_list_action_navigate_up"
+        android:title="@string/file_list_action_create_file"
         app:showAsAction="never" />
 
     <item
-        android:id="@+id/action_navigate_to"
-        android:alphabeticShortcut="l"
+        android:id="@+id/action_create_directory"
         android:orderInCategory="100"
-        android:title="@string/file_list_action_navigate_to"
+        android:title="@string/file_list_action_create_directory"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_create_database"
+        android:orderInCategory="100"
+        android:title="@string/file_list_action_create_database"
         app:showAsAction="never" />
 
     <item

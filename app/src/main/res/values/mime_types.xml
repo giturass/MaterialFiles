@@ -14,6 +14,7 @@
     <string name="file_type_name_certificate">%1$s certificate</string>
     <string name="file_type_name_code">%1$s document</string>
     <string name="file_type_name_contact">Electronic business card</string>
+    <string name="file_type_name_database">%1$s database</string>
     <string name="file_type_name_directory">Folder</string>
     <string name="file_type_name_document">%1$s document</string>
     <string name="file_type_name_ebook">%1$s e-book</string>

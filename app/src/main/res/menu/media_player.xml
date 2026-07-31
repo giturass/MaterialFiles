@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  ~ Copyright (c) 2026 Hai Zhang <dreaming.in.code.zh@gmail.com>
+  ~ All Rights Reserved.
+  -->
+
+<menu
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/action_background_playback"
+        android:checkable="true"
+        android:orderInCategory="10"
+        android:title="@string/media_player_background_playback"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_playback_speed"
+        android:orderInCategory="30"
+        android:title="@string/media_player_playback_speed"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_video_scale"
+        android:orderInCategory="40"
+        android:title="@string/media_player_video_scale"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_audio_track"
+        android:orderInCategory="50"
+        android:title="@string/media_player_audio_track"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_subtitle_track"
+        android:orderInCategory="60"
+        android:title="@string/media_player_subtitle_track"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_hardware_decoding"
+        android:checkable="true"
+        android:orderInCategory="70"
+        android:title="@string/media_player_hardware_decoding"
+        app:showAsAction="never" />
+</menu>

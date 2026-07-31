@@ -34,6 +34,7 @@ private fun MimeTypeIcon.getNameRes(mimeType: MimeType, hasExtension: Boolean): 
         MimeTypeIcon.CERTIFICATE -> R.string.file_type_name_certificate
         MimeTypeIcon.CODE -> R.string.file_type_name_code
         MimeTypeIcon.CONTACT -> R.string.file_type_name_contact
+        MimeTypeIcon.DATABASE -> R.string.file_type_name_database
         MimeTypeIcon.DIRECTORY -> R.string.file_type_name_directory
         MimeTypeIcon.DOCUMENT -> R.string.file_type_name_document
         MimeTypeIcon.EBOOK -> R.string.file_type_name_ebook

@@ -50,7 +50,13 @@ abstract class NameDialogFragment : AppCompatDialogFragment() {
             .setNegativeButton(android.R.string.cancel, null)
             .create()
             .apply {
-                window!!.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
+                window!!.setSoftInputMode(
+                    if (isSoftInputVisibleOnCreate) {
+                        WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
+                    } else {
+                        WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN
+                    }
+                )
                 // Override the listener here so that we have control over when to close the dialog.
                 setOnShowListener {
                     getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { onOk() }
@@ -61,6 +67,14 @@ abstract class NameDialogFragment : AppCompatDialogFragment() {
     protected abstract val titleRes: Int
 
     protected open val initialName: String? = null
+
+    /**
+     * Whether the soft input should be shown as soon as the dialog opens.
+     *
+     * Dialogs with controls besides the name field should opt out of this, because the soft input
+     * takes up enough of the screen to push those controls out of view.
+     */
+    protected open val isSoftInputVisibleOnCreate: Boolean = true
 
     protected open fun onInflateBinding(inflater: LayoutInflater): Binding =
         Binding.inflate(inflater)

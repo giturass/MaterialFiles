@@ -7,14 +7,6 @@
 
 <resources xmlns:tools="http://schemas.android.com/tools">
 
-    <style name="Preference.MaterialFiles.SwitchPreferenceCompat" parent="Preference.SwitchPreferenceCompat.Material">
-        <item name="android:widgetLayout">@layout/switch_preference_compat_widget</item>
-    </style>
-
-    <style name="ShapeAppearance.MaterialFiles.MediumComponent" parent="ShapeAppearance.MaterialComponents.MediumComponent">
-        <item name="cornerSize">8dp</item>
-    </style>
-
     <style name="TextAppearance.AppCompat.Widget.ActionBar.Subtitle.Small">
         <item name="android:textSize" tools:ignore="SpUsage">12dp</item>
     </style>
@@ -29,32 +21,9 @@
         <item name="android:clipToPadding">false</item>
     </style>
 
-    <style name="Widget.MaterialFiles.NavigationView" parent="Widget.MaterialComponents.NavigationView">
-        <item name="itemHorizontalPadding">@dimen/navigation_item_horizontal_padding</item>
-        <item name="itemVerticalPadding" tools:ignore="PrivateResource">@dimen/design_navigation_item_vertical_padding</item>
-        <item name="itemShapeAppearanceOverlay">@style/ShapeAppearanceOverlay.MaterialFiles.NavigationView.Item</item>
-        <item name="itemShapeInsetStart">0dp</item>
-        <item name="itemShapeInsetEnd">8dp</item>
-        <item name="itemShapeInsetTop">0dp</item>
-        <item name="itemShapeInsetBottom">0dp</item>
-        <item name="itemIconTint">@color/navigation_item_subtitle_text_color</item>
-        <item name="itemIconPadding">@dimen/navigation_item_icon_padding</item>
-        <item name="itemSubtitleTextAppearance">?textAppearanceBody2</item>
-        <item name="itemSubtitleTextColor">@color/navigation_item_subtitle_text_color</item>
-        <item name="itemSubtitleTextSize">10sp</item>
-        <item name="dividerVerticalPadding">@dimen/design_navigation_separator_vertical_padding</item>
-    </style>
-    <style name="ShapeAppearanceOverlay.MaterialFiles.NavigationView.Item" parent="">
-        <item name="cornerSize">50%</item>
-        <item name="cornerSizeTopLeft">0dp</item>
-        <item name="cornerSizeBottomLeft">0dp</item>
-    </style>
-
-    <style name="Widget.MaterialFiles.CardView" parent="Widget.MaterialComponents.CardView">
+    <style name="Widget.MaterialFiles.CardView" parent="Widget.Material3.CardView.Outlined">
         <item name="android:stateListAnimator">@null</item>
         <item name="cardElevation">0dp</item>
-        <item name="strokeColor">@color/mtrl_btn_stroke_color_selector</item>
-        <item name="strokeWidth">@dimen/mtrl_btn_stroke_size</item>
     </style>
 
     <!-- See also ThemeOverlay.AppCompat.ActionBar . -->

@@ -1,0 +1,387 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  ~ Copyright (c) 2026 Hai Zhang <dreaming.in.code.zh@gmail.com>
+  ~ All Rights Reserved.
+  -->
+
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black">
+
+    <FrameLayout
+        android:id="@+id/mediaContent"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clickable="true"
+        android:focusable="true">
+
+        <!-- Artwork blown up behind an audio track, blurred and dimmed so that it reads as a
+             backdrop rather than a second copy of the cover. -->
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/audioBackdrop"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:importantForAccessibility="no"
+            android:scaleType="centerCrop"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
+        <View
+            android:id="@+id/audioBackdropScrim"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/dark_70_percent"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
+        <me.zhanghai.android.files.viewer.media.MediaVideoLayout
+            android:id="@+id/videoLayout"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <LinearLayout
+            android:id="@+id/audioPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:paddingStart="32dp"
+            android:paddingTop="24dp"
+            android:paddingEnd="32dp"
+            android:paddingBottom="72dp"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/audioCoverCard"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
+                app:cardElevation="16dp"
+                app:shapeAppearanceOverlay="@style/ShapeAppearance.MaterialFiles.MediaPlayerAudioCover"
+                app:strokeWidth="0dp">
+
+                <!-- The record turns as one piece: grooves, label and artwork together. Rasterised
+                     into a layer so that spinning it does not redraw the grooves every frame. -->
+                <FrameLayout
+                    android:id="@+id/audioDisc"
+                    android:layout_width="@dimen/media_player_audio_cover_size"
+                    android:layout_height="@dimen/media_player_audio_cover_size"
+                    android:background="@drawable/media_player_vinyl_disc"
+                    android:layerType="hardware">
+
+                    <!-- As wide as the label circle and cut to the same circle, so the artwork is
+                         the record's label rather than a stamp in the middle of it. -->
+                    <com.google.android.material.imageview.ShapeableImageView
+                        android:id="@+id/audioCover"
+                        android:layout_width="@dimen/media_player_audio_cover_art_size"
+                        android:layout_height="@dimen/media_player_audio_cover_art_size"
+                        android:layout_gravity="center"
+                        android:contentDescription="@string/media_player_audio_cover"
+                        android:scaleType="centerCrop"
+                        app:shapeAppearanceOverlay="@style/ShapeAppearance.MaterialFiles.MediaPlayerAudioCoverArt" />
+                </FrameLayout>
+
+                <!-- Stays put while the disc turns, so the sheen and the spindle hole read as part
+                     of the player rather than as part of the record. -->
+                <View
+                    android:id="@+id/audioCoverOverlay"
+                    android:layout_width="@dimen/media_player_audio_cover_size"
+                    android:layout_height="@dimen/media_player_audio_cover_size"
+                    android:background="@drawable/media_player_vinyl_overlay"
+                    android:importantForAccessibility="no" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <TextView
+                android:id="@+id/audioTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="28dp"
+                android:ellipsize="end"
+                android:gravity="center_horizontal"
+                android:maxLines="2"
+                android:textAppearance="?textAppearanceTitleLarge"
+                android:textColor="?attr/colorOnSurface"
+                tools:text="Track title" />
+
+            <TextView
+                android:id="@+id/audioSubtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:ellipsize="end"
+                android:gravity="center_horizontal"
+                android:maxLines="1"
+                android:textAppearance="?textAppearanceBodyMedium"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                tools:text="Artist • Album" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:id="@+id/lyricsPanel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clickable="true"
+            android:focusable="true"
+            android:visibility="gone">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/lyricsList"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:paddingTop="96dp"
+                android:paddingBottom="176dp"
+                android:scrollbars="none" />
+
+            <TextView
+                android:id="@+id/lyricsEmptyText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:text="@string/media_player_no_lyrics"
+                android:textAppearance="?textAppearanceBodyLarge"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:visibility="gone" />
+        </FrameLayout>
+
+        <com.google.android.material.progressindicator.CircularProgressIndicator
+            android:id="@+id/progress"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:indeterminate="true"
+            android:visibility="gone"
+            app:indicatorSize="48dp"
+            app:trackThickness="4dp" />
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/errorPanel"
+            style="@style/Widget.Material3.CardView.Filled"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_margin="24dp"
+            android:visibility="gone"
+            app:cardElevation="0dp"
+            tools:visibility="visible">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="24dp">
+
+                <androidx.appcompat.widget.AppCompatImageView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/media_player_error_icon_white_48dp"
+                    app:tint="?colorError" />
+
+                <TextView
+                    android:id="@+id/errorText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:gravity="center"
+                    android:maxWidth="280dp"
+                    android:text="@string/media_player_error"
+                    android:textAppearance="?textAppearanceBodyMedium"
+                    android:textColor="?colorOnSurface" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/retryButton"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:text="@string/media_player_retry" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+    </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/appBarLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:background="@drawable/media_player_top_scrim">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?actionBarSize"
+            android:theme="?actionBarTheme"
+            app:popupTheme="?actionBarPopupTheme" />
+    </FrameLayout>
+
+    <LinearLayout
+        android:id="@+id/controlsContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="@drawable/media_player_controls_background"
+        android:clickable="true"
+        android:focusable="true"
+        android:orientation="vertical"
+        android:paddingStart="8dp"
+        android:paddingTop="48dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="8dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/currentTimeText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:fontFeatureSettings="tnum"
+                android:minWidth="44dp"
+                android:gravity="center"
+                android:textAppearance="?textAppearanceLabelMedium"
+                android:textColor="?attr/colorOnSurface"
+                tools:text="0:00" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/seekBar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:contentDescription="@string/media_player_seek"
+                android:value="0"
+                android:valueFrom="0"
+                android:valueTo="1000"
+                app:labelBehavior="floating"
+                app:thumbHeight="20dp"
+                app:thumbTrackGapSize="4dp"
+                app:thumbWidth="4dp"
+                app:tickVisible="false"
+                app:trackCornerSize="3dp"
+                app:trackHeight="6dp"
+                app:trackInsideCornerSize="2dp"
+                app:trackStopIndicatorSize="0dp" />
+
+            <TextView
+                android:id="@+id/durationText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:fontFeatureSettings="tnum"
+                android:minWidth="44dp"
+                android:gravity="center"
+                android:textAppearance="?textAppearanceLabelMedium"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                tools:text="0:00" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <FrameLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/repeatButton"
+                    style="@style/Widget.Material3.Button.IconButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_gravity="start|center_vertical"
+                    android:contentDescription="@string/media_player_repeat"
+                    app:icon="@drawable/media_repeat_one_icon_white_24dp"
+                    app:iconSize="24dp"
+                    app:iconTint="@color/media_player_control_icon_tint" />
+            </FrameLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/previousButton"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:contentDescription="@string/media_player_previous"
+                android:visibility="gone"
+                app:icon="@drawable/media_skip_previous_icon_white_24dp"
+                app:iconSize="28dp"
+                app:iconTint="@color/media_player_control_icon_tint"
+                tools:visibility="visible" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/rewindButton"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:contentDescription="@string/media_player_rewind_10"
+                app:icon="@drawable/media_replay_10_icon_white_24dp"
+                app:iconSize="28dp"
+                app:iconTint="@color/media_player_control_icon_tint" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/playPauseButton"
+                style="@style/Widget.Material3.Button.IconButton.Filled"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:layout_marginStart="12dp"
+                android:layout_marginEnd="12dp"
+                android:contentDescription="@string/media_player_play"
+                app:icon="@drawable/media_play_icon_white_24dp"
+                app:iconSize="32dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/forwardButton"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:contentDescription="@string/media_player_forward_10"
+                app:icon="@drawable/media_forward_10_icon_white_24dp"
+                app:iconSize="28dp"
+                app:iconTint="@color/media_player_control_icon_tint" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/nextButton"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:contentDescription="@string/media_player_next"
+                android:visibility="gone"
+                app:icon="@drawable/media_skip_next_icon_white_24dp"
+                app:iconSize="28dp"
+                app:iconTint="@color/media_player_control_icon_tint"
+                tools:visibility="visible" />
+
+            <FrameLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/rotateButton"
+                    style="@style/Widget.Material3.Button.IconButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_gravity="end|center_vertical"
+                    android:contentDescription="@string/media_player_rotate_screen"
+                    app:icon="@drawable/media_screen_rotation_icon_white_24dp"
+                    app:iconSize="24dp"
+                    app:iconTint="@color/media_player_control_icon_tint" />
+            </FrameLayout>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

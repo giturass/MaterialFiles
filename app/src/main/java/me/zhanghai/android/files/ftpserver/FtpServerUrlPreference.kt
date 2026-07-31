@@ -27,7 +27,7 @@ class FtpServerUrlPreference : Preference {
     private val observer = Observer<Any> { updateUrl() }
     private val receiver = FtpServerUrl.createChangeReceiver(context) { updateUrl() }
 
-    private var url: String? = null
+    private var url: String = ""
 
     constructor(context: Context) : super(context)
 
@@ -69,7 +69,7 @@ class FtpServerUrlPreference : Preference {
 
     private fun updateUrl() {
         url = FtpServerUrl.getUrl()
-        summary = url ?: context.getString(R.string.ftp_server_url_summary_no_local_inet_address)
+        summary = url
     }
 
     override fun onBindViewHolder(holder: PreferenceViewHolder) {
@@ -81,7 +81,6 @@ class FtpServerUrlPreference : Preference {
                 view: View,
                 menuInfo: ContextMenuInfo?
             ) {
-                val url = url ?: return
                 menu.apply {
                     setHeaderTitle(url)
                     add(Menu.NONE, Menu.NONE, Menu.NONE, R.string.ftp_server_url_menu_copy_url)

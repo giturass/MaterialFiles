@@ -15,10 +15,13 @@
     <bool name="pref_default_value_file_list_persistent_drawer_open">true</bool>
     <string name="pref_key_file_list_show_hidden_files">key_file_list_show_hidden_files</string>
     <bool name="pref_default_value_file_list_show_hidden_files">false</bool>
+    <string name="pref_key_file_list_show_folder_app_icons">key_file_list_show_folder_app_icons</string>
+    <bool name="pref_default_value_file_list_show_folder_app_icons">true</bool>
     <string name="pref_key_file_list_view_type">key_file_list_view_type</string>
     <string name="pref_default_value_file_list_view_type">0</string>
     <string name="pref_key_file_list_sort_options">key_file_list_sort_options</string>
-    <string name="pref_key_create_archive_type">key_create_archive_type</string>
+    <string name="pref_key_create_archive_type">key_create_archive_type_2</string>
+    <string name="pref_default_value_create_archive_type">0</string>
 
     <string name="pref_key_ftp_server_state">key_ftp_server_state</string>
     <bool name="pref_visible_ftp_server_add_tile">false</bool>
@@ -68,6 +71,18 @@
         <item>1</item>
         <item>2</item>
     </string-array>
+    <string name="pref_key_shizuku_enabled">key_shizuku_enabled</string>
+    <bool name="pref_default_value_shizuku_enabled">false</bool>
+    <string name="pref_key_text_editor_font_size">key_text_editor_font_size</string>
+    <integer name="pref_default_value_text_editor_font_size">16</integer>
+    <string name="pref_key_text_editor_word_wrap">key_text_editor_word_wrap</string>
+    <bool name="pref_default_value_text_editor_word_wrap">false</bool>
+    <string name="pref_key_text_editor_line_numbers">key_text_editor_line_numbers</string>
+    <bool name="pref_default_value_text_editor_line_numbers">true</bool>
+    <string name="pref_key_media_player_background_playback">key_media_player_background_playback</string>
+    <bool name="pref_default_value_media_player_background_playback">true</bool>
+    <string name="pref_key_media_player_hardware_decoding">key_media_player_hardware_decoding</string>
+    <bool name="pref_default_value_media_player_hardware_decoding">true</bool>
     <string name="pref_key_archive_file_name_encoding">key_archive_file_name_encoding</string>
     <string name="pref_default_value_archive_file_name_encoding">UTF-8</string>
     <string name="pref_key_open_apk_default_action">key_open_apk_default_action</string>
@@ -82,4 +97,12 @@
     <bool name="pref_visible_show_pdf_thumbnail_pre_28">true</bool>
     <string name="pref_key_read_remote_files_for_thumbnail">key_read_remote_files_for_thumbnail</string>
     <bool name="pref_default_value_read_remote_files_for_thumbnail">true</bool>
+    <string name="pref_key_sign_apk_key_store">key_sign_apk_key_store</string>
+    <string name="pref_key_sign_apk_key_alias">key_sign_apk_key_alias</string>
+    <string name="pref_key_sign_apk_v1">key_sign_apk_v1</string>
+    <bool name="pref_default_value_sign_apk_v1">true</bool>
+    <string name="pref_key_sign_apk_v2">key_sign_apk_v2</string>
+    <bool name="pref_default_value_sign_apk_v2">true</bool>
+    <string name="pref_key_sign_apk_v3">key_sign_apk_v3</string>
+    <bool name="pref_default_value_sign_apk_v3">true</bool>
 </resources>

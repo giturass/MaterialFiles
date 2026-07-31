@@ -8,6 +8,8 @@ package me.zhanghai.android.files.provider.remote
 import me.zhanghai.android.files.provider.FileSystemProviders
 
 open class RemoteFileServiceInterface : IRemoteFileService.Stub() {
+    open override fun destroy() = Unit
+
     override fun getRemoteFileSystemProviderInterface(scheme: String): IRemoteFileSystemProvider =
         RemoteFileSystemProviderInterface(FileSystemProviders[scheme])
 

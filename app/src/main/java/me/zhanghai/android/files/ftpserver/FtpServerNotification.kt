@@ -46,7 +46,6 @@ class FtpServerNotification(private val service: Service) {
 
     private fun doStartForeground() {
         val contextText = FtpServerUrl.getUrl()
-            ?: service.getString(R.string.ftp_server_notification_text_no_local_inet_address)
         val contentIntent = FtpServerActivity::class.createIntent()
         var pendingIntentFlags = PendingIntent.FLAG_UPDATE_CURRENT
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {

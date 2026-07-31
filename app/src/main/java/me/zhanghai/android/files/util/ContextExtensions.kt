@@ -211,10 +211,6 @@ val Context.hasW960Dp: Boolean
 val Context.isLightTheme: Boolean
     get() = getBooleanByAttr(androidx.appcompat.R.attr.isLightTheme)
 
-val Context.isMaterial3Theme: Boolean
-    @SuppressLint("PrivateResource")
-    get() = getBooleanByAttr(com.google.android.material.R.attr.isMaterial3Theme)
-
 val Context.isOrientationLandscape: Boolean
     get() = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 

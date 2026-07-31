@@ -1,0 +1,127 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Shell Script",
+  "scopeName": "source.shell",
+  "patterns": [
+    { "include": "#shebang" },
+    { "include": "#comments" },
+    { "include": "#heredoc" },
+    { "include": "#strings" },
+    { "include": "#command-substitution" },
+    { "include": "#variables" },
+    { "include": "#functions" },
+    { "include": "#keywords" },
+    { "include": "#builtins" },
+    { "include": "#numbers" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "shebang": {
+      "match": "\\A#!.*(?:/|\\b)(?:ba|da|z|k)?sh\\b.*$",
+      "name": "comment.line.shebang.shell"
+    },
+    "comments": {
+      "match": "#.*$",
+      "name": "comment.line.number-sign.shell"
+    },
+    "heredoc": {
+      "begin": "<<-?\\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\\1",
+      "beginCaptures": {
+        "0": { "name": "keyword.operator.heredoc.shell" }
+      },
+      "end": "^\\s*\\2\\s*$",
+      "endCaptures": {
+        "0": { "name": "keyword.operator.heredoc.shell" }
+      },
+      "contentName": "string.unquoted.heredoc.shell"
+    },
+    "strings": {
+      "patterns": [
+        {
+          "begin": "'",
+          "end": "'",
+          "name": "string.quoted.single.shell"
+        },
+        {
+          "begin": "\"",
+          "end": "\"",
+          "name": "string.quoted.double.shell",
+          "patterns": [
+            { "match": "\\\\[\\\\\"$`nrt]", "name": "constant.character.escape.shell" },
+            { "include": "#command-substitution" },
+            { "include": "#variables" }
+          ]
+        }
+      ]
+    },
+    "command-substitution": {
+      "patterns": [
+        {
+          "begin": "\\$\\(",
+          "beginCaptures": { "0": { "name": "punctuation.definition.subshell.begin.shell" } },
+          "end": "\\)",
+          "endCaptures": { "0": { "name": "punctuation.definition.subshell.end.shell" } },
+          "name": "meta.subshell.shell",
+          "patterns": [{ "include": "$self" }]
+        },
+        {
+          "begin": "`",
+          "end": "`",
+          "name": "string.interpolated.backtick.shell",
+          "patterns": [
+            { "match": "\\\\[`\\\\$]", "name": "constant.character.escape.shell" },
+            { "include": "#variables" }
+          ]
+        }
+      ]
+    },
+    "variables": {
+      "patterns": [
+        {
+          "begin": "\\$\\{",
+          "beginCaptures": { "0": { "name": "punctuation.definition.variable.begin.shell" } },
+          "end": "\\}",
+          "endCaptures": { "0": { "name": "punctuation.definition.variable.end.shell" } },
+          "name": "variable.other.braced.shell"
+        },
+        {
+          "match": "\\$(?:[A-Za-z_][A-Za-z0-9_]*|[0-9@#?$!*-])",
+          "name": "variable.other.shell"
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "match": "\\b(function)\\s+([A-Za-z_][A-Za-z0-9_.-]*)",
+          "captures": {
+            "1": { "name": "storage.type.function.shell" },
+            "2": { "name": "entity.name.function.shell" }
+          }
+        },
+        {
+          "match": "\\b([A-Za-z_][A-Za-z0-9_.-]*)\\s*(?=\\(\\s*\\)\\s*\\{)",
+          "captures": {
+            "1": { "name": "entity.name.function.shell" }
+          }
+        }
+      ]
+    },
+    "keywords": {
+      "match": "\\b(?:if|then|elif|else|fi|for|while|until|do|done|case|in|esac|select|function|time|coproc)\\b",
+      "name": "keyword.control.shell"
+    },
+    "builtins": {
+      "match": "(?<![A-Za-z0-9_.-])(?:alias|bg|bind|break|builtin|caller|cd|command|compgen|complete|continue|declare|dirs|disown|echo|enable|eval|exec|exit|export|false|fc|fg|getopts|hash|help|history|jobs|kill|let|local|logout|mapfile|popd|printf|pushd|pwd|read|readonly|return|set|shift|shopt|source|suspend|test|times|trap|true|type|typeset|ulimit|umask|unalias|unset|wait)(?![A-Za-z0-9_.-])",
+      "name": "support.function.builtin.shell"
+    },
+    "numbers": {
+      "match": "(?<![A-Za-z0-9_])(?:0[xX][0-9A-Fa-f]+|[0-9]+)(?![A-Za-z0-9_])",
+      "name": "constant.numeric.shell"
+    },
+    "operators": {
+      "match": "&&|\\|\\||;;|;&|;;&|<<-?|>>?|[|&;<>]=?|!",
+      "name": "keyword.operator.shell"
+    }
+  }
+}

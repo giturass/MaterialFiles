@@ -31,7 +31,12 @@ import kotlinx.coroutines.runBlocking
 import me.zhanghai.android.files.R
 import me.zhanghai.android.files.app.BackgroundActivityStarter
 import me.zhanghai.android.files.app.mainExecutor
+import me.zhanghai.android.files.apksigner.ApkSigning
+import me.zhanghai.android.files.apksigner.ApkSigningSchemes
+import me.zhanghai.android.files.apksigner.ApkVerificationResult
+import me.zhanghai.android.files.apksigner.KeyStores
 import me.zhanghai.android.files.compat.mainExecutorCompat
+import me.zhanghai.android.files.database.DatabaseRepository
 import me.zhanghai.android.files.file.FileItem
 import me.zhanghai.android.files.file.MimeType
 import me.zhanghai.android.files.file.asFileSize
@@ -69,6 +74,7 @@ import me.zhanghai.android.files.provider.common.isDirectory
 import me.zhanghai.android.files.provider.common.moveTo
 import me.zhanghai.android.files.provider.common.newByteChannel
 import me.zhanghai.android.files.provider.common.newDirectoryStream
+import me.zhanghai.android.files.provider.common.newInputStream
 import me.zhanghai.android.files.provider.common.newOutputStream
 import me.zhanghai.android.files.provider.common.readAttributes
 import me.zhanghai.android.files.provider.common.resolveForeign
@@ -86,6 +92,7 @@ import me.zhanghai.android.files.util.createIntent
 import me.zhanghai.android.files.util.createViewIntent
 import me.zhanghai.android.files.util.extraPath
 import me.zhanghai.android.files.util.getQuantityString
+import me.zhanghai.android.files.util.localFileOrNull
 import me.zhanghai.android.files.util.putArgs
 import me.zhanghai.android.files.util.showToast
 import me.zhanghai.android.files.util.toEnumSet
@@ -94,6 +101,7 @@ import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.IOException
 import java.io.InterruptedIOException
+import java.security.GeneralSecurityException
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
@@ -238,33 +246,60 @@ private fun FileJob.throwIfInterrupted() {
 
 @Throws(IOException::class)
 private fun FileJob.scan(sources: List<Path?>, @PluralsRes notificationTitleRes: Int): ScanInfo {
-    val scanInfo = ScanInfo()
-    for (source in sources) {
-        Files.walkFileTree(source, object : SimpleFileVisitor<Path>() {
-            @Throws(IOException::class)
-            override fun preVisitDirectory(
-                directory: Path,
-                attributes: BasicFileAttributes
-            ): FileVisitResult {
-                scanPath(attributes, scanInfo, notificationTitleRes)
-                throwIfInterrupted()
-                return FileVisitResult.CONTINUE
-            }
+    var scanInfo: ScanInfo
+    var retry: Boolean
+    do {
+        retry = false
+        // Counted from scratch on a retry, because whatever was walked before the failure has
+        // already been added.
+        scanInfo = ScanInfo()
+        try {
+            for (source in sources) {
+                Files.walkFileTree(source, object : SimpleFileVisitor<Path>() {
+                    @Throws(IOException::class)
+                    override fun preVisitDirectory(
+                        directory: Path,
+                        attributes: BasicFileAttributes
+                    ): FileVisitResult {
+                        scanPath(attributes, scanInfo, notificationTitleRes)
+                        throwIfInterrupted()
+                        return FileVisitResult.CONTINUE
+                    }
 
-            @Throws(IOException::class)
-            override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
-                scanPath(attributes, scanInfo, notificationTitleRes)
-                throwIfInterrupted()
-                return FileVisitResult.CONTINUE
-            }
+                    @Throws(IOException::class)
+                    override fun visitFile(
+                        file: Path,
+                        attributes: BasicFileAttributes
+                    ): FileVisitResult {
+                        scanPath(attributes, scanInfo, notificationTitleRes)
+                        throwIfInterrupted()
+                        return FileVisitResult.CONTINUE
+                    }
 
-            @Throws(IOException::class)
-            override fun visitFileFailed(file: Path, exception: IOException): FileVisitResult {
-                // TODO: Prompt retry, skip, skip-all or abort.
-                return super.visitFileFailed(file, exception)
+                    @Throws(IOException::class)
+                    override fun visitFileFailed(
+                        file: Path,
+                        exception: IOException
+                    ): FileVisitResult {
+                        // TODO: Prompt retry, skip, skip-all or abort.
+                        return super.visitFileFailed(file, exception)
+                    }
+                })
             }
-        })
-    }
+        } catch (e: InterruptedIOException) {
+            throw e
+        } catch (e: IOException) {
+            e.printStackTrace()
+            // An archive that hides its entry names needs the password before anything in it can
+            // even be counted, so ask for it here rather than failing the job with the listing
+            // error. Every other job step already asks the same way.
+            if (e is UserActionRequiredException && showUserAction(e)) {
+                retry = true
+                continue
+            }
+            throw e
+        }
+    } while (retry)
     postScanNotification(scanInfo, notificationTitleRes)
     return scanInfo
 }
@@ -616,18 +651,27 @@ class ArchiveFileJob(
     private val archiveFile: Path,
     private val format: Int,
     private val filter: Int,
-    private val password: String?
+    private val password: String?,
+    private val encryptFileNames: Boolean,
+    private val deleteSources: Boolean
 ) : FileJob() {
     @Throws(IOException::class)
     override fun run() {
         val scanInfo = scan(sources, R.plurals.file_job_archive_scan_notification_title_format)
-        val channel = archiveFile.newByteChannel(
-            StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE
-        )
+        val openOptions = if (
+            ArchiveWriter.needsReadableChannel(format, password, encryptFileNames)
+        ) {
+            arrayOf(
+                StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, StandardOpenOption.READ
+            )
+        } else {
+            arrayOf(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)
+        }
+        val channel = archiveFile.newByteChannel(*openOptions)
         var successful = false
         try {
             channel.use {
-                ArchiveWriter(channel, format, filter, password).use { writer ->
+                ArchiveWriter(channel, format, filter, password, encryptFileNames).use { writer ->
                     val transferInfo = TransferInfo(scanInfo, archiveFile)
                     for (source in sources) {
                         val target = getTargetFileName(source)
@@ -647,6 +691,22 @@ class ArchiveFileJob(
                     e.printStackTrace()
                 }
             }
+        }
+        // Only once the archive is complete on disk, so a failed or interrupted run never costs the
+        // user their originals.
+        if (deleteSources) {
+            deleteSources()
+        }
+    }
+
+    @Throws(IOException::class)
+    private fun deleteSources() {
+        val scanInfo = scan(sources, R.plurals.file_job_delete_scan_notification_title_format)
+        val transferInfo = TransferInfo(scanInfo, null)
+        val actionAllInfo = ActionAllInfo()
+        for (source in sources) {
+            deleteRecursively(source, transferInfo, actionAllInfo)
+            throwIfInterrupted()
         }
     }
 
@@ -943,6 +1003,31 @@ private fun FileJob.create(path: Path, createDirectory: Boolean) {
     } while (retry)
 }
 
+/**
+ * Creates an empty but valid SQLite database. SQLite can only write to a real file, so the database
+ * is built in the cache and its bytes are then written to [path], which may live anywhere.
+ */
+class CreateDatabaseFileJob(private val path: Path) : FileJob() {
+    @Throws(IOException::class)
+    override fun run() {
+        // Create the file first so that an existing one is reported the same way as for any other
+        // new file, instead of being silently overwritten.
+        create(path, false)
+        val cacheFile = File(cacheDirectory, CACHE_FILE_NAME)
+        try {
+            cacheFile.delete()
+            DatabaseRepository.create(cacheFile)
+            write(path, cacheFile.readBytes())
+        } finally {
+            cacheFile.delete()
+        }
+    }
+
+    companion object {
+        private const val CACHE_FILE_NAME = "new_database.db"
+    }
+}
+
 class DeleteFileJob(private val paths: List<Path>) : FileJob() {
     @Throws(IOException::class)
     override fun run() {
@@ -954,42 +1039,42 @@ class DeleteFileJob(private val paths: List<Path>) : FileJob() {
             throwIfInterrupted()
         }
     }
+}
 
-    @Throws(IOException::class)
-    private fun deleteRecursively(
-        path: Path,
-        transferInfo: TransferInfo,
-        actionAllInfo: ActionAllInfo
-    ) {
-        Files.walkFileTree(path, object : SimpleFileVisitor<Path>() {
-            @Throws(IOException::class)
-            override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
-                delete(file, transferInfo, actionAllInfo)
-                throwIfInterrupted()
-                return FileVisitResult.CONTINUE
-            }
+@Throws(IOException::class)
+private fun FileJob.deleteRecursively(
+    path: Path,
+    transferInfo: TransferInfo,
+    actionAllInfo: ActionAllInfo
+) {
+    Files.walkFileTree(path, object : SimpleFileVisitor<Path>() {
+        @Throws(IOException::class)
+        override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
+            delete(file, transferInfo, actionAllInfo)
+            throwIfInterrupted()
+            return FileVisitResult.CONTINUE
+        }
 
-            @Throws(IOException::class)
-            override fun visitFileFailed(file: Path, exception: IOException): FileVisitResult {
-                // TODO: Prompt retry, skip, skip-all or abort.
-                return super.visitFileFailed(file, exception)
-            }
+        @Throws(IOException::class)
+        override fun visitFileFailed(file: Path, exception: IOException): FileVisitResult {
+            // TODO: Prompt retry, skip, skip-all or abort.
+            return super.visitFileFailed(file, exception)
+        }
 
-            @Throws(IOException::class)
-            override fun postVisitDirectory(
-                directory: Path,
-                exception: IOException?
-            ): FileVisitResult {
-                // TODO: Prompt retry, skip, skip-all or abort.
-                if (exception != null) {
-                    throw exception
-                }
-                delete(directory, transferInfo, actionAllInfo)
-                throwIfInterrupted()
-                return FileVisitResult.CONTINUE
+        @Throws(IOException::class)
+        override fun postVisitDirectory(
+            directory: Path,
+            exception: IOException?
+        ): FileVisitResult {
+            // TODO: Prompt retry, skip, skip-all or abort.
+            if (exception != null) {
+                throw exception
             }
-        })
-    }
+            delete(directory, transferInfo, actionAllInfo)
+            throwIfInterrupted()
+            return FileVisitResult.CONTINUE
+        }
+    })
 }
 
 @Throws(IOException::class)
@@ -2334,4 +2419,124 @@ private fun FileJob.postWriteNotification(transferInfo: TransferInfo) {
     val max = size.toInt()
     val progress = transferredSize.toInt()
     postNotification(title, text, null, null, max, progress, false, true)
+}
+
+/**
+ * Signs an APK with apksig.
+ *
+ * apksig works on real files, so anything that isn't on local storage is staged through the cache
+ * first. The keystore and passwords have already been checked by the dialog that started this job,
+ * so a failure here is unexpected and reported as-is.
+ */
+class SignApkFileJob(
+    private val inputApk: Path,
+    private val outputApk: Path,
+    private val keyStore: Path,
+    private val storePassword: CharArray,
+    private val keyAlias: String,
+    private val keyPassword: CharArray,
+    private val schemes: ApkSigningSchemes
+) : FileJob() {
+    @Throws(IOException::class)
+    override fun run() {
+        val workingDirectory = File(cacheDirectory, CACHE_DIRECTORY_NAME)
+        if (!workingDirectory.isDirectory && !workingDirectory.mkdirs()) {
+            throw IOException("Cannot create cache directory ${workingDirectory.path}")
+        }
+        val temporaryFiles = mutableListOf<File>()
+        try {
+            postSignApkNotification(getFileName(inputApk))
+            val keyStoreFile = localize(keyStore, workingDirectory, "keystore", temporaryFiles)
+            val signingKey = try {
+                KeyStores.load(keyStoreFile, storePassword)
+                    .getSigningKey(keyAlias, keyPassword)
+            } catch (e: GeneralSecurityException) {
+                throw IOException(e)
+            }
+            val inputFile = localize(inputApk, workingDirectory, "input.apk", temporaryFiles)
+            val outputLocalFile = outputApk.localFileOrNull
+                ?: File(workingDirectory, "output.apk").also { temporaryFiles += it }
+            try {
+                ApkSigning.sign(inputFile, outputLocalFile, signingKey, schemes)
+            } catch (e: IOException) {
+                throw e
+            } catch (e: Exception) {
+                throw IOException(e)
+            }
+            if (outputApk.localFileOrNull == null) {
+                val scanInfo = ScanInfo().apply {
+                    incrementFileCount()
+                    addToSize(outputLocalFile.length())
+                }
+                val transferInfo = TransferInfo(scanInfo, outputApk)
+                val actionAllInfo = ActionAllInfo(replace = true)
+                copy(
+                    Paths.get(outputLocalFile.path), outputApk, false, transferInfo, actionAllInfo
+                )
+            }
+            val verification = try {
+                ApkSigning.verify(outputApk.localFileOrNull ?: outputLocalFile)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            }
+            showToast(
+                if (verification != null && verification.isVerified) {
+                    getString(
+                        R.string.file_job_sign_apk_success_format, getFileName(outputApk),
+                        verification.schemesText
+                    )
+                } else {
+                    getString(
+                        R.string.file_job_sign_apk_unverified_format, getFileName(outputApk)
+                    )
+                }, Toast.LENGTH_LONG
+            )
+        } finally {
+            storePassword.fill('\u0000')
+            keyPassword.fill('\u0000')
+            temporaryFiles.forEach { it.delete() }
+        }
+    }
+
+    /** Returns the local file for [path], copying it into the cache when it isn't local already. */
+    @Throws(IOException::class)
+    private fun localize(
+        path: Path,
+        workingDirectory: File,
+        cacheFileName: String,
+        temporaryFiles: MutableList<File>
+    ): File {
+        path.localFileOrNull?.let { return it }
+        val file = File(workingDirectory, cacheFileName)
+        temporaryFiles += file
+        path.newInputStream().use { inputStream ->
+            file.outputStream().use { outputStream -> inputStream.copyTo(outputStream) }
+        }
+        return file
+    }
+
+    private fun postSignApkNotification(fileName: String) {
+        postNotification(
+            getString(R.string.file_job_sign_apk_notification_title_format, fileName), null, null,
+            null, 0, 0, true, false
+        )
+    }
+
+    private val ApkVerificationResult.schemesText: String
+        get() = buildList {
+            if (usedV1) {
+                add("v1")
+            }
+            if (usedV2) {
+                add("v2")
+            }
+            if (usedV3) {
+                add("v3")
+            }
+        }.joinToString(", ")
+
+    companion object {
+        private const val CACHE_DIRECTORY_NAME = "sign_apk"
+    }
 }

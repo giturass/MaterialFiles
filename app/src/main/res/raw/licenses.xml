@@ -22,6 +22,20 @@
     </notice>
 
     <notice>
+        <name>Android SQLite</name>
+        <url>https://github.com/requery/sqlite-android</url>
+        <copyright>Copyright 2017 requery.io</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
+        <name>apksig</name>
+        <url>https://android.googlesource.com/platform/tools/apksig</url>
+        <copyright>Copyright 2016 The Android Open Source Project</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
         <name>SubsamplingScaleImageView</name>
         <url>https://github.com/davemorrissey/subsampling-scale-image-view</url>
         <copyright>Copyright 2016 David Morrissey</copyright>
@@ -113,6 +127,20 @@
     </notice>
 
     <notice>
+        <name>Apache Commons Compress</name>
+        <url>https://commons.apache.org/proper/commons-compress/</url>
+        <copyright>Copyright 2002 The Apache Software Foundation</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
+        <name>XZ for Java</name>
+        <url>https://tukaani.org/xz/java.html</url>
+        <copyright>Copyright The XZ for Java authors and contributors</copyright>
+        <license>Zero-Clause BSD License</license>
+    </notice>
+
+    <notice>
         <name>Insetter</name>
         <url>https://github.com/chrisbanes/insetter</url>
         <copyright>Copyright 2019 Google LLC</copyright>
@@ -134,6 +162,13 @@
     </notice>
 
     <notice>
+        <name>Sora Editor</name>
+        <url>https://github.com/Rosemoe/sora-editor</url>
+        <copyright>Copyright 2020-2024 Rosemoe</copyright>
+        <license>GNU Lesser General Public License 2.1</license>
+    </notice>
+
+    <notice>
         <name>jcifs-ng</name>
         <url>https://github.com/AgNO3/jcifs-ng</url>
         <copyright>Copyright 2016 AgNO3 Gmbh &amp; Co. KG</copyright>
@@ -145,6 +180,23 @@
         <url>https://github.com/coil-kt/coil</url>
         <copyright>Copyright 2020 Coil Contributors</copyright>
         <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
+        <name>AndroidX Media3 (ExoPlayer)</name>
+        <url>https://github.com/androidx/media</url>
+        <copyright>Copyright 2020 The Android Open Source Project</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <!-- BASS is proprietary, so there is no LicenseResolver license to reference here and its
+         terms are stated as part of the copyright notice instead. -->
+    <notice>
+        <name>BASS audio library</name>
+        <url>https://www.un4seen.com</url>
+        <copyright>Copyright (c) 1999-2026 Un4seen Developments Ltd. All rights reserved.
+
+BASS and its add-ons are free for non-commercial use; commercial use requires a license from Un4seen Developments Ltd. See https://www.un4seen.com/bass.html#license for the full terms.</copyright>
     </notice>
 
     <notice>

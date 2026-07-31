@@ -5,6 +5,7 @@
 
 package me.zhanghai.android.files.provider.archive.archiver
 
+import android.os.Build
 import java8.nio.channels.SeekableByteChannel
 import java8.nio.file.LinkOption
 import java8.nio.file.Path
@@ -18,6 +19,7 @@ import me.zhanghai.android.files.provider.common.newInputStream
 import me.zhanghai.android.files.provider.common.readAttributes
 import me.zhanghai.android.files.provider.common.readSymbolicLinkByteString
 import me.zhanghai.android.files.provider.common.size
+import me.zhanghai.android.libarchive.Archive
 import java.io.Closeable
 import java.io.IOException
 
@@ -25,12 +27,33 @@ class ArchiveWriter @Throws(IOException::class) constructor(
     channel: SeekableByteChannel,
     format: Int,
     filter: Int,
-    password: String?
+    password: String?,
+    encryptFileNames: Boolean = false
 ) : Closeable {
-    private val archive = WriteArchive(channel, format, filter, password)
+    private val archive: WriteArchive?
+    private val encryptedSevenZArchive: EncryptedSevenZArchive?
+
+    init {
+        if (format == Archive.FORMAT_7ZIP && password != null) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+                throw IOException(UnsupportedOperationException("Encrypted 7Z archive"))
+            }
+            archive = null
+            encryptedSevenZArchive = EncryptedSevenZArchive(channel, password, encryptFileNames)
+        } else {
+            archive = WriteArchive(channel, format, filter, password)
+            encryptedSevenZArchive = null
+        }
+    }
 
     @Throws(IOException::class)
     fun write(file: Path, entryName: Path, intervalMillis: Long, listener: ((Long) -> Unit)?) {
+        val encryptedSevenZArchive = encryptedSevenZArchive
+        if (encryptedSevenZArchive != null) {
+            encryptedSevenZArchive.write(file, entryName, intervalMillis, listener)
+            return
+        }
+        val archive = archive!!
         val name = entryName.toString()
         val lastModifiedTime = file.getLastModifiedTime(LinkOption.NOFOLLOW_LINKS)
         val lastAccessTime = null
@@ -73,6 +96,20 @@ class ArchiveWriter @Throws(IOException::class) constructor(
 
     @Throws(IOException::class)
     override fun close() {
-        archive.close()
+        archive?.close()
+        encryptedSevenZArchive?.close()
+    }
+
+    companion object {
+        /**
+         * Whether the channel this writer is given also has to be readable. Hiding the entry names
+         * of a 7Z archive means reading its finished header back out of the file to encrypt it,
+         * which a write-only channel cannot do.
+         */
+        fun needsReadableChannel(
+            format: Int,
+            password: String?,
+            encryptFileNames: Boolean
+        ): Boolean = format == Archive.FORMAT_7ZIP && password != null && encryptFileNames
     }
 }

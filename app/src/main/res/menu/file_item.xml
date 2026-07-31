@@ -36,6 +36,10 @@
         android:title="@string/file_item_action_archive" />
 
     <item
+        android:id="@+id/action_sign_apk"
+        android:title="@string/file_item_action_sign_apk" />
+
+    <item
         android:id="@+id/action_share"
         android:title="@string/share" />
 

@@ -42,7 +42,7 @@ class NavigationListAdapter(
     private val viewAttributes = context.obtainStyledAttributesCompat(
         null, com.google.android.material.R.styleable.NavigationView,
         com.google.android.material.R.attr.navigationViewStyle,
-        com.google.android.material.R.style.Widget_MaterialComponents_NavigationView
+        R.style.Widget_MaterialFiles_NavigationView
     ).use { a ->
         val itemShapeAppearance = a.getResourceId(
             com.google.android.material.R.styleable.NavigationView_itemShapeAppearance, 0

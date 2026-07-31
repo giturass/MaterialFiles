@@ -17,7 +17,8 @@ import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
 
 class ArchivePasswordRequiredException(
-    private val file: Path,
+    /** The path that could not be read, which is also what a password has to be added to. */
+    val file: Path,
     reason: String?
 ) :
     UserActionRequiredException(file.toString(), null, reason) {

@@ -15,7 +15,11 @@ interface RootablePath {
 }
 
 private val rootStrategy: RootStrategy
-    get() = if (isRunningAsRoot) RootStrategy.NEVER else Settings.ROOT_STRATEGY.valueCompat
+    get() = if (isRunningInPrivilegedProcess) {
+        RootStrategy.NEVER
+    } else {
+        Settings.ROOT_STRATEGY.valueCompat
+    }
 
 @Throws(IOException::class)
 fun <T, R> callRootable(

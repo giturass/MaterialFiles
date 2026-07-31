@@ -37,7 +37,6 @@ import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.ui.AnimatedListAdapter
 import me.zhanghai.android.files.ui.CheckableForegroundLinearLayout
 import me.zhanghai.android.files.ui.CheckableItemBackground
-import me.zhanghai.android.files.util.isMaterial3Theme
 import me.zhanghai.android.files.util.layoutInflater
 import me.zhanghai.android.files.util.valueCompat
 import java.util.Locale
@@ -73,6 +72,15 @@ class FileListAdapter(
         set(value) {
             field = value
             notifyItemRangeChanged(0, itemCount, PAYLOAD_STATE_CHANGED)
+        }
+
+    var showFolderAppIcons = Settings.FILE_LIST_SHOW_FOLDER_APP_ICONS.valueCompat
+        set(value) {
+            if (field == value) {
+                return
+            }
+            field = value
+            notifyItemRangeChanged(0, itemCount, PAYLOAD_APP_ICON_BADGE_CHANGED)
         }
 
     private val selectedFiles = fileItemSetOf()
@@ -181,23 +189,14 @@ class FileListAdapter(
         return holder.apply {
             itemLayout.apply {
                 val context = context
-                val isMaterial3Theme = context.isMaterial3Theme
-                if (viewType == FileViewType.GRID && isMaterial3Theme) {
+                if (viewType == FileViewType.GRID) {
                     foregroundCompat =
                         context.getDrawableCompat(R.drawable.file_item_grid_foreground_material3)
                 }
-                background = if (viewType == FileViewType.GRID && isMaterial3Theme) {
+                background = if (viewType == FileViewType.GRID) {
                     CheckableItemBackground.create(4f, 12f, context)
                 } else {
                     CheckableItemBackground.create(0f, 0f, context)
-                }
-            }
-            thumbnailOutlineView?.apply {
-                val context = context
-                if (context.isMaterial3Theme) {
-                    background = context.getDrawableCompat(
-                        R.drawable.file_item_grid_thumbnail_outline_material3
-                    )
                 }
             }
             popupMenu = PopupMenu(menuButton.context, menuButton)
@@ -231,6 +230,9 @@ class FileListAdapter(
                 isSelected = nameEllipsize == TextUtils.TruncateAt.MARQUEE
             }
         }
+        if (PAYLOAD_APP_ICON_BADGE_CHANGED in payloads) {
+            bindAppIconBadge(file, holder.appIconBadgeImage)
+        }
         if (payloads.isNotEmpty()) {
             return
         }
@@ -257,6 +259,19 @@ class FileListAdapter(
         holder.iconImage.apply {
             isVisible = true
             setImageResource(iconRes)
+        }
+        holder.iconLayout.apply {
+            val showDirectoryBackground = isDirectory && viewType == FileViewType.LIST
+            background = if (showDirectoryBackground) {
+                context.getDrawableCompat(R.drawable.file_directory_background)
+            } else {
+                null
+            }
+            elevation = if (showDirectoryBackground) {
+                resources.getDimension(R.dimen.file_directory_elevation)
+            } else {
+                0f
+            }
         }
         holder.directoryThumbnailImage?.isVisible = isDirectory
         holder.thumbnailOutlineView?.isVisible = !isDirectory
@@ -286,16 +301,7 @@ class FileListAdapter(
                 }
             }
         }
-        holder.appIconBadgeImage.apply {
-            dispose()
-            setImageDrawable(null)
-            val appDirectoryPackageName = file.appDirectoryPackageName
-            val hasAppIconBadge = appDirectoryPackageName != null
-            isVisible = hasAppIconBadge
-            if (hasAppIconBadge) {
-                load(AppIconPackageName(appDirectoryPackageName!!))
-            }
-        }
+        bindAppIconBadge(file, holder.appIconBadgeImage)
         holder.badgeImage.apply {
             val badgeIconRes = if (file.attributesNoFollowLinks.isSymbolicLink) {
                 if (file.isSymbolicLinkBroken) {
@@ -334,6 +340,7 @@ class FileListAdapter(
         menu.findItem(R.id.action_rename).isVisible = !isReadOnly
         menu.findItem(R.id.action_extract).isVisible = file.isArchiveFile
         menu.findItem(R.id.action_archive).isVisible = !isArchivePath
+        menu.findItem(R.id.action_sign_apk).isVisible = file.mimeType.isApk && !isArchivePath
         menu.findItem(R.id.action_add_bookmark).isVisible = isDirectory
         holder.popupMenu.setOnMenuItemClickListener {
             when (it.itemId) {
@@ -363,6 +370,10 @@ class FileListAdapter(
                 }
                 R.id.action_archive -> {
                     listener.showCreateArchiveDialog(file)
+                    true
+                }
+                R.id.action_sign_apk -> {
+                    listener.showSignApkDialog(file)
                     true
                 }
                 R.id.action_share -> {
@@ -404,8 +415,26 @@ class FileListAdapter(
     override val isAnimationEnabled: Boolean
         get() = Settings.FILE_LIST_ANIMATION.valueCompat
 
+    private fun bindAppIconBadge(file: FileItem, image: ImageView) {
+        image.apply {
+            dispose()
+            setImageDrawable(null)
+            val appDirectoryPackageName = if (showFolderAppIcons) {
+                file.appDirectoryPackageName
+            } else {
+                null
+            }
+            val hasAppIconBadge = appDirectoryPackageName != null
+            isVisible = hasAppIconBadge
+            if (hasAppIconBadge) {
+                load(AppIconPackageName(appDirectoryPackageName))
+            }
+        }
+    }
+
     companion object {
         private val PAYLOAD_STATE_CHANGED = Any()
+        private val PAYLOAD_APP_ICON_BADGE_CHANGED = Any()
 
         private val CALLBACK = object : DiffUtil.ItemCallback<FileItem>() {
             override fun areItemsTheSame(oldItem: FileItem, newItem: FileItem): Boolean =
@@ -478,6 +507,7 @@ class FileListAdapter(
         fun showRenameFileDialog(file: FileItem)
         fun extractFile(file: FileItem)
         fun showCreateArchiveDialog(file: FileItem)
+        fun showSignApkDialog(file: FileItem)
         fun shareFile(file: FileItem)
         fun copyPath(file: FileItem)
         fun addBookmark(file: FileItem)

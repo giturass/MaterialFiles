@@ -6,6 +6,7 @@
   -->
 
 <resources>
+    <dimen name="file_directory_elevation">2dp</dimen>
     <dimen name="screen_edge_margin">16dp</dimen>
     <dimen name="screen_edge_margin_minus_4dp">12dp</dimen>
     <dimen name="screen_edge_margin_minus_8dp">8dp</dimen>
@@ -25,8 +26,6 @@
     <dimen name="dialog_padding_minus_16dp">8dp</dimen>
     <dimen name="navigation_max_width">320dp</dimen>
     <dimen name="navigation_header_height">172dp</dimen>
-    <dimen name="navigation_item_horizontal_padding">24dp</dimen>
-    <dimen name="navigation_item_icon_padding">24dp</dimen>
     <dimen name="tab_layout_height">48dp</dimen>
     <dimen name="list_vertical_padding">8dp</dimen>
     <dimen name="list_bottom_padding_with_fab">88dp</dimen>
@@ -50,4 +49,16 @@
 
     <!-- Reduce fast scroll thumb touch target size because we have the popup menu beside it. -->
     <dimen name="afs_min_touch_target_size">24dp</dimen>
+
+    <dimen name="database_editor_cell_width">160dp</dimen>
+    <dimen name="database_editor_cell_padding_horizontal">12dp</dimen>
+    <dimen name="database_editor_cell_padding_vertical">10dp</dimen>
+
+    <dimen name="media_player_audio_cover_size">256dp</dimen>
+    <!-- The label is 62.5% of the disc, and the artwork fills it: a round cover on a round label,
+         so nothing of it is lost and it is large enough to read at arm's length. -->
+    <dimen name="media_player_audio_cover_label_size">160dp</dimen>
+    <dimen name="media_player_audio_cover_art_size">160dp</dimen>
+    <dimen name="media_player_audio_cover_placeholder_padding">48dp</dimen>
+    <dimen name="media_player_audio_cover_hole_size">16dp</dimen>
 </resources>

@@ -17,6 +17,7 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
@@ -32,8 +33,8 @@
         android:maxSdkVersion="32" />
     <uses-permission android:name="com.android.launcher.permission.INSTALL_SHORTCUT" />
 
-    <!-- Crashlytics and Shizuku requires API 23. -->
-    <uses-sdk tools:overrideLibrary="com.google.firebase,com.google.firebase.components,com.google.firebase.crashlytics,com.google.firebase.crashlytics.ndk,com.google.firebase.installations,com.google.firebase.sessions,rikka.shizuku.aidl,rikka.shizuku.api,rikka.shizuku.shared" />
+    <!-- Shizuku requires API 23. -->
+    <uses-sdk tools:overrideLibrary="rikka.shizuku.aidl,rikka.shizuku.api,rikka.shizuku.shared" />
 
     <!--
       ~ Samsung DeX requires explicitly setting android:resizeableActivity="true" for the app to be
@@ -336,6 +337,40 @@
         </activity>
 
         <activity
+            android:name="me.zhanghai.android.files.database.DatabaseEditorActivity"
+            android:exported="true"
+            android:label="@string/database_editor_title"
+            android:theme="@style/Theme.MaterialFiles">
+            <intent-filter tools:ignore="AppLinkUrlError">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/vnd.sqlite3" />
+                <data android:mimeType="application/x-sqlite3" />
+                <data android:mimeType="application/geopackage+sqlite3" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name="me.zhanghai.android.files.viewer.media.MediaPlayerActivity"
+            android:exported="true"
+            android:label="@string/media_player_title"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.MaterialFiles.Immersive">
+            <intent-filter tools:ignore="AppLinkUrlError">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="application/ogg" />
+                <data android:mimeType="application/x-flac" />
+            </intent-filter>
+            <intent-filter tools:ignore="AppLinkUrlError">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+        </activity>
+
+        <activity
             android:name="me.zhanghai.android.files.viewer.image.ImageViewerActivity"
             android:exported="true"
             android:label="@string/image_viewer_title"
@@ -350,6 +385,11 @@
         <service
             android:name="me.zhanghai.android.files.filejob.FileJobService"
             android:foregroundServiceType="dataSync" />
+
+        <service
+            android:name="me.zhanghai.android.files.viewer.media.MediaPlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
 
         <service android:name="me.zhanghai.android.files.ftpserver.FtpServerService"
             android:foregroundServiceType="dataSync" />
@@ -379,6 +419,14 @@
         </service>
 
         <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
+        <provider
             android:name="me.zhanghai.android.files.app.AppProvider"
             android:authorities="@string/app_provider_authority"
             android:exported="false" />
@@ -393,8 +441,5 @@
 
         <receiver android:name="me.zhanghai.android.files.ftpserver.FtpServerReceiver" />
 
-        <meta-data
-            android:name="firebase_crashlytics_collection_enabled"
-            android:value="false" />
     </application>
 </manifest>

@@ -255,6 +255,8 @@ daf application/vnd.Mobius.DAF
 dart application/vnd.dart
 dataless application/vnd.fdsn.seed
 davmount application/davmount+xml
+db application/vnd.sqlite3
+db3 application/vnd.sqlite3
 dbf application/vnd.dbf
 dcd application/DCD
 dcm application/dicom

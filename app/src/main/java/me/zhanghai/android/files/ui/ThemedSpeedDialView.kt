@@ -39,7 +39,6 @@ import me.zhanghai.android.files.util.dpToDimensionPixelSize
 import me.zhanghai.android.files.util.getColorByAttr
 import me.zhanghai.android.files.util.getParcelableSafe
 import me.zhanghai.android.files.util.getResourceIdByAttr
-import me.zhanghai.android.files.util.isMaterial3Theme
 import me.zhanghai.android.files.util.shortAnimTime
 import me.zhanghai.android.files.util.withModulatedAlpha
 
@@ -66,23 +65,14 @@ class ThemedSpeedDialView : SpeedDialView {
             useCompatPadding = false
         }
         val context = context
-        if (context.isMaterial3Theme) {
-            mainFabClosedBackgroundColor =
-                context.getColorByAttr(com.google.android.material.R.attr.colorSecondaryContainer)
-            mainFabClosedIconColor =
-                context.getColorByAttr(com.google.android.material.R.attr.colorOnSecondaryContainer)
-            mainFabOpenedBackgroundColor =
-                context.getColorByAttr(androidx.appcompat.R.attr.colorPrimary)
-            mainFabOpenedIconColor =
-                context.getColorByAttr(com.google.android.material.R.attr.colorOnPrimary)
-        } else {
-            mainFabClosedBackgroundColor =
-                context.getColorByAttr(com.google.android.material.R.attr.colorSecondary)
-            mainFabClosedIconColor =
-                context.getColorByAttr(com.google.android.material.R.attr.colorOnSecondary)
-            mainFabOpenedBackgroundColor = mainFabClosedBackgroundColor
-            mainFabOpenedIconColor = mainFabClosedIconColor
-        }
+        mainFabClosedBackgroundColor =
+            context.getColorByAttr(com.google.android.material.R.attr.colorSecondaryContainer)
+        mainFabClosedIconColor =
+            context.getColorByAttr(com.google.android.material.R.attr.colorOnSecondaryContainer)
+        mainFabOpenedBackgroundColor =
+            context.getColorByAttr(androidx.appcompat.R.attr.colorPrimary)
+        mainFabOpenedIconColor =
+            context.getColorByAttr(com.google.android.material.R.attr.colorOnPrimary)
         // Always use our own animation to fix the library issue that ripple is rotated as well.
         val mainFabDrawable = RotateDrawable::class.createCompat().apply {
             drawableCompat = mainFab.drawable
@@ -150,22 +140,12 @@ class ThemedSpeedDialView : SpeedDialView {
         animate: Boolean
     ): FabWithLabelView? {
         val context = context
-        val isMaterial3Theme = context.isMaterial3Theme
-        val fabImageTintColor = if (isMaterial3Theme) {
+        val fabImageTintColor =
             context.getColorByAttr(androidx.appcompat.R.attr.colorPrimary)
-        } else {
-            context.getColorByAttr(com.google.android.material.R.attr.colorSecondary)
-        }
         val fabBackgroundColor =
             context.getColorByAttr(com.google.android.material.R.attr.colorSurface)
         val labelColor = context.getColorByAttr(android.R.attr.textColorSecondary)
-        val labelBackgroundColor = if (isMaterial3Theme) {
-            Color.TRANSPARENT
-        } else {
-            // Label view doesn't have enough elevation (only 1dp) for elevation overlay to work
-            // well.
-            context.getColorByAttr(androidx.appcompat.R.attr.colorBackgroundFloating)
-        }
+        val labelBackgroundColor = Color.TRANSPARENT
         val actionItem = SpeedDialActionItem.Builder(
             actionItem.id,
             // Should not be a resource, pass null to fail fast.
@@ -187,18 +167,16 @@ class ThemedSpeedDialView : SpeedDialView {
                 }
                 useCompatPadding = false
             }
-            if (isMaterial3Theme) {
-                labelBackground.apply {
-                    useCompatPadding = false
-                    setContentPadding(0, 0, 0, 0)
-                    foregroundCompat = null
-                    (getChildAt(0) as TextView).apply {
-                        setTextAppearanceCompat(
-                            context.getResourceIdByAttr(
-                                com.google.android.material.R.attr.textAppearanceLabelLarge
-                            )
+            labelBackground.apply {
+                useCompatPadding = false
+                setContentPadding(0, 0, 0, 0)
+                foregroundCompat = null
+                (getChildAt(0) as TextView).apply {
+                    setTextAppearanceCompat(
+                        context.getResourceIdByAttr(
+                            com.google.android.material.R.attr.textAppearanceLabelLarge
                         )
-                    }
+                    )
                 }
             }
         }

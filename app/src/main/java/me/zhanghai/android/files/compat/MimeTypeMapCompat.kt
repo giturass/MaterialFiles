@@ -266,6 +266,8 @@ private val extensionToMimeTypeMap = mapOf(
     "dart" to "application/vnd.dart",
     "dataless" to "application/vnd.fdsn.seed",
     "davmount" to "application/davmount+xml",
+    "db" to "application/vnd.sqlite3",
+    "db3" to "application/vnd.sqlite3",
     "dbf" to "application/vnd.dbf",
     "dcd" to "application/DCD",
     "dcm" to "application/dicom",

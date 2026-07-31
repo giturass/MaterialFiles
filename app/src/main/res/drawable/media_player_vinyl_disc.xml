@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  ~ Copyright (c) 2026 Hai Zhang <dreaming.in.code.zh@gmail.com>
+  ~ All Rights Reserved.
+  -->
+
+<!--
+  ~ The record itself: a near-black disc, a band of grooves, and the label the artwork sits on.
+  ~ Drawn under the artwork and turned with it, so the grooves and the highlights along them travel
+  ~ the way a record's do. The sheen and the spindle hole live in media_player_vinyl_overlay
+  ~ instead, because those belong to the light and to the player rather than to the record.
+  ~
+  ~ A vector rather than a layer-list of shapes: the disc is 256dp upright but only 152dp in
+  ~ landscape, and the groove spacing has to follow it instead of being clipped.
+  -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="@dimen/media_player_audio_cover_size"
+    android:height="@dimen/media_player_audio_cover_size"
+    android:viewportWidth="256"
+    android:viewportHeight="256">
+
+    <!-- Disc body. Kept flat, with the lighting left to the overlay above it, so that the fill
+         renders the same on every supported version. -->
+    <path
+        android:fillColor="#16161a"
+        android:pathData="M128,0 A128,128 0 1,1 128,256 A128,128 0 1,1 128,0 Z" />
+
+    <!-- Grooves, evenly pitched from the outer edge down to the label, with every fourth brighter
+         so the bands read the way the gaps between tracks do. -->
+    <path
+        android:pathData="M128,3 A125,125 0 1,1 128,253 A125,125 0 1,1 128,3 Z"
+        android:strokeColor="#1fffffff"
+        android:strokeWidth="1" />
+    <path
+        android:pathData="M128,6.5 A121.5,121.5 0 1,1 128,249.5 A121.5,121.5 0 1,1 128,6.5 Z"
+        android:strokeColor="#0dffffff"
+        android:strokeWidth="1" />
+    <path
+        android:pathData="M128,10 A118,118 0 1,1 128,246 A118,118 0 1,1 128,10 Z"
+        android:strokeColor="#0dffffff"
+        android:strokeWidth="1" />
+    <path
+        android:pathData="M128,13.5 A114.5,114.5 0 1,1 128,242.5 A114.5,114.5 0 1,1 128,13.5 Z"
+        android:strokeColor="#0dffffff"
+        android:strokeWidth="1" />
+    <path
+        android:pathData="M128,17 A111,111 0 1,1 128,239 A111,111 0 1,1 128,17 Z"
+        android:strokeColor="#1fffffff"
+        android:strokeWidth="1" />
+    <path
+        android:pathData="M128,20.5 A107.5,107.5 0 1,1 128,235.5 A107.5,107.5 0 1,1 128,20.5 Z"
+        android:strokeColor="#0dffffff"
+        android:strokeWidth="1" />
+    <path
+        android:pathData="M128,24 A104,104 0 1,1 128,232 A104,104 0 1,1 128,24 Z"
+        android:strokeColor="#0dffffff"
+        android:strokeWidth="1" />
+    <path
+        android:pathData="M128,27.5 A100.5,100.5 0 1,1 128,228.5 A100.5,100.5 0 1,1 128,27.5 Z"
+        android:strokeColor="#0dffffff"
+        android:strokeWidth="1" />
+    <path
+        android:pathData="M128,31 A97,97 0 1,1 128,225 A97,97 0 1,1 128,31 Z"
+        android:strokeColor="#1fffffff"
+        android:strokeWidth="1" />
+    <path
+        android:pathData="M128,34.5 A93.5,93.5 0 1,1 128,221.5 A93.5,93.5 0 1,1 128,34.5 Z"
+        android:strokeColor="#0dffffff"
+        android:strokeWidth="1" />
+    <path
+        android:pathData="M128,38 A90,90 0 1,1 128,218 A90,90 0 1,1 128,38 Z"
+        android:strokeColor="#0dffffff"
+        android:strokeWidth="1" />
+    <path
+        android:pathData="M128,41.5 A86.5,86.5 0 1,1 128,214.5 A86.5,86.5 0 1,1 128,41.5 Z"
+        android:strokeColor="#0dffffff"
+        android:strokeWidth="1" />
+    <path
+        android:pathData="M128,44 A84,84 0 1,1 128,212 A84,84 0 1,1 128,44 Z"
+        android:strokeColor="#26000000"
+        android:strokeWidth="2" />
+
+    <!--
+      ~ Light caught along the grooves. Arcs rather than the full circles above: a circle looks the
+      ~ same at every angle, so these are what actually show the record turning.
+      -->
+    <path
+        android:pathData="M225.9,82.4 A108,108 0 0,1 225.9,173.6"
+        android:strokeColor="#26ffffff"
+        android:strokeLineCap="round"
+        android:strokeWidth="7" />
+    <path
+        android:pathData="M37.4,170.3 A100,100 0 0,1 37.4,85.7"
+        android:strokeColor="#1affffff"
+        android:strokeLineCap="round"
+        android:strokeWidth="5" />
+    <path
+        android:pathData="M88.3,19 A116,116 0 0,1 158,16"
+        android:strokeColor="#1affffff"
+        android:strokeLineCap="round"
+        android:strokeWidth="4" />
+
+    <!-- The label, which the artwork covers exactly. It shows on its own only while a track has no
+         artwork to put there, so it is a paper tone rather than more black. -->
+    <path
+        android:fillColor="#2f2f36"
+        android:pathData="M128,48 A80,80 0 1,1 128,208 A80,80 0 1,1 128,48 Z" />
+</vector>

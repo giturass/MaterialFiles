@@ -6,15 +6,15 @@
   -->
 
 <resources>
-    <style name="Theme.MaterialFiles.Material3.Black">
+    <style name="Theme.MaterialFiles.Black">
         <item name="colorPrimaryDark">@color/color_primary_dark_black</item>
         <item name="colorSurface">@android:color/black</item>
     </style>
-    <style name="Theme.MaterialFiles.Material3.Translucent.Black">
+    <style name="Theme.MaterialFiles.Translucent.Black">
         <item name="colorPrimaryDark">@color/color_primary_dark_black</item>
         <item name="colorSurface">@android:color/black</item>
     </style>
-    <style name="Theme.MaterialFiles.Material3.Immersive.Black">
+    <style name="Theme.MaterialFiles.Immersive.Black">
         <item name="colorPrimaryDark">@color/color_primary_dark_black</item>
         <item name="colorSurface">@android:color/black</item>
     </style>

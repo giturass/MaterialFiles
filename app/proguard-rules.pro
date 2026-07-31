@@ -55,3 +55,18 @@
 
 # SMBJ-RPC
 -dontwarn java.rmi.UnmarshalException
+
+# SnakeYAML optionally supports JavaBeans, which is not available on Android.
+-dontwarn java.beans.**
+
+# TM4E uses Joni for TextMate regular expressions. R8 enum unboxing corrupts
+# QuantifierNode's nested reduce table and disables syntax highlighting.
+-keep,allowobfuscation class org.joni.** { *; }
+
+# BASS's JNI bridge resolves Java classes, callback interfaces and structure fields by their fixed
+# names, so none of it can be renamed or stripped.
+-keep class com.un4seen.bass.** { *; }
+
+# SevenZHeaderEncryptor reaches Commons Compress' package private 7z internals (NID, AES256Options,
+# Coders) to encrypt an archive's header, so the whole package has to stay in one runtime package.
+-keep class org.apache.commons.compress.archivers.sevenz.** { *; }

@@ -17,7 +17,7 @@ import me.zhanghai.android.files.app.application
 import me.zhanghai.android.files.app.contentResolver
 import me.zhanghai.android.files.hiddenapi.RestrictedHiddenApi
 import me.zhanghai.android.files.provider.common.DelegateFileChannel
-import me.zhanghai.android.files.provider.root.isRunningAsRoot
+import me.zhanghai.android.files.provider.root.isRunningInPrivilegedProcess
 import me.zhanghai.android.files.util.lazyReflectedMethod
 import java.io.File
 import java.io.IOException
@@ -28,7 +28,7 @@ import java.io.IOException
  */
 object MediaScanner {
     fun scan(file: File, isDeleted: Boolean = false) {
-        if (isRunningAsRoot) {
+        if (isRunningInPrivilegedProcess) {
             return
         }
         MediaScannerConnection.scanFile(application, arrayOf(file.path), null) { _, _ ->
@@ -87,7 +87,7 @@ object MediaScanner {
     }
 
     fun createScanOnCloseFileChannel(fileChannel: FileChannel, file: File): FileChannel =
-        if (isRunningAsRoot) {
+        if (isRunningInPrivilegedProcess) {
             fileChannel
         } else {
             object : DelegateFileChannel(fileChannel) {

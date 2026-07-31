@@ -23,6 +23,7 @@
         android:layout_marginEnd="@dimen/content_start_from_screen_edge_margin_minus_44dp"
         android:clipToPadding="false"
         android:duplicateParentState="true"
+        android:outlineProvider="background"
         android:padding="@dimen/touch_target_large_icon_padding">
 
         <me.zhanghai.android.files.ui.DisabledAlphaImageView

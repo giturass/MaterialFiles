@@ -7,13 +7,15 @@ import me.zhanghai.android.files.provider.remote.IRemotePosixFileStore;
 import me.zhanghai.android.files.provider.remote.ParcelableObject;
 
 interface IRemoteFileService {
-    IRemoteFileSystemProvider getRemoteFileSystemProviderInterface(String scheme);
+    void destroy() = 16777114;
 
-    IRemoteFileSystem getRemoteFileSystemInterface(in ParcelableObject fileSystem);
+    IRemoteFileSystemProvider getRemoteFileSystemProviderInterface(String scheme) = 0;
 
-    IRemotePosixFileStore getRemotePosixFileStoreInterface(in ParcelableObject fileStore);
+    IRemoteFileSystem getRemoteFileSystemInterface(in ParcelableObject fileSystem) = 1;
+
+    IRemotePosixFileStore getRemotePosixFileStoreInterface(in ParcelableObject fileStore) = 2;
 
     IRemotePosixFileAttributeView getRemotePosixFileAttributeViewInterface(
         in ParcelableObject attributeView
-    );
+    ) = 3;
 }

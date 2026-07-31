@@ -39,6 +39,7 @@ import me.zhanghai.android.files.file.lastModifiedInstant
 import me.zhanghai.android.files.filelist.appDirectoryPackageName
 import me.zhanghai.android.files.filelist.supportsThumbnail
 import me.zhanghai.android.files.provider.common.isEncrypted
+import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.util.ParcelableArgs
 import me.zhanghai.android.files.util.ParcelableState
 import me.zhanghai.android.files.util.RemoteCallback
@@ -53,6 +54,7 @@ import me.zhanghai.android.files.util.readParcelable
 import me.zhanghai.android.files.util.setTextWithSelection
 import me.zhanghai.android.files.util.shortAnimTime
 import me.zhanghai.android.files.util.showSoftInput
+import me.zhanghai.android.files.util.valueCompat
 
 class FileJobConflictDialogFragment : AppCompatDialogFragment() {
     private val args by args<Args>()
@@ -174,11 +176,15 @@ class FileJobConflictDialogFragment : AppCompatDialogFragment() {
         appIconBadgeImage.apply {
             dispose()
             setImageDrawable(null)
-            val appDirectoryPackageName = file.appDirectoryPackageName
+            val appDirectoryPackageName = if (Settings.FILE_LIST_SHOW_FOLDER_APP_ICONS.valueCompat) {
+                file.appDirectoryPackageName
+            } else {
+                null
+            }
             val hasAppIconBadge = appDirectoryPackageName != null
             isVisible = hasAppIconBadge
             if (hasAppIconBadge) {
-                load(AppIconPackageName(appDirectoryPackageName!!))
+                load(AppIconPackageName(appDirectoryPackageName))
             }
         }
         badgeImage.apply {

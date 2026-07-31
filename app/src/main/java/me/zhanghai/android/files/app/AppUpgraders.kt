@@ -112,17 +112,8 @@ private fun migrateFileSortOptionsSetting1_1_0(sharedPreferences: SharedPreferen
 }
 
 fun migrateCreateArchiveTypeSetting1_1_0() {
-    val key = application.getString(R.string.pref_key_create_archive_type)
-    val oldValue = defaultSharedPreferences.getString(key, null) ?: return
-    val newValue = oldValue.replace(Regex("type_.+$")) {
-        when (it.value) {
-            "type_zip" -> "zipRadio"
-            "type_tar_xz" -> "tarXzRadio"
-            "type_seven_z" -> "sevenZRadio"
-            else -> "zipRadio"
-        }
-    }
-    defaultSharedPreferences.edit { putString(key, newValue) }
+    // No-op: the create archive type setting has since moved to a new key holding an enum ordinal,
+    // so the value under the old key is never read and doesn't need migrating.
 }
 
 private fun migrateStandardDirectorySettingsSetting1_1_0() {

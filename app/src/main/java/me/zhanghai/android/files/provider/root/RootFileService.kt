@@ -13,17 +13,26 @@ import me.zhanghai.android.files.BuildConfig
 import me.zhanghai.android.files.provider.FileSystemProviders
 import me.zhanghai.android.files.provider.remote.RemoteFileService
 import me.zhanghai.android.files.provider.remote.RemoteInterface
+import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.util.lazyReflectedMethod
+import me.zhanghai.android.files.util.valueCompat
 
 val isRunningAsRoot = Process.myUid() == 0
+
+@Volatile
+var isRunningAsPrivilegedFileService = false
+    private set
+
+val isRunningInPrivilegedProcess: Boolean
+    get() = isRunningAsRoot || isRunningAsPrivilegedFileService
 
 @SuppressLint("StaticFieldLeak")
 lateinit var rootContext: Context private set
 
 object RootFileService : RemoteFileService(
     RemoteInterface {
-        if (SuiFileServiceLauncher.isSuiAvailable()) {
-            SuiFileServiceLauncher.launchService()
+        if (Settings.SHIZUKU_ENABLED.valueCompat) {
+            ShizukuFileServiceLauncher.launchService()
         } else {
             LibSuFileServiceLauncher.launchService()
         }
@@ -43,9 +52,13 @@ object RootFileService : RemoteFileService(
         "android.app.ActivityThread", "getSystemContext"
     )
 
-    fun main() {
+    fun main(context: Context? = null) {
+        // A Shizuku user service normally runs as shell (UID 2000), not root. Mark it as the
+        // privileged backend before providers are installed so file operations use the local
+        // provider in this process instead of recursively trying to launch another root service.
+        isRunningAsPrivilegedFileService = true
         Log.i(LOG_TAG, "Creating package context")
-        rootContext = createPackageContext(BuildConfig.APPLICATION_ID)
+        rootContext = context ?: createPackageContext(BuildConfig.APPLICATION_ID)
         Log.i(LOG_TAG, "Installing file system providers")
         FileSystemProviders.install()
         FileSystemProviders.overflowWatchEvents = true

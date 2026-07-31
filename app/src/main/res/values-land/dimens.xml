@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  ~ Copyright (c) 2026 Hai Zhang <dreaming.in.code.zh@gmail.com>
+  ~ All Rights Reserved.
+  -->
+
+<resources>
+    <!-- Landscape leaves far less vertical room for the artwork, the title and the controls. The
+         label and the artwork filling it keep the same proportions as the disc. -->
+    <dimen name="media_player_audio_cover_size">152dp</dimen>
+    <dimen name="media_player_audio_cover_label_size">95dp</dimen>
+    <dimen name="media_player_audio_cover_art_size">95dp</dimen>
+    <dimen name="media_player_audio_cover_placeholder_padding">28dp</dimen>
+    <dimen name="media_player_audio_cover_hole_size">10dp</dimen>
+</resources>

@@ -58,7 +58,26 @@ private val extensionToMimeTypeOverrideMap = mapOf(
     "log" to "text/plain",
     "prop" to "text/plain",
     "properties" to "text/plain",
-    "rc" to "text/plain"
+    "rc" to "text/plain",
+    // Audio formats the media player can play through BASS but that Android either doesn't know
+    // about or maps to something unrelated.
+    "ape" to "audio/x-monkeys-audio",
+    "mac" to "audio/x-monkeys-audio",
+    "wv" to "audio/x-wavpack", // Clashes with "application/vnd.wv.csp+wbxml"
+    "tta" to "audio/x-tta",
+    "mpc" to "audio/x-musepack", // Clashes with "chemical/x-mopac-input"
+    "mpp" to "audio/x-musepack",
+    "dsf" to "audio/x-dsd",
+    "dff" to "audio/x-dsd",
+    "mod" to "audio/x-mod", // Clashes with "application/xml-dtd"
+    "xm" to "audio/x-mod",
+    "s3m" to "audio/x-mod",
+    "it" to "audio/x-mod",
+    "mtm" to "audio/x-mod",
+    "umx" to "audio/x-mod",
+    "mo3" to "audio/x-mo3",
+    "eac3" to "audio/eac3",
+    "ec3" to "audio/eac3"
 ).mapValues { it.value.asMimeType() }
 
 fun MimeType.Companion.forSpecialPosixFileType(type: PosixFileType): MimeType? =

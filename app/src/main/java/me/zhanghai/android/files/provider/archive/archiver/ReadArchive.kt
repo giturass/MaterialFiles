@@ -29,6 +29,13 @@ import me.zhanghai.android.libarchive.ArchiveException
 class ReadArchive : Closeable {
     private val archive = Archive.readNew()
 
+    /**
+     * Which format libarchive settled on, valid once a header has been read. One of
+     * [Archive]'s `FORMAT_*` constants.
+     */
+    val format: Int
+        get() = Archive.format(archive)
+
     @Throws(ArchiveException::class)
     constructor(inputStream: InputStream, passwords: List<String>) {
         var successful = false
@@ -238,9 +245,12 @@ class ReadArchive : Closeable {
 
         @Throws(IOException::class)
         override fun read(b: ByteArray, off: Int, len: Int): Int {
+            // Wrapped rather than cleared: libarchive fills the buffer from its position, which is
+            // where the caller's range starts, and clearing it would send the bytes to b[0].
             val buffer = ByteBuffer.wrap(b, off, len)
-            read(buffer)
-            return if (buffer.hasRemaining()) buffer.remaining() else -1
+            Archive.readData(archive, buffer)
+            val bytesRead = buffer.position() - off
+            return if (bytesRead > 0) bytesRead else -1
         }
 
         @Throws(IOException::class)

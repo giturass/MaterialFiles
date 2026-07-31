@@ -5,6 +5,7 @@
 
 package me.zhanghai.android.files.provider.archive.archiver
 
+import android.os.Build
 import androidx.preference.PreferenceManager
 import java8.nio.channels.SeekableByteChannel
 import java8.nio.charset.StandardCharsets
@@ -18,10 +19,12 @@ import me.zhanghai.android.files.provider.common.PosixFileMode
 import me.zhanghai.android.files.provider.common.PosixFileType
 import me.zhanghai.android.files.provider.common.newByteChannel
 import me.zhanghai.android.files.provider.common.newInputStream
-import me.zhanghai.android.files.provider.root.isRunningAsRoot
+import me.zhanghai.android.files.provider.root.isRunningInPrivilegedProcess
 import me.zhanghai.android.files.provider.root.rootContext
 import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.util.valueCompat
+import me.zhanghai.android.libarchive.Archive
+import me.zhanghai.android.libarchive.ArchiveException
 import java.io.Closeable
 import java.io.IOException
 import java.io.InputStream
@@ -91,12 +94,21 @@ object ArchiveReader {
     @Throws(IOException::class)
     private fun readEntries(file: Path, passwords: List<String>): List<ReadArchive.Entry> {
         val charset = archiveFileNameCharset
-        val (archive, closeable) = openArchive(file, passwords)
-        return closeable.use {
-            buildList {
-                while (true) {
-                    this += archive.readEntry(charset) ?: break
+        return try {
+            val (archive, closeable) = openArchive(file, passwords)
+            closeable.use {
+                buildList {
+                    while (true) {
+                        this += archive.readEntry(charset) ?: break
+                    }
                 }
+            }
+        } catch (e: ArchiveException) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
+                EncryptedSevenZReader.isEncryptedHeaderException(e)) {
+                EncryptedSevenZReader.readEntries(file, passwords, charset)
+            } else {
+                throw e
             }
         }
     }
@@ -104,28 +116,47 @@ object ArchiveReader {
     @Throws(IOException::class)
     fun newInputStream(file: Path, passwords: List<String>, entry: ReadArchive.Entry): InputStream? {
         val charset = archiveFileNameCharset
-        val (archive, closeable) = openArchive(file, passwords)
-        var successful = false
-        return try {
-            while (true) {
-                val currentEntry = archive.readEntry(charset) ?: break
-                if (currentEntry.name != entry.name) {
-                    continue
+        try {
+            val (archive, closeable) = openArchive(file, passwords)
+            var inputStream: InputStream? = null
+            try {
+                var found = false
+                while (true) {
+                    val currentEntry = archive.readEntry(charset) ?: break
+                    if (currentEntry.name == entry.name) {
+                        found = true
+                        break
+                    }
                 }
-                successful = true
-                break
+                if (!found) {
+                    return null
+                }
+                if (!needsCommonsCompress(archive, entry)) {
+                    inputStream = CloseableInputStream(archive.newDataInputStream(), closeable)
+                    return inputStream
+                }
+            } finally {
+                if (inputStream == null) {
+                    closeable.close()
+                }
             }
-            if (successful) {
-                CloseableInputStream(archive.newDataInputStream(), closeable)
-            } else {
-                null
-            }
-        } finally {
-            if (!successful) {
-                closeable.close()
+        } catch (e: ArchiveException) {
+            if (!(Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
+                    EncryptedSevenZReader.isEncryptedHeaderException(e))) {
+                throw e
             }
         }
+        return EncryptedSevenZReader.newInputStream(file, passwords, entry)
     }
+
+    /**
+     * Whether [entry] has to be read with Commons Compress instead. libarchive lists a 7Z archive
+     * whose entry content is encrypted, but refuses to decrypt it, and it refuses on the first read
+     * rather than when the entry is opened, so the swap is made before a caller sees that.
+     */
+    private fun needsCommonsCompress(archive: ReadArchive, entry: ReadArchive.Entry): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && entry.isEncrypted &&
+            archive.format == Archive.FORMAT_7ZIP
 
     @Throws(IOException::class)
     private fun openArchive(
@@ -189,7 +220,7 @@ object ArchiveReader {
 
     private val archiveFileNameCharset: Charset
         get() =
-            if (isRunningAsRoot) {
+            if (isRunningInPrivilegedProcess) {
                 try {
                     val sharedPreferences =
                         PreferenceManager.getDefaultSharedPreferences(rootContext)

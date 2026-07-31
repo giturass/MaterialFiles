@@ -15,6 +15,7 @@ import me.zhanghai.android.files.filejob.fileJobNotificationTemplate
 import me.zhanghai.android.files.ftpserver.ftpServerServiceNotificationTemplate
 import me.zhanghai.android.files.hiddenapi.HiddenApi
 import me.zhanghai.android.files.provider.FileSystemProviders
+import me.zhanghai.android.files.provider.root.ShizukuFileServiceLauncher
 import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.storage.FtpServerAuthenticator
 import me.zhanghai.android.files.storage.SftpServerAuthenticator
@@ -23,6 +24,7 @@ import me.zhanghai.android.files.storage.StorageVolumeListLiveData
 import me.zhanghai.android.files.storage.WebDavServerAuthenticator
 import me.zhanghai.android.files.theme.custom.CustomThemeHelper
 import me.zhanghai.android.files.theme.night.NightModeHelper
+import me.zhanghai.android.files.viewer.media.mediaPlaybackNotificationChannelTemplate
 import java.util.Properties
 import me.zhanghai.android.files.provider.ftp.client.Client as FtpClient
 import me.zhanghai.android.files.provider.sftp.client.Client as SftpClient
@@ -30,10 +32,10 @@ import me.zhanghai.android.files.provider.smb.client.Client as SmbClient
 import me.zhanghai.android.files.provider.webdav.client.Client as WebDavClient
 
 val appInitializers = listOf(
-    ::initializeCrashlytics,
     ::disableHiddenApiChecks,
     ::initializeWebViewDebugging,
     ::initializeCoil,
+    ::initializeShizuku,
     ::initializeFileSystemProviders,
     ::upgradeApp,
     ::initializeLiveDataObjects,
@@ -42,10 +44,8 @@ val appInitializers = listOf(
     ::createNotificationChannels
 )
 
-private fun initializeCrashlytics() {
-//#ifdef NONFREE
-    me.zhanghai.android.files.nonfree.CrashlyticsInitializer.initialize()
-//#endif
+private fun initializeShizuku() {
+    ShizukuFileServiceLauncher.initialize(application)
 }
 
 private fun disableHiddenApiChecks() {
@@ -96,7 +96,8 @@ private fun createNotificationChannels() {
             listOf(
                 backgroundActivityStartNotificationTemplate.channelTemplate,
                 fileJobNotificationTemplate.channelTemplate,
-                ftpServerServiceNotificationTemplate.channelTemplate
+                ftpServerServiceNotificationTemplate.channelTemplate,
+                mediaPlaybackNotificationChannelTemplate
             ).map { it.create(application) }
         )
     }

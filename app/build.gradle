@@ -8,26 +8,11 @@ apply plugin: 'kotlin-parcelize'
 
 apply from: '../signing.gradle'
 
-//#ifdef NONFREE
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
-    }
-    dependencies {
-        classpath 'com.google.gms:google-services:4.4.4'
-        classpath 'com.google.firebase:firebase-crashlytics-gradle:3.0.6'
-    }
-}
-apply plugin: 'com.google.gms.google-services'
-apply plugin: 'com.google.firebase.crashlytics'
-//#endif
-
 android {
     namespace 'me.zhanghai.android.files'
     buildToolsVersion = '37.0.0'
     compileSdk = 36
-    ndkVersion '28.1.13356709'
+    ndkVersion '29.0.14206865'
     defaultConfig {
         applicationId 'me.zhanghai.android.files'
         minSdk 23
@@ -45,6 +30,9 @@ android {
                 arguments '-DANDROID_STL=none'
             }
         }
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
     }
     buildFeatures {
         aidl true
@@ -54,6 +42,10 @@ android {
     }
     androidResources {
         generateLocaleConfig true
+        // Only English and Simplified Chinese are shipped. Without this the locale config would
+        // also list every language AndroidX and Material happen to translate themselves into, and
+        // the in-app language picker reads that list.
+        localeFilters.addAll(['en', 'zh-rCN'])
     }
     compileOptions {
         coreLibraryDesugaringEnabled true
@@ -75,12 +67,9 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release
-//#ifdef NONFREE
-            firebaseCrashlytics {
-                nativeSymbolUploadEnabled true
+            if (signingConfigs.release.storeFile != null) {
+                signingConfig signingConfigs.release
             }
-//#endif
         }
     }
     packagingOptions {
@@ -113,6 +102,9 @@ dependencies {
     }
     implementation 'com.github.chrisbanes:PhotoView:2.3.0'
     implementation 'com.github.topjohnwu.libsu:service:5.2.2'
+    // Bundles a modern SQLite build with the same API as android.database.sqlite, so that database
+    // files relying on newer features open consistently across OS versions.
+    implementation 'com.github.requery:sqlite-android:3.49.0'
 }
 
 dependencies {
@@ -139,6 +131,7 @@ dependencies {
     implementation "androidx.lifecycle:lifecycle-runtime-ktx:$androidx_lifecycle_version"
     implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:$androidx_lifecycle_version"
     implementation 'androidx.preference:preference-ktx:1.2.1'
+    implementation 'androidx.media:media:1.8.0'
     implementation 'androidx.recyclerview:recyclerview:1.4.0'
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.2.0'
     implementation 'com.google.android.material:material:1.13.0'
@@ -176,6 +169,8 @@ dependencies {
     // Guava conflicts with com.google.guava:listenablefuture:1.0 pulled in by AndroidX Core
     implementation 'com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava'
     implementation 'com.takisoft.preferencex:preferencex:1.1.0'
+    implementation 'org.apache.commons:commons-compress:1.27.1'
+    implementation 'org.tukaani:xz:1.10'
     implementation 'commons-net:commons-net:3.13.0'
     // LicensesDialog 2.2.0 pulls in androidx.webkit and uses setForceDark() instead of correctly
     // setting colors.
@@ -185,6 +180,7 @@ dependencies {
     implementation 'dev.chrisbanes:insetter-ktx:0.3.1'
     implementation 'dev.rikka.rikkax.preference:simplemenu-preference:1.0.3'
     implementation 'dev.rikka.shizuku:api:13.1.5'
+    implementation 'dev.rikka.shizuku:provider:13.1.5'
     implementation ('eu.agno3.jcifs:jcifs-ng:2.1.10') {
         exclude group: 'org.bouncycastle', module: 'bcprov-jdk18on'
     }
@@ -193,6 +189,28 @@ dependencies {
     implementation 'io.coil-kt:coil-gif'
     implementation 'io.coil-kt:coil-svg'
     implementation 'io.coil-kt:coil-video'
+    // ExoPlayer decodes video and mainstream audio; media3-ui is only needed for its SubtitleView.
+    // Audio formats that ExoPlayer has no extractor or decoder for (ALAC, APE, WavPack, TTA,
+    // Musepack, DSD, AIFF, MOD, ...) fall back to BASS, which is vendored under
+    // src/main/java/com/un4seen/bass and src/main/jniLibs since it isn't published to Maven.
+    // Playback state and controls are owned by our media playback service so playback can continue
+    // after the viewer leaves the foreground.
+    def media3_version = '1.10.1'
+    implementation "androidx.media3:media3-exoplayer:$media3_version"
+    implementation "androidx.media3:media3-ui:$media3_version"
+    // Built from Sora Editor 0.24.6 source. The local language-textmate AAR replaces TM4E's four
+    // Java records with equivalent classes so AGP can dex it for minSdk 23.
+    implementation files('libs/sora-editor-0.24.6.aar')
+    implementation files('libs/sora-language-textmate-0.24.6.aar')
+    // The library behind apksigner, used to sign APKs with APK Signature Scheme v1/v2/v3.
+    implementation 'com.android.tools.build:apksig:9.1.0'
+    implementation 'androidx.annotation:annotation:1.10.0'
+    implementation 'androidx.collection:collection:1.5.0'
+    implementation 'com.google.code.gson:gson:2.13.2'
+    implementation 'org.jruby.jcodings:jcodings:1.0.64'
+    implementation 'org.jruby.joni:joni:2.2.7'
+    implementation 'org.snakeyaml:snakeyaml-engine:3.0.1'
+    implementation 'org.eclipse.jdt:org.eclipse.jdt.annotation:2.4.100'
     implementation 'me.zhanghai.android.appiconloader:appiconloader:1.5.0'
     implementation 'me.zhanghai.android.fastscroll:library:1.3.0'
     implementation 'me.zhanghai.android.foregroundcompat:library:1.0.2'
@@ -211,10 +229,4 @@ dependencies {
     }
     // Also a dependency of jCIFS-NG.
     implementation 'org.slf4j:slf4j-android:1.7.36'
-
-//#ifdef NONFREE
-    implementation platform('com.google.firebase:firebase-bom:34.11.0')
-    implementation 'com.google.firebase:firebase-analytics'
-    implementation 'com.google.firebase:firebase-crashlytics-ndk'
-//#endif
 }
