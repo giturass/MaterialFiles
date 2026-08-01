@@ -39,9 +39,15 @@ import java.nio.charset.Charset
 object EncryptedSevenZReader {
     /**
      * Whether [exception] is libarchive giving up on a 7z archive because its header is encrypted.
+     *
+     * Matched on keywords rather than on the exact sentence, so that a libarchive that reworded it
+     * doesn't silently turn every such archive into an unexplained failure.
      */
-    fun isEncryptedHeaderException(exception: ArchiveException): Boolean =
-        exception.message == ENCRYPTED_HEADER_MESSAGE
+    fun isEncryptedHeaderException(exception: ArchiveException): Boolean {
+        val message = exception.message ?: return false
+        return message.contains("header", ignoreCase = true) &&
+            message.contains("encrypted", ignoreCase = true)
+    }
 
     @Throws(IOException::class)
     fun readEntries(
@@ -67,6 +73,16 @@ object EncryptedSevenZReader {
         if (passwords.isEmpty()) {
             throw ArchiveException(ARCHIVE_ERRNO_MISC, PASSPHRASE_REQUIRED_MESSAGE)
         }
+        // Reading a whole archive out means one call per entry, and reopening for each of them
+        // would parse the header and decompress everything before it all over again.
+        SequentialArchiveCache.take(file, entry.name)?.let { cached ->
+            try {
+                return ProbedInputStream(file, cached, cached.readProbe())
+            } catch (e: IOException) {
+                e.printStackTrace()
+                cached.closeSafe()
+            }
+        }
         var lastException: IOException? = null
         for (password in passwords) {
             val archive = try {
@@ -91,7 +107,7 @@ object EncryptedSevenZReader {
                 }
                 val probe = archive.readProbe()
                 successful = true
-                return ProbedInputStream(archive, probe)
+                return ProbedInputStream(file, archive, probe)
             } catch (e: IOException) {
                 lastException = e
             } finally {
@@ -241,18 +257,25 @@ object EncryptedSevenZReader {
 
     /** The bytes already read to check the password, followed by the rest of the entry. */
     private class ProbedInputStream(
+        private val file: Path,
         private val archive: SevenZFile,
         private val probe: ByteArray
     ) : InputStream() {
         private var probeOffset = 0
+        /**
+         * Whether the entry was read to its end. Only then is the archive positioned exactly at the
+         * next entry, which is what makes it worth keeping around for the next call.
+         */
+        private var isDrained = false
+        private var isClosed = false
 
         @Throws(IOException::class)
-        override fun read(): Int =
+        override fun read(): Int {
             if (probeOffset < probe.size) {
-                probe[probeOffset++].toInt() and 0xFF
-            } else {
-                archive.read()
+                return probe[probeOffset++].toInt() and 0xFF
             }
+            return archive.read().also { if (it < 0) isDrained = true }
+        }
 
         @Throws(IOException::class)
         override fun read(b: ByteArray, off: Int, len: Int): Int {
@@ -260,7 +283,7 @@ object EncryptedSevenZReader {
                 return 0
             }
             if (probeOffset >= probe.size) {
-                return archive.read(b, off, len)
+                return archive.read(b, off, len).also { if (it < 0) isDrained = true }
             }
             val length = minOf(len, probe.size - probeOffset)
             probe.copyInto(b, off, probeOffset, probeOffset + length)
@@ -270,7 +293,78 @@ object EncryptedSevenZReader {
 
         @Throws(IOException::class)
         override fun close() {
+            if (isClosed) {
+                return
+            }
+            isClosed = true
+            if (isDrained && SequentialArchiveCache.offer(file, archive)) {
+                return
+            }
             archive.close()
+        }
+    }
+
+    /**
+     * Holds on to one archive that has been read to the end of an entry, so that reading the next
+     * one continues rather than starting over. A 7z archive is solid, so starting over means
+     * decompressing everything in front of the entry again.
+     *
+     * A single slot, because the only access pattern this helps is one caller walking one archive.
+     * Anything else simply misses and opens its own.
+     */
+    private object SequentialArchiveCache {
+        private var file: Path? = null
+        private var archive: SevenZFile? = null
+        /** The name of the entry the held archive is already positioned on. */
+        private var heldEntryName: String? = null
+
+        /** Takes the held archive when it is already positioned on [entryName]. */
+        @Synchronized
+        fun take(file: Path, entryName: String): SevenZFile? {
+            if (this.file != file) {
+                // Another archive is being read now, so the held one is not going to be resumed.
+                closeHeldLocked()
+                return null
+            }
+            if (heldEntryName != entryName) {
+                closeHeldLocked()
+                return null
+            }
+            val archive = archive
+            clearLocked()
+            return archive
+        }
+
+        /**
+         * Hands an archive over to be kept for the next call, or returns false when there is nothing
+         * left in it to keep it for, in which case the caller still owns it.
+         */
+        @Synchronized
+        fun offer(file: Path, archive: SevenZFile): Boolean {
+            // Stepping onto the next entry here is what lets take() hand it straight back without
+            // having to step, and tells us whether there is a next entry at all.
+            val nextEntry = try {
+                archive.nextEntry
+            } catch (e: IOException) {
+                e.printStackTrace()
+                return false
+            } ?: return false
+            closeHeldLocked()
+            this.file = file
+            this.archive = archive
+            heldEntryName = nextEntry.name
+            return true
+        }
+
+        private fun clearLocked() {
+            file = null
+            archive = null
+            heldEntryName = null
+        }
+
+        private fun closeHeldLocked() {
+            archive?.closeSafe()
+            clearLocked()
         }
     }
 

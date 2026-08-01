@@ -9,6 +9,7 @@ import android.content.Context
 import android.net.Uri
 import java8.nio.file.Path
 import me.zhanghai.android.files.provider.common.newInputStream
+import me.zhanghai.android.files.util.localFileOrNull
 import java.io.BufferedInputStream
 import java.io.EOFException
 import java.io.InputStream
@@ -29,8 +30,11 @@ object LyricsLoader {
         if (path != null) {
             loadSidecar(path)?.let { return it }
         }
+        // Reading tags out of a remote file means pulling its bytes over the network, and an MP4
+        // whose metadata sits at the end would mean pulling all of them, for lyrics.
+        val isLocal = path == null || path.localFileOrNull != null
         return try {
-            openStream(context, path, uri)?.use { loadEmbedded(it) }
+            openStream(context, path, uri)?.use { loadEmbedded(it, isLocal) }
         } catch (e: Exception) {
             e.printStackTrace()
             null
@@ -71,7 +75,7 @@ object LyricsLoader {
         }
     }
 
-    private fun loadEmbedded(inputStream: InputStream): Lyrics? {
+    private fun loadEmbedded(inputStream: InputStream, isLocal: Boolean): Lyrics? {
         val stream = BufferedInputStream(inputStream)
         val magic = ByteArray(12)
         stream.mark(magic.size + 1)
@@ -84,7 +88,7 @@ object LyricsLoader {
             when {
                 magic.startsWith(ID3_MAGIC) -> readId3v2Lyrics(stream)
                 magic.startsWith(FLAC_MAGIC) -> readFlacLyrics(stream)
-                magic.startsWith(FTYP_MAGIC, 4) -> readMp4Lyrics(stream)
+                magic.startsWith(FTYP_MAGIC, 4) -> readMp4Lyrics(stream, isLocal)
                 else -> null
             }
         } catch (e: Exception) {
@@ -239,9 +243,10 @@ object LyricsLoader {
     }
 
     /** Walks the atom tree down to `moov.udta.meta.ilst.©lyr`. */
-    private fun readMp4Lyrics(stream: InputStream): String? {
+    private fun readMp4Lyrics(stream: InputStream, isLocal: Boolean): String? {
+        val scanLimit = if (isLocal) MAX_MP4_SCAN_BYTES else MAX_REMOTE_MP4_SCAN_BYTES
         var readBytes = 0L
-        while (readBytes < MAX_MP4_SCAN_BYTES) {
+        while (readBytes < scanLimit) {
             val header = ByteArray(8)
             stream.readFully(header)
             readBytes += header.size
@@ -260,6 +265,11 @@ object LyricsLoader {
                 val moov = ByteArray(contentSize.toInt())
                 stream.readFully(moov)
                 return moov.findMp4Lyrics(0, moov.size, 0)
+            }
+            if (readBytes + contentSize > scanLimit) {
+                // The metadata is past where we are willing to read, which for a file that isn't
+                // local means past where we are willing to download.
+                return null
             }
             stream.skipFully(contentSize)
             readBytes += contentSize
@@ -436,6 +446,11 @@ object LyricsLoader {
     private const val MAX_LYRICS_BYTES = 512 * 1024
     private const val MAX_TAG_BYTES = 4 * 1024 * 1024
     private const val MAX_MP4_SCAN_BYTES = 512L * 1024 * 1024
+    /**
+     * How far into a file that isn't local we are willing to look for the metadata atom. Enough for
+     * one written for streaming, which puts it at the front, and not enough to be felt otherwise.
+     */
+    private const val MAX_REMOTE_MP4_SCAN_BYTES = 4L * 1024 * 1024
     private const val MAX_MP4_DEPTH = 8
     private const val FLAC_BLOCK_VORBIS_COMMENT = 4
     /** `©lyr`, the iTunes lyrics atom. */

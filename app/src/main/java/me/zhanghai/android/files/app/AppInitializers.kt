@@ -24,6 +24,7 @@ import me.zhanghai.android.files.storage.StorageVolumeListLiveData
 import me.zhanghai.android.files.storage.WebDavServerAuthenticator
 import me.zhanghai.android.files.theme.custom.CustomThemeHelper
 import me.zhanghai.android.files.theme.night.NightModeHelper
+import me.zhanghai.android.files.util.CacheFiles
 import me.zhanghai.android.files.viewer.media.mediaPlaybackNotificationChannelTemplate
 import java.util.Properties
 import me.zhanghai.android.files.provider.ftp.client.Client as FtpClient
@@ -41,7 +42,8 @@ val appInitializers = listOf(
     ::initializeLiveDataObjects,
     ::initializeCustomTheme,
     ::initializeNightMode,
-    ::createNotificationChannels
+    ::createNotificationChannels,
+    ::pruneCacheFiles
 )
 
 private fun initializeShizuku() {
@@ -90,8 +92,7 @@ private fun initializeNightMode() {
     NightModeHelper.initialize(application)
 }
 
-private fun createNotificationChannels() {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+private fun createNotificationChannels() {    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         notificationManager.createNotificationChannels(
             listOf(
                 backgroundActivityStartNotificationTemplate.channelTemplate,
@@ -101,4 +102,13 @@ private fun createNotificationChannels() {
             ).map { it.create(application) }
         )
     }
+}
+
+/**
+ * Clears the working copies the database editor and the APK signer make of files that don't live on
+ * the local file system. They are deleted when the editor closes, but not when the process dies
+ * first, and nothing can be holding one this early.
+ */
+private fun pruneCacheFiles() {
+    AsyncTask.THREAD_POOL_EXECUTOR.execute { CacheFiles.pruneAll(application) }
 }

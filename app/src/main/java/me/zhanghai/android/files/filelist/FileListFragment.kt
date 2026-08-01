@@ -72,7 +72,7 @@ import me.zhanghai.android.files.file.extension
 import me.zhanghai.android.files.file.fileProviderUri
 import me.zhanghai.android.files.file.isApk
 import me.zhanghai.android.files.file.isImage
-import me.zhanghai.android.files.file.isMedia
+import me.zhanghai.android.files.file.isPlayableMedia
 import me.zhanghai.android.files.file.isSqlite
 import me.zhanghai.android.files.fileaction.ArchivePasswordDialogActivity
 import me.zhanghai.android.files.fileaction.ArchivePasswordDialogFragment
@@ -168,6 +168,13 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         RequestPermissionInSettingsContract(android.Manifest.permission.POST_NOTIFICATIONS),
         this::onRequestNotificationPermissionInSettingsResult
     )
+    private val requestTermuxRunCommandPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+        this::onRequestTermuxRunCommandPermissionResult
+    )
+
+    /** Whether any terminal is installed, which cannot change while we are on screen. */
+    private val isTerminalAvailable by lazy { Terminal.isAvailable() }
 
     private val args by args<Args>()
     private val argsPath by lazy { args.intent.extraPath }
@@ -441,6 +448,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         updateViewSortMenuItems()
         updateSelectAllMenuItem()
         updateShowHiddenFilesMenuItem()
+        updateOpenInTerminalMenuItem()
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
@@ -742,6 +750,13 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         menuBinding.showHiddenFilesItem.isChecked = showHiddenFiles
     }
 
+    private fun updateOpenInTerminalMenuItem() {
+        if (!this::menuBinding.isInitialized) {
+            return
+        }
+        menuBinding.openInTerminalItem.isVisible = isTerminalAvailable
+    }
+
     private fun share() {
         shareFile(currentPath, MimeType.DIRECTORY)
     }
@@ -752,10 +767,25 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
     private fun openInTerminal() {
         val path = currentPath
-        if (path.isLinuxPath) {
-            Terminal.open(path.toFile().path, requireContext())
+        if (!path.isLinuxPath) {
+            showToast(R.string.file_list_open_in_terminal_unsupported_path)
+            return
+        }
+        when (Terminal.open(path.toFile().path, requireContext())) {
+            Terminal.Result.OPENED -> Unit
+            Terminal.Result.TERMUX_PERMISSION_REQUIRED ->
+                requestTermuxRunCommandPermissionLauncher.launch(
+                    Terminal.TERMUX_RUN_COMMAND_PERMISSION
+                )
+            Terminal.Result.NOT_FOUND -> showToast(R.string.activity_not_found)
+        }
+    }
+
+    private fun onRequestTermuxRunCommandPermissionResult(isGranted: Boolean) {
+        if (isGranted) {
+            openInTerminal()
         } else {
-            // TODO
+            showToast(R.string.file_list_open_in_terminal_termux_permission_denied)
         }
     }
 
@@ -1227,7 +1257,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             openDatabase(file)
             return
         }
-        if (file.mimeType.isMedia && !file.path.isArchivePath) {
+        if (file.mimeType.isPlayableMedia && !file.path.isArchivePath) {
             openMedia(file)
             return
         }
@@ -1753,7 +1783,8 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         val sortDirectoriesFirstItem: MenuItem,
         val viewSortPathSpecificItem: MenuItem,
         val selectAllItem: MenuItem,
-        val showHiddenFilesItem: MenuItem
+        val showHiddenFilesItem: MenuItem,
+        val openInTerminalItem: MenuItem
     ) {
         companion object {
             fun inflate(menu: Menu, inflater: MenuInflater): MenuBinding {
@@ -1769,7 +1800,8 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                     menu.findItem(R.id.action_sort_directories_first),
                     menu.findItem(R.id.action_view_sort_path_specific),
                     menu.findItem(R.id.action_select_all),
-                    menu.findItem(R.id.action_show_hidden_files)
+                    menu.findItem(R.id.action_show_hidden_files),
+                    menu.findItem(R.id.action_open_in_terminal)
                 )
             }
         }

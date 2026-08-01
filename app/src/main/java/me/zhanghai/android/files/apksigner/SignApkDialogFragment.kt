@@ -35,6 +35,7 @@ import me.zhanghai.android.files.util.ParcelableParceler
 import me.zhanghai.android.files.util.args
 import me.zhanghai.android.files.util.asFileName
 import me.zhanghai.android.files.util.asFileNameOrNull
+import me.zhanghai.android.files.util.CacheFiles
 import me.zhanghai.android.files.util.copyToCacheFile
 import me.zhanghai.android.files.util.layoutInflater
 import me.zhanghai.android.files.util.localFileOrNull
@@ -188,6 +189,10 @@ class SignApkDialogFragment : AppCompatDialogFragment(),
             } catch (e: Exception) {
                 e.printStackTrace()
                 Result.failure(e)
+            } finally {
+                // Nothing else refers to it, so it doesn't have to sit in the heap until a garbage
+                // collection happens to move it.
+                storePassword.fill('\u0000')
             }
             isUnlocking = false
             if (!isAdded) {
@@ -247,16 +252,21 @@ class SignApkDialogFragment : AppCompatDialogFragment(),
         // Check the key password before starting a background job, so that a typo is reported here
         // instead of as a notification later on.
         lifecycleScope.launch {
+            val checkStorePassword = storePassword.toCharArray()
+            val checkKeyPassword = keyPassword.toCharArray()
             val throwable = try {
                 withContext(Dispatchers.IO) {
                     val file = keyStorePath.toLocalOrCacheFile()
-                    KeyStores.load(file, storePassword.toCharArray())
-                        .getSigningKey(alias, keyPassword.toCharArray())
+                    KeyStores.load(file, checkStorePassword)
+                        .getSigningKey(alias, checkKeyPassword)
                 }
                 null
             } catch (e: Exception) {
                 e.printStackTrace()
                 e
+            } finally {
+                checkStorePassword.fill('\u0000')
+                checkKeyPassword.fill('\u0000')
             }
             if (!isAdded) {
                 return@launch
@@ -284,13 +294,12 @@ class SignApkDialogFragment : AppCompatDialogFragment(),
 
     /** apksig and the keystore readers both need a real file, so stage remote ones in the cache. */
     private fun Path.toLocalOrCacheFile(): File =
-        localFileOrNull ?: copyToCacheFile(requireContext(), KEY_STORE_CACHE_DIRECTORY)
+        localFileOrNull ?: copyToCacheFile(requireContext(), CacheFiles.KEY_STORE)
 
     companion object {
         private const val STATE_KEY_STORE = "keyStore"
         private const val STATE_ALIASES = "aliases"
         private const val STATE_OUTPUT_NAME = "outputName"
-        private const val KEY_STORE_CACHE_DIRECTORY = "key_store"
 
         fun show(files: FileItemSet, directory: Path, fragment: Fragment) {
             SignApkDialogFragment().putArgs(Args(files, directory)).show(fragment)

@@ -113,24 +113,42 @@ class DatabaseRepository private constructor(private val database: SQLiteDatabas
     /**
      * Reads one page of [table], keeping each row's `rowid` when the table has one. A [query]
      * restricts the page to rows holding it in any column.
+     *
+     * A table with a `rowid` is paged by it rather than by `OFFSET`, because `OFFSET` makes SQLite
+     * count its way past every skipped row and so gets slower the further down the table the user
+     * scrolls. [afterRowId] is the last row of the previous page; null asks for the first one.
      */
     fun queryPage(
         table: SqlTable,
         offset: Long,
         limit: Int,
-        query: String? = null
+        query: String? = null,
+        afterRowId: Long? = null
     ): List<SqlRow> {
         val quotedName = table.name.quoteSqlIdentifier()
         val (whereClause, whereArguments) = table.filterClause(query)
+        val arguments = mutableListOf<Any?>()
         val sql = if (table.hasRowId) {
-            "SELECT rowid AS $ROW_ID_COLUMN, * FROM $quotedName$whereClause LIMIT ? OFFSET ?"
+            buildString {
+                append("SELECT rowid AS ").append(ROW_ID_COLUMN).append(", * FROM ")
+                append(quotedName)
+                append(whereClause)
+                whereArguments.mapTo(arguments) { it.bindArgument }
+                if (afterRowId != null) {
+                    append(if (whereClause.isEmpty()) " WHERE" else " AND")
+                    append(" rowid > ?")
+                    arguments += afterRowId
+                }
+                append(" ORDER BY rowid LIMIT ?")
+                arguments += limit.toLong()
+            }
         } else {
+            whereArguments.mapTo(arguments) { it.bindArgument }
+            arguments += limit.toLong()
+            arguments += offset
             "SELECT * FROM $quotedName$whereClause LIMIT ? OFFSET ?"
         }
-        val arguments =
-            (whereArguments.map { it.bindArgument } + listOf(limit.toLong(), offset))
-                .toTypedArray()
-        return database.rawQuery(sql, arguments).use { cursor ->
+        return database.rawQuery(sql, arguments.toTypedArray()).use { cursor ->
             val valueOffset = if (table.hasRowId) 1 else 0
             buildList {
                 while (cursor.moveToNext()) {
@@ -213,15 +231,35 @@ class DatabaseRepository private constructor(private val database: SQLiteDatabas
     /**
      * Runs [sql], which may contain several statements. Returns the result of the last one: its rows
      * if it was a query, otherwise how many rows it changed.
+     *
+     * A script of several statements runs as one transaction, so that a failure halfway through
+     * leaves the database as it was rather than half changed. A statement that manages transactions
+     * itself takes the script out of ours, since SQLite has no nested transactions.
      */
     fun execute(sql: String): SqlStatementResult {
         val statements = sql.splitSqlStatements()
-        require(statements.isNotEmpty())
-        var result: SqlStatementResult = SqlStatementResult.Update(0)
-        for (statement in statements) {
-            result = executeSingle(statement)
+        require(statements.isNotEmpty()) { "No statement to run" }
+        if (statements.size == 1) {
+            return executeSingle(statements.single())
         }
-        return result
+        val isTransactional = statements.none { it.isTransactionStatement() }
+        if (isTransactional) {
+            database.beginTransaction()
+        }
+        try {
+            var result: SqlStatementResult = SqlStatementResult.Update(0)
+            for (statement in statements) {
+                result = executeSingle(statement)
+            }
+            if (isTransactional) {
+                database.setTransactionSuccessful()
+            }
+            return result
+        } finally {
+            if (isTransactional) {
+                database.endTransaction()
+            }
+        }
     }
 
     private fun executeSingle(sql: String): SqlStatementResult =
@@ -229,7 +267,7 @@ class DatabaseRepository private constructor(private val database: SQLiteDatabas
             database.rawQuery(sql, emptyArray()).use { cursor ->
                 val columns = cursor.columnNames.toList()
                 val rows = buildList {
-                    while (cursor.moveToNext() && size < MAX_QUERY_ROWS) {
+                    while (size < MAX_QUERY_ROWS && cursor.moveToNext()) {
                         add(SqlRow(null, (0 until cursor.columnCount).map { cursor.getSqlValue(it) }))
                     }
                 }
@@ -397,6 +435,19 @@ class DatabaseRepository private constructor(private val database: SQLiteDatabas
             }
             return DatabaseRepository(SQLiteDatabase.openDatabase(file.path, null, flags))
         }
+
+        /**
+         * Opens [file] for writing, falling back to read-only when it cannot be written to. A
+         * database on a read-only mount, or one whose directory we may not create a journal in,
+         * is still worth showing; only the editing has to be refused.
+         */
+        fun openWritableOrReadOnly(file: File): DatabaseRepository =
+            try {
+                open(file, readOnly = false)
+            } catch (e: RuntimeException) {
+                e.printStackTrace()
+                open(file, readOnly = true)
+            }
 
         /** Creates a valid, empty database file at [file]. */
         fun create(file: File) {

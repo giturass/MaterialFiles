@@ -99,13 +99,19 @@ class EncryptedSevenZArchive @Throws(IOException::class) constructor(
 
     @Throws(IOException::class)
     override fun close() {
-        if (encryptFileNames) {
-            // The header only exists once the entries have been finalised, and it has to be
-            // rewritten while the channel is still open.
-            archive.finish()
-            SevenZHeaderEncryptor.encryptHeader(javaChannel, passwordChars)
+        try {
+            if (encryptFileNames) {
+                // The header only exists once the entries have been finalised, and it has to be
+                // rewritten while the channel is still open.
+                archive.finish()
+                SevenZHeaderEncryptor.encryptHeader(javaChannel, passwordChars)
+            }
+        } finally {
+            // Whatever went wrong above, the channel underneath still has to be let go of.
+            archive.close()
+            // Nothing else refers to the password, so it doesn't have to stay in the heap.
+            passwordChars.fill(Char.MIN_VALUE)
         }
-        archive.close()
     }
 
     companion object {

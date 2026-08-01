@@ -59,8 +59,16 @@ class MediaPlaybackService : Service() {
         ERROR
     }
 
-    fun interface Listener {
+    interface Listener {
         fun onPlaybackStateChanged()
+
+        /**
+         * Only the playback position moved, four times a second. Kept apart from
+         * [onPlaybackStateChanged] so that a listener doesn't have to refresh everything that often.
+         */
+        fun onPlaybackProgressChanged() {
+            onPlaybackStateChanged()
+        }
     }
 
     inner class LocalBinder : Binder() {
@@ -213,7 +221,7 @@ class MediaPlaybackService : Service() {
 
         override fun onProgressChanged() {
             updateMediaSessionPlaybackState()
-            notifyListeners()
+            listeners.forEach { it.onPlaybackProgressChanged() }
         }
 
         override fun onDurationChanged() {
@@ -319,6 +327,9 @@ class MediaPlaybackService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Whatever this command turns out to be, the system started us as a foreground service and
+        // expects a notification within seconds. Leaving it again straight afterwards is allowed.
+        notification.startForegroundNow()
         when (intent?.action) {
             ACTION_OPEN -> {
                 val uri = intent.data

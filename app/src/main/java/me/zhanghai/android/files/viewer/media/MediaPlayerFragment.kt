@@ -32,6 +32,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.animation.LinearInterpolator
 import android.widget.ImageView
+import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
@@ -53,7 +54,7 @@ import me.zhanghai.android.files.file.fileProviderUri
 import me.zhanghai.android.files.file.guessFromPath
 import me.zhanghai.android.files.file.intentType
 import me.zhanghai.android.files.file.isAudio
-import me.zhanghai.android.files.file.isMedia
+import me.zhanghai.android.files.file.isPlayableMedia
 import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.util.ParcelableArgs
 import me.zhanghai.android.files.util.args
@@ -74,7 +75,7 @@ class MediaPlayerFragment : Fragment() {
     private lateinit var systemUiHelper: SystemUiHelper
 
     private var playbackService: MediaPlaybackService? = null
-    private var serviceBound = false
+    private var serviceBindRequested = false
     private var viewStarted = false
     private var shouldOpenMedia = false
     private var controlsVisible = true
@@ -90,6 +91,20 @@ class MediaPlayerFragment : Fragment() {
     private var lyricsVisible = false
     private var displayedLyrics: Lyrics? = null
     private var lyricsUserScrolling = false
+    private var displayedActivityTitle: CharSequence? = null
+
+    /** Resolved once, since the theme cannot change while the view is alive. */
+    private val repeatOnTint by lazy {
+        ColorStateList.valueOf(
+            requireContext().getColorByAttr(androidx.appcompat.R.attr.colorPrimary)
+        )
+    }
+    private val repeatOffTint by lazy {
+        ColorStateList.valueOf(
+            requireContext()
+                .getColorByAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
+        )
+    }
 
     private val lyricsAdapter = LyricsAdapter { line ->
         playbackService?.seekTo(line.timeMillis)
@@ -97,7 +112,15 @@ class MediaPlayerFragment : Fragment() {
 
     private val endLyricsUserScrollingRunnable = Runnable { lyricsUserScrolling = false }
 
-    private val playbackListener = MediaPlaybackService.Listener { updatePlaybackState() }
+    private val playbackListener = object : MediaPlaybackService.Listener {
+        override fun onPlaybackStateChanged() {
+            updatePlaybackState()
+        }
+
+        override fun onPlaybackProgressChanged() {
+            updateProgress()
+        }
+    }
 
     private val hideControlsRunnable = Runnable {
         if (!displayedAsAudio && playbackService?.isPlaying == true) {
@@ -112,7 +135,6 @@ class MediaPlayerFragment : Fragment() {
             }
             val service = (binder as MediaPlaybackService.LocalBinder).service
             playbackService = service
-            serviceBound = true
             service.addListener(playbackListener)
             if (service.currentUri == null) {
                 startPlayback(force = true)
@@ -121,7 +143,6 @@ class MediaPlayerFragment : Fragment() {
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
-            serviceBound = false
             playbackService = null
             updatePlaybackState()
         }
@@ -294,7 +315,10 @@ class MediaPlayerFragment : Fragment() {
             shouldOpenMedia = false
             startPlayback(force = true)
         }
-        serviceBound = requireContext().bindService(
+        // Even a bindService() that returns false leaves the connection registered, so it has to be
+        // unbound either way or it leaks.
+        serviceBindRequested = true
+        requireContext().bindService(
             Intent(requireContext(), MediaPlaybackService::class.java),
             serviceConnection,
             Context.BIND_AUTO_CREATE
@@ -319,11 +343,11 @@ class MediaPlayerFragment : Fragment() {
                     MediaPlaybackService.stop(requireContext())
                 }
             }
-            if (serviceBound) {
-                requireContext().unbindService(serviceConnection)
-            }
         }
-        serviceBound = false
+        if (serviceBindRequested) {
+            serviceBindRequested = false
+            runCatching { requireContext().unbindService(serviceConnection) }
+        }
         playbackService = null
         viewStarted = false
         super.onStop()
@@ -336,6 +360,10 @@ class MediaPlayerFragment : Fragment() {
             binding.audioCover.dispose()
             binding.audioBackdrop.dispose()
         }
+        // The service owns the artwork and may outlive this view; only the reference is ours.
+        displayedArtwork = null
+        hasDisplayedArtwork = false
+        displayedActivityTitle = null
         super.onDestroyView()
     }
 
@@ -429,7 +457,6 @@ class MediaPlayerFragment : Fragment() {
         val playing = service?.isPlaying == true
         val showPause = service?.isPlayingOrPreparing == true
         val duration = service?.duration ?: 0L
-        val currentTime = service?.currentTime ?: 0L
         val seekable = service?.isSeekable == true
         val isAudio = if (service?.currentUri != null) service.isAudio else source.isAudio
         updateMediaPresentation(isAudio)
@@ -439,19 +466,23 @@ class MediaPlayerFragment : Fragment() {
         if (displayedAsAudio) {
             // The artwork panel already shows the track prominently, so the app bar stays out of
             // the way.
-            requireActivity().title = ""
+            setActivityTitle("")
             binding.toolbar.subtitle = null
             binding.audioTitle.text = title
             binding.audioSubtitle.text = subtitle
             binding.audioSubtitle.isVisible = !subtitle.isNullOrEmpty()
         } else {
-            requireActivity().title = title
+            setActivityTitle(title)
             binding.toolbar.subtitle = subtitle
         }
         binding.progress.isVisible = status == MediaPlaybackService.Status.OPENING
             || status == MediaPlaybackService.Status.BUFFERING
-        binding.errorPanel.isVisible = status == MediaPlaybackService.Status.ERROR
-        binding.errorText.text = service?.errorMessage ?: getString(R.string.media_player_error)
+        val hasError = status == MediaPlaybackService.Status.ERROR
+        binding.errorPanel.isVisible = hasError
+        if (hasError) {
+            binding.errorText.text =
+                service?.errorMessage ?: getString(R.string.media_player_error)
+        }
         binding.playPauseButton.setIconResource(
             if (showPause) R.drawable.media_pause_icon_white_24dp
             else R.drawable.media_play_icon_white_24dp
@@ -466,29 +497,13 @@ class MediaPlayerFragment : Fragment() {
         binding.repeatButton.isEnabled = service?.hasMedia == true
         // Material 3's checkable icon button reads as primary when on and as on-surface-variant when
         // off, which is exactly the distinction repeat needs.
-        binding.repeatButton.iconTint = ColorStateList.valueOf(
-            requireContext().getColorByAttr(
-                if (service?.repeat == true) {
-                    androidx.appcompat.R.attr.colorPrimary
-                } else {
-                    com.google.android.material.R.attr.colorOnSurfaceVariant
-                }
-            )
-        )
+        binding.repeatButton.iconTint =
+            if (service?.repeat == true) repeatOnTint else repeatOffTint
         binding.seekBar.isEnabled = seekable && duration > 0L
-        if (!seeking) {
-            binding.seekBar.value = if (duration > 0L) {
-                (currentTime.coerceAtMost(duration) * SEEK_BAR_MAX / duration).toFloat()
-            } else {
-                0f
-            }
-            binding.currentTimeText.text = formatTime(currentTime)
-        }
-        binding.durationText.text = formatTime(duration)
         binding.root.keepScreenOn = viewStarted && !displayedAsAudio && playing
         updateArtwork(service?.artwork)
         updateCoverRotation()
-        updateLyrics(service?.lyrics, currentTime)
+        updateProgress()
         // Only on the transition, or the periodic progress updates would keep pushing the timer
         // back and the controls would never hide.
         if (displayedPlaying != playing) {
@@ -504,6 +519,45 @@ class MediaPlayerFragment : Fragment() {
             displayedMenuRevision = menuRevision
             displayedMenuAudio = displayedAsAudio
             requireActivity().invalidateOptionsMenu()
+        }
+    }
+
+    /**
+     * The part that has to keep up with playback, four times a second. Everything else only changes
+     * when the session does, and is left to [updatePlaybackState].
+     */
+    private fun updateProgress() {
+        if (!::binding.isInitialized || !::source.isInitialized) {
+            return
+        }
+        val service = playbackService
+        val duration = service?.duration ?: 0L
+        val currentTime = service?.currentTime ?: 0L
+        if (!seeking) {
+            binding.seekBar.value = if (duration > 0L) {
+                (currentTime.coerceAtMost(duration) * SEEK_BAR_MAX / duration).toFloat()
+            } else {
+                0f
+            }
+            binding.currentTimeText.setTextIfChanged(formatTime(currentTime))
+        }
+        // A stream can learn its own length as it goes, without an engine callback to say so.
+        binding.durationText.setTextIfChanged(formatTime(duration))
+        updateLyrics(service?.lyrics, currentTime)
+    }
+
+    private fun setActivityTitle(title: CharSequence) {
+        if (displayedActivityTitle == title) {
+            return
+        }
+        displayedActivityTitle = title
+        requireActivity().title = title
+    }
+
+    /** Avoids the relayout that setting the same text on a TextView would still cause. */
+    private fun TextView.setTextIfChanged(value: String) {
+        if (text?.toString() != value) {
+            text = value
         }
     }
 
@@ -763,7 +817,10 @@ class MediaPlayerFragment : Fragment() {
 
     private fun timeForSeekBarValue(value: Float): Long {
         val duration = playbackService?.duration ?: 0L
-        return duration * value.toLong() / SEEK_BAR_MAX
+        // The slider is continuous, so the fraction has to survive into the multiplication; rounding
+        // it away first costs a second per twenty minutes of media.
+        return (duration * value.toDouble() / SEEK_BAR_MAX).toLong()
+            .coerceIn(0L, duration.coerceAtLeast(0L))
     }
 
     private fun showPlaybackSpeedDialog() {
@@ -883,17 +940,17 @@ class MediaPlayerFragment : Fragment() {
             val uri = intent.data ?: path?.fileProviderUri ?: return null
             val declaredMimeType = (intent.type ?: intent.resolveType(context))
                 ?.asMimeTypeOrNull()
-            val mimeType = declaredMimeType?.takeIf { it.isMedia }
-                ?: resolveMimeType(context, uri)?.takeIf { it.isMedia }
+            val mimeType = declaredMimeType?.takeIf { it.isPlayableMedia }
+                ?: resolveMimeType(context, uri)?.takeIf { it.isPlayableMedia }
                 ?: path?.let {
                     val name = it.fileName?.toString() ?: it.toString()
-                    MimeType.guessFromPath(name).takeIf { mime -> mime.isMedia }
+                    MimeType.guessFromPath(name).takeIf { mime -> mime.isPlayableMedia }
                 }
                 ?: uri.lastPathSegment?.let {
-                    MimeType.guessFromPath(it).takeIf { mime -> mime.isMedia }
+                    MimeType.guessFromPath(it).takeIf { mime -> mime.isPlayableMedia }
                 }
                 ?: declaredMimeType
-            if (mimeType == null || !mimeType.isMedia) {
+            if (mimeType == null || !mimeType.isPlayableMedia) {
                 return null
             }
             val title = path?.fileName?.toString()?.takeIf { it.isNotEmpty() }

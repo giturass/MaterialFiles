@@ -32,6 +32,8 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission android:name="com.android.launcher.permission.INSTALL_SHORTCUT" />
+    <!-- Termux's own permission, required to open a directory in a Termux session. -->
+    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
 
     <!-- Shizuku requires API 23. -->
     <uses-sdk tools:overrideLibrary="rikka.shizuku.aidl,rikka.shizuku.api,rikka.shizuku.shared" />

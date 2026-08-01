@@ -94,11 +94,16 @@ object JavaKeyStore {
     @Throws(IOException::class, GeneralSecurityException::class)
     private fun verifyIntegrity(bytes: ByteArray, storePassword: CharArray) {
         val contentLength = bytes.size - DIGEST_LENGTH
-        val digest = MessageDigest.getInstance("SHA-1").run {
-            update(storePassword.toUtf16BeBytes())
-            update(DIGEST_SALT)
-            update(bytes, 0, contentLength)
-            digest()
+        val passwordBytes = storePassword.toUtf16BeBytes()
+        val digest = try {
+            MessageDigest.getInstance("SHA-1").run {
+                update(passwordBytes)
+                update(DIGEST_SALT)
+                update(bytes, 0, contentLength)
+                digest()
+            }
+        } finally {
+            passwordBytes.fill(0)
         }
         val expected = bytes.copyOfRange(contentLength, bytes.size)
         if (!digest.contentEquals(expected)) {
@@ -202,29 +207,34 @@ object JavaKeyStore {
         val expectedDigest = protectedKey.copyOfRange(DIGEST_LENGTH + keyLength, protectedKey.size)
 
         val passwordBytes = keyPassword.toUtf16BeBytes()
-        val messageDigest = MessageDigest.getInstance("SHA-1")
-        val key = ByteArray(keyLength)
-        var previous = salt
-        var offset = 0
-        while (offset < keyLength) {
-            messageDigest.update(passwordBytes)
-            messageDigest.update(previous)
-            previous = messageDigest.digest()
-            messageDigest.reset()
-            val count = minOf(DIGEST_LENGTH, keyLength - offset)
-            for (index in 0 until count) {
-                key[offset + index] = (encrypted[offset + index].toInt()
-                    xor previous[index].toInt()).toByte()
+        try {
+            val messageDigest = MessageDigest.getInstance("SHA-1")
+            val key = ByteArray(keyLength)
+            var previous = salt
+            var offset = 0
+            while (offset < keyLength) {
+                messageDigest.update(passwordBytes)
+                messageDigest.update(previous)
+                previous = messageDigest.digest()
+                messageDigest.reset()
+                val count = minOf(DIGEST_LENGTH, keyLength - offset)
+                for (index in 0 until count) {
+                    key[offset + index] = (encrypted[offset + index].toInt()
+                        xor previous[index].toInt()).toByte()
+                }
+                offset += count
             }
-            offset += count
-        }
 
-        messageDigest.update(passwordBytes)
-        messageDigest.update(key)
-        if (!messageDigest.digest().contentEquals(expectedDigest)) {
-            throw IOException("Wrong key password")
+            messageDigest.update(passwordBytes)
+            messageDigest.update(key)
+            if (!messageDigest.digest().contentEquals(expectedDigest)) {
+                throw IOException("Wrong key password")
+            }
+            return key
+        } finally {
+            // The password in its digestible form is ours, and nothing else needs it afterwards.
+            passwordBytes.fill(0)
         }
-        return key
     }
 
     private fun AlgorithmIdentifier.toJcaAlgorithmName(): String =

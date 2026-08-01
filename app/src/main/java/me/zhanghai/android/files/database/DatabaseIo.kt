@@ -8,6 +8,7 @@ package me.zhanghai.android.files.database
 import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.Reader
 
 /**
  * The literal form of this value inside a statement, for the places a value cannot be bound: the
@@ -88,14 +89,16 @@ class CsvField(val text: String, val isQuoted: Boolean)
 /**
  * Parses RFC 4180 CSV, accepting either line ending and tolerating a final line without one. A
  * quote inside a quoted field is written doubled.
+ *
+ * Produced a row at a time off [reader], so that importing a file larger than memory still works.
+ * The sequence may only be consumed once, and only while [reader] is open.
  */
-fun parseCsv(text: String): List<List<CsvField>> {
-    val rows = mutableListOf<List<CsvField>>()
+fun parseCsvRows(reader: Reader): Sequence<List<CsvField>> = sequence {
+    val input = PeekingReader(reader)
     var row = mutableListOf<CsvField>()
     val field = StringBuilder()
     var isQuoted = false
     var wasQuoted = false
-    var index = 0
     var hasField = false
     fun endField() {
         row += CsvField(field.toString(), wasQuoted)
@@ -103,58 +106,75 @@ fun parseCsv(text: String): List<List<CsvField>> {
         wasQuoted = false
         hasField = false
     }
-    fun endRow() {
-        endField()
-        rows += row
-        row = mutableListOf()
-    }
-    while (index < text.length) {
-        val char = text[index]
+    while (true) {
+        val next = input.read()
+        if (next == -1) {
+            break
+        }
+        val char = next.toChar()
         when {
             isQuoted -> when {
-                char == '"' && index + 1 < text.length && text[index + 1] == '"' -> {
+                char == '"' && input.peek() == QUOTE_CODE -> {
                     field.append('"')
-                    index += 2
+                    input.read()
                 }
-                char == '"' -> {
-                    isQuoted = false
-                    index++
-                }
-                else -> {
-                    field.append(char)
-                    index++
-                }
+                char == '"' -> isQuoted = false
+                else -> field.append(char)
             }
             char == '"' -> {
                 isQuoted = true
                 wasQuoted = true
                 hasField = true
-                index++
             }
-            char == ',' -> {
-                endField()
-                index++
-            }
+            char == ',' -> endField()
             char == '\r' || char == '\n' -> {
-                // A trailing newline ends the last row rather than starting an empty one.
-                endRow()
-                index += if (char == '\r' && index + 1 < text.length && text[index + 1] == '\n') {
-                    2
-                } else {
-                    1
+                if (char == '\r' && input.peek() == NEWLINE_CODE) {
+                    input.read()
                 }
+                // A trailing newline ends the last row rather than starting an empty one.
+                endField()
+                yield(row)
+                row = mutableListOf()
             }
             else -> {
                 field.append(char)
                 hasField = true
-                index++
             }
         }
     }
     if (hasField || field.isNotEmpty() || row.isNotEmpty()) {
-        endRow()
+        endField()
+        yield(row)
     }
-    return rows
+}
+
+private const val QUOTE_CODE = '"'.code
+private const val NEWLINE_CODE = '\n'.code
+
+/** A [Reader] with the single character of lookahead that CRLF and doubled quotes need. */
+private class PeekingReader(private val reader: Reader) {
+    private var peeked = NOTHING
+
+    fun read(): Int {
+        val peeked = peeked
+        if (peeked != NOTHING) {
+            this.peeked = NOTHING
+            return peeked
+        }
+        return reader.read()
+    }
+
+    fun peek(): Int {
+        if (peeked == NOTHING) {
+            peeked = reader.read()
+        }
+        return peeked
+    }
+
+    companion object {
+        /** Distinct from -1, which is a real end of input. */
+        private const val NOTHING = -2
+    }
 }
 
 /** The value a parsed field stands for, given the column it is going into. */

@@ -164,6 +164,9 @@ class CreateKeyStoreDialogFragment : AppCompatDialogFragment() {
             }
             showToast(getString(R.string.create_key_store_success_format, targetPath.name))
             listener.onKeyStoreCreated(targetPath, alias, String(password))
+            // Nothing else refers to the array afterwards, so it doesn't have to sit in the heap
+            // until a garbage collection happens to move it.
+            password.fill(Char.MIN_VALUE)
             dismiss()
         }
     }

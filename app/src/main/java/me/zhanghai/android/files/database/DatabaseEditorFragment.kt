@@ -83,7 +83,7 @@ class DatabaseEditorFragment : Fragment(), RowEditorDialogFragment.Listener,
 
     private val exportDatabaseLauncher = registerForActivityResult(
         FileListActivity.CreateFileContract()
-    ) { path -> path?.let { viewModel.exportDatabaseFile(it, requireContext()) } }
+    ) { path -> path?.let { viewModel.exportDatabaseFile(it) } }
 
     private val importLauncher = registerForActivityResult(
         FileListActivity.OpenFileContract()
@@ -731,7 +731,7 @@ class DatabaseEditorFragment : Fragment(), RowEditorDialogFragment.Listener,
     }
 
     private fun writeBack() {
-        viewModel.writeBack(requireContext())
+        viewModel.writeBack()
     }
 
     private fun confirmClose() {

@@ -52,6 +52,22 @@ val MimeType.isVideo: Boolean
 val MimeType.isMedia: Boolean
     get() = isAudio || isVideo
 
+/**
+ * Whether our own player can actually play this, as opposed to merely recognizing it as media.
+ *
+ * MIDI is the exception: neither ExoPlayer nor BASS can render it without a SoundFont, which we
+ * don't ship, so it goes to whatever the system offers instead of opening a player that would only
+ * report an error.
+ */
+val MimeType.isPlayableMedia: Boolean
+    get() = isMedia && this !in unplayableMediaMimeTypes
+
+private val unplayableMediaMimeTypes = mutableListOf(
+    "audio/midi",
+    "audio/sp-midi",
+    "audio/x-midi"
+).map { it.asMimeType() }.toSet()
+
 val MimeType.isPdf: Boolean
     get() = this == MimeType.PDF
 

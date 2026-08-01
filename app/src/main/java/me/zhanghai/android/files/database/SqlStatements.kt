@@ -17,12 +17,22 @@ private val QUERY_KEYWORDS = setOf("SELECT", "WITH", "PRAGMA", "EXPLAIN", "VALUE
 private val ROW_CHANGING_KEYWORDS = setOf("INSERT", "UPDATE", "DELETE", "REPLACE")
 
 /**
+ * Statements that manage a transaction themselves. SQLite has no nested transactions, so a script
+ * containing one of these cannot be wrapped in another.
+ */
+private val TRANSACTION_KEYWORDS = setOf("BEGIN", "COMMIT", "END", "ROLLBACK", "SAVEPOINT", "RELEASE")
+
+/**
  * Splits SQL into individual statements on top-level semicolons, leaving semicolons inside string
- * literals, quoted identifiers and comments alone. Blank statements are dropped.
+ * literals, quoted identifiers and comments alone. Blank statements are dropped, and so are ones
+ * that turned out to hold nothing but a comment - a script ending in a comment is ordinary, and
+ * SQLite would refuse to compile it on its own.
  */
 fun String.splitSqlStatements(): List<String> {
     val statements = mutableListOf<String>()
     val statement = StringBuilder()
+    // Tracked separately from the buffer, which also holds the comments that came before.
+    var hasCode = false
     var index = 0
     while (index < length) {
         val char = this[index]
@@ -41,23 +51,29 @@ fun String.splitSqlStatements(): List<String> {
                 val end = findClosingQuote(index, char)
                 statement.append(this, index, end)
                 index = end
+                hasCode = true
             }
             char == '[' -> {
                 val end = (indexOf(']', index + 1).takeIf { it != -1 }?.plus(1)) ?: length
                 statement.append(this, index, end)
                 index = end
+                hasCode = true
             }
             char == ';' -> {
-                statements.addIfNotBlank(statement)
+                statements.addIfCode(statement, hasCode)
+                hasCode = false
                 index++
             }
             else -> {
                 statement.append(char)
+                if (!char.isWhitespace()) {
+                    hasCode = true
+                }
                 index++
             }
         }
     }
-    statements.addIfNotBlank(statement)
+    statements.addIfCode(statement, hasCode)
     return statements
 }
 
@@ -80,10 +96,10 @@ private fun String.findClosingQuote(start: Int, quote: Char): Int {
     return length
 }
 
-private fun MutableList<String>.addIfNotBlank(builder: StringBuilder) {
+private fun MutableList<String>.addIfCode(builder: StringBuilder, hasCode: Boolean) {
     val statement = builder.toString().trim()
     builder.setLength(0)
-    if (statement.isNotEmpty()) {
+    if (hasCode && statement.isNotEmpty()) {
         add(statement)
     }
 }
@@ -91,6 +107,8 @@ private fun MutableList<String>.addIfNotBlank(builder: StringBuilder) {
 fun String.isQueryStatement(): Boolean = firstSqlKeyword() in QUERY_KEYWORDS
 
 fun String.isRowChangingStatement(): Boolean = firstSqlKeyword() in ROW_CHANGING_KEYWORDS
+
+fun String.isTransactionStatement(): Boolean = firstSqlKeyword() in TRANSACTION_KEYWORDS
 
 /** The leading keyword, skipping whitespace and comments, uppercased. */
 private fun String.firstSqlKeyword(): String {
@@ -104,8 +122,10 @@ private fun String.firstSqlKeyword(): String {
             char == '/' && index + 1 < length && this[index + 1] == '*' ->
                 index = indexOf("*/", index + 2).let { if (it != -1) it + 2 else length }
             else -> {
-                val end = index + (substring(index).indexOfFirst { !it.isLetter() }
-                    .takeIf { it != -1 } ?: (length - index))
+                var end = index
+                while (end < length && this[end].isLetter()) {
+                    end++
+                }
                 return substring(index, end).uppercase()
             }
         }

@@ -24,7 +24,9 @@ import androidx.appcompat.widget.TooltipCompat
 import androidx.core.view.isVisible
 import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import io.github.rosemoe.sora.event.ContentChangeEvent
@@ -87,25 +89,25 @@ class TextEditorFragment : Fragment(), ConfirmReloadDialogFragment.Listener,
 
         setHasOptionsMenu(true)
 
-        lifecycleScope.launchWhenStarted {
-            onBackPressedCallback = object : OnBackPressedCallback(false) {
-                override fun handleOnBackPressed() {
-                    if (binding.searchPanel.isVisible) {
-                        hideSearch()
-                    } else {
-                        ConfirmCloseDialogFragment.show(this@TextEditorFragment)
-                    }
+        // Created here rather than inside the collector below, because onSupportNavigateUp() may
+        // reach it before this fragment has ever been started.
+        onBackPressedCallback = object : OnBackPressedCallback(false) {
+            override fun handleOnBackPressed() {
+                if (binding.searchPanel.isVisible) {
+                    hideSearch()
+                } else {
+                    ConfirmCloseDialogFragment.show(this@TextEditorFragment)
                 }
             }
-            launch {
-                viewModel.isTextChanged.collect { updateBackPressedCallback() }
+        }
+        lifecycleScope.launch {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch { viewModel.isTextChanged.collect { updateBackPressedCallback() } }
+                launch { viewModel.encoding.collect { onEncodingChanged() } }
+                launch { viewModel.textState.collect { onTextStateChanged(it) } }
+                launch { viewModel.isTextChanged.collect { onIsTextChangedChanged() } }
+                launch { viewModel.writeFileState.collect { onWriteFileStateChanged(it) } }
             }
-            addOnBackPressedCallback(onBackPressedCallback)
-
-            launch { viewModel.encoding.collect { onEncodingChanged() } }
-            launch { viewModel.textState.collect { onTextStateChanged(it) } }
-            launch { viewModel.isTextChanged.collect { onIsTextChangedChanged() } }
-            launch { viewModel.writeFileState.collect { onWriteFileStateChanged(it) } }
         }
     }
 
@@ -128,11 +130,11 @@ class TextEditorFragment : Fragment(), ConfirmReloadDialogFragment.Listener,
         }
         this.argsFile = argsFile
 
+        addOnBackPressedCallback(onBackPressedCallback)
+
         val activity = requireActivity() as AppCompatActivity
-        activity.lifecycleScope.launchWhenCreated {
-            activity.setSupportActionBar(binding.toolbar)
-            activity.supportActionBar!!.setDisplayHomeAsUpEnabled(true)
-        }
+        activity.setSupportActionBar(binding.toolbar)
+        activity.supportActionBar!!.setDisplayHomeAsUpEnabled(true)
 
         val displayMetrics = resources.displayMetrics
         binding.editor.apply {
@@ -849,7 +851,13 @@ class TextEditorFragment : Fragment(), ConfirmReloadDialogFragment.Listener,
     }
 
     private fun showEncodingDialog() {
-        val charsets = Charset.availableCharsets().values.toList()
+        // The platform ships around 170 charsets in an alphabetical order that buries the handful
+        // anyone actually picks, so those go to the top.
+        val available = Charset.availableCharsets().values.toList()
+        val common = COMMON_CHARSET_NAMES.mapNotNull { name ->
+            available.firstOrNull { it.name().equals(name, ignoreCase = true) }
+        }
+        val charsets = common + available.filterNot { it in common }
         val labels = charsets.map { it.displayName() }.toTypedArray()
         val selected = charsets.indexOfFirst { it.name() == viewModel.encoding.value.name() }
         MaterialAlertDialogBuilder(requireContext())
@@ -921,6 +929,12 @@ class TextEditorFragment : Fragment(), ConfirmReloadDialogFragment.Listener,
         private const val MIN_FONT_SIZE = 10
         private const val MAX_FONT_SIZE = 40
         private const val FONT_SIZE_SAVE_DELAY_MILLIS = 250L
+
+        /** Offered first in the encoding picker, in this order. Anything missing is skipped. */
+        private val COMMON_CHARSET_NAMES = listOf(
+            "UTF-8", "GB18030", "GBK", "Big5", "Shift_JIS", "EUC-KR", "UTF-16", "UTF-16LE",
+            "UTF-16BE", "windows-1252", "ISO-8859-1", "US-ASCII"
+        )
     }
 
     private data class SearchOptionsState(

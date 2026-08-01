@@ -5,15 +5,14 @@
 
 package me.zhanghai.android.files.database
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import java8.nio.file.Path
-import java8.nio.file.Paths
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -22,19 +21,21 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.zhanghai.android.files.app.application
-import me.zhanghai.android.files.filejob.FileJobService
 import me.zhanghai.android.files.filelist.name
 import me.zhanghai.android.files.provider.common.newInputStream
 import me.zhanghai.android.files.provider.common.newOutputStream
 import me.zhanghai.android.files.util.ActionState
+import me.zhanghai.android.files.util.CacheFiles
 import me.zhanghai.android.files.util.DataState
 import me.zhanghai.android.files.util.copyToCacheFile
+import me.zhanghai.android.files.util.deleteCacheFile
 import me.zhanghai.android.files.util.isFinished
 import me.zhanghai.android.files.util.isReady
 import me.zhanghai.android.files.util.localFileOrNull
 import me.zhanghai.android.files.util.toError
 import me.zhanghai.android.files.util.toLoading
 import java.io.File
+import java.io.IOException
 
 class DatabaseEditorViewModel(val path: Path) : ViewModel() {
     /**
@@ -87,10 +88,11 @@ class DatabaseEditorViewModel(val path: Path) : ViewModel() {
             try {
                 val database = withContext(databaseDispatcher) {
                     val localFile = path.localFileOrNull
-                    val file = localFile ?: path.copyToCacheFile(application, CACHE_SUBDIRECTORY)
+                    val file = localFile
+                        ?: path.copyToCacheFile(application, CacheFiles.DATABASE_EDITOR)
                     // A file we only have a copy of can be edited, but the copy is what gets
                     // written, so the user has to push it back explicitly.
-                    val repository = DatabaseRepository.open(file, readOnly = false)
+                    val repository = DatabaseRepository.openWritableOrReadOnly(file)
                     OpenedDatabase(repository, file, isCacheCopy = localFile == null)
                 }
                 currentCoroutineContext().ensureActive()
@@ -135,8 +137,14 @@ class DatabaseEditorViewModel(val path: Path) : ViewModel() {
             val query = _searchQuery.value.takeIf { it.isNotEmpty() }
             val data = withContext(databaseDispatcher) {
                 val table = repository.getTable(name)
-                val totalRows = repository.countRows(table, query)
                 val rows = repository.queryPage(table, 0, PAGE_SIZE, query)
+                // A page that didn't fill up is the whole answer, so there is nothing to count: on
+                // a search that means not scanning the table a second time for every keystroke.
+                val totalRows = if (rows.size < PAGE_SIZE) {
+                    rows.size.toLong()
+                } else {
+                    repository.countRows(table, query)
+                }
                 TableData(table, rows, totalRows, query = query.orEmpty())
             }
             currentCoroutineContext().ensureActive()
@@ -162,7 +170,8 @@ class DatabaseEditorViewModel(val path: Path) : ViewModel() {
                 val moreRows = withContext(databaseDispatcher) {
                     repository.queryPage(
                         data.table, data.rows.size.toLong(), PAGE_SIZE,
-                        data.query.takeIf { it.isNotEmpty() }
+                        data.query.takeIf { it.isNotEmpty() },
+                        afterRowId = data.rows.lastOrNull()?.rowId
                     )
                 }
                 currentCoroutineContext().ensureActive()
@@ -381,26 +390,34 @@ class DatabaseEditorViewModel(val path: Path) : ViewModel() {
     fun importTableCsv(path: Path) {
         val table = currentTable ?: return
         runIo { repository ->
-            val csvRows = parseCsv(path.readImportText())
-            require(csvRows.isNotEmpty()) { "The file has no rows" }
-            // Columns are matched by header name, so a file holding extra or reordered columns
-            // still imports, and one that shares no column at all is refused rather than guessed at.
-            val mappings = csvRows.first().mapIndexedNotNull { index, field ->
-                table.columns.firstOrNull { it.name.equals(field.text, ignoreCase = true) }
-                    ?.let { index to it }
-            }
-            require(mappings.isNotEmpty()) { "No column in this file matches ${table.name}" }
-            val values = csvRows.asSequence()
-                .drop(1)
-                .filterNot { it.size == 1 && !it[0].isQuoted && it[0].text.isEmpty() }
-                .map { fields ->
-                    mappings.map { (index, column) ->
-                        fields.getOrNull(index)?.toSqlValue(column) ?: SqlValue.Null
+            // Streamed rather than read whole, so that the size of the file is the file system's
+            // problem rather than ours.
+            path.newInputStream().use { inputStream ->
+                inputStream.reader().buffered().use { reader ->
+                    val rows = parseCsvRows(reader).iterator()
+                    require(rows.hasNext()) { "The file has no rows" }
+                    // Columns are matched by header name, so a file holding extra or reordered
+                    // columns still imports, and one that shares no column at all is refused rather
+                    // than guessed at.
+                    val mappings = rows.next().mapIndexedNotNull { index, field ->
+                        table.columns.firstOrNull { it.name.equals(field.text, ignoreCase = true) }
+                            ?.let { index to it }
                     }
+                    require(mappings.isNotEmpty()) {
+                        "No column in this file matches ${table.name}"
+                    }
+                    val values = rows.asSequence()
+                        .filterNot { it.size == 1 && !it[0].isQuoted && it[0].text.isEmpty() }
+                        .map { fields ->
+                            mappings.map { (index, column) ->
+                                fields.getOrNull(index)?.toSqlValue(column) ?: SqlValue.Null
+                            }
+                        }
+                    IoResult.RowsImported(
+                        repository.insertRows(table.name, mappings.map { it.second.name }, values)
+                    )
                 }
-            IoResult.RowsImported(
-                repository.insertRows(table.name, mappings.map { it.second.name }, values)
-            )
+            }
         }
     }
 
@@ -423,17 +440,24 @@ class DatabaseEditorViewModel(val path: Path) : ViewModel() {
     }
 
     /** Copies the database file itself to [path], flushing anything still in the log first. */
-    fun exportDatabaseFile(path: Path, context: Context) {
+    fun exportDatabaseFile(path: Path) {
         val database = (_databaseState.value as? DataState.Success)?.data ?: return
+        if (!_ioState.value.isReady) {
+            return
+        }
+        _ioState.value = ActionState.Running(Unit)
         viewModelScope.launch {
             try {
-                withContext(databaseDispatcher) { database.repository.checkpoint() }
-                FileJobService.save(Paths.get(database.file.path), path, context)
+                withContext(databaseDispatcher) {
+                    database.repository.checkpoint()
+                    database.file.copyToPath(path)
+                }
+                _ioState.value = ActionState.Success(Unit, IoResult.DatabaseExported)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 e.printStackTrace()
-                postError(e)
+                _ioState.value = ActionState.Error(Unit, e)
             }
         }
     }
@@ -469,8 +493,11 @@ class DatabaseEditorViewModel(val path: Path) : ViewModel() {
     /**
      * Copies the edited cache file back over the original. Only meaningful when the database didn't
      * live on the local file system to begin with.
+     *
+     * The copy itself is [NonCancellable]: it overwrites the file the user opened, and being
+     * interrupted halfway would leave them with neither the old database nor the new one.
      */
-    fun writeBack(context: Context) {
+    fun writeBack() {
         val database = (_databaseState.value as? DataState.Success)?.data ?: return
         if (!database.isCacheCopy || !_writeBackState.value.isReady) {
             return
@@ -478,9 +505,11 @@ class DatabaseEditorViewModel(val path: Path) : ViewModel() {
         _writeBackState.value = ActionState.Running(path)
         viewModelScope.launch {
             try {
-                // Force everything still buffered out to the cache file before copying it.
-                withContext(databaseDispatcher) { database.repository.checkpoint() }
-                FileJobService.save(Paths.get(database.file.path), path, context)
+                withContext(NonCancellable + databaseDispatcher) {
+                    // Force everything still buffered out to the cache file before copying it.
+                    database.repository.checkpoint()
+                    database.file.copyToPath(path)
+                }
                 _hasUnsavedChanges.value = false
                 _writeBackState.value = ActionState.Success(path, Unit)
             } catch (e: CancellationException) {
@@ -531,7 +560,7 @@ class DatabaseEditorViewModel(val path: Path) : ViewModel() {
             e.printStackTrace()
         }
         if (database?.isCacheCopy == true) {
-            database.file.delete()
+            deleteCacheFile(database.file)
         }
     }
 
@@ -566,16 +595,22 @@ class DatabaseEditorViewModel(val path: Path) : ViewModel() {
     companion object {
         const val PAGE_SIZE = 100
 
-        private const val CACHE_SUBDIRECTORY = "database_editor"
-
         /** Long enough that typing a word doesn't run a query per keystroke. */
         private const val SEARCH_DEBOUNCE_MILLIS = 300L
     }
 }
 
 /**
- * Reads a file being imported. Whole rather than streamed, because both parsers need the entire
- * document, and because an import large enough to matter belongs in the SQL console instead.
+ * Reads a file being imported. Whole rather than streamed, because [org.json.JSONArray] needs the
+ * entire document; the CSV importer streams instead.
  */
 private fun Path.readImportText(): String =
     newInputStream().use { it.reader().readText() }
+
+/** Overwrites [path] with this file's contents. */
+@Throws(IOException::class)
+private fun File.copyToPath(path: Path) {
+    inputStream().use { inputStream ->
+        path.newOutputStream().use { outputStream -> inputStream.copyTo(outputStream) }
+    }
+}

@@ -50,14 +50,43 @@ class MediaPlaybackNotification(
     fun startOrUpdate() {
         val notification = buildNotification()
         if (!isForeground && service.isPlayingOrPreparing) {
+            enterForeground(notification)
+        } else {
+            runCatching {
+                NotificationManagerCompat.from(service)
+                    .notify(NotificationIds.MEDIA_PLAYBACK, notification)
+            }
+        }
+    }
+
+    /**
+     * Enters the foreground whatever the playback state is.
+     *
+     * A start command has at most a few seconds to call `startForeground()`, and the notification's
+     * own actions are delivered as foreground service starts so that they still work once we have
+     * left the foreground. Pausing or stopping right afterwards is fine; never starting is not.
+     */
+    fun startForegroundNow() {
+        if (isForeground) {
+            return
+        }
+        enterForeground(buildNotification())
+    }
+
+    private fun enterForeground(notification: android.app.Notification) {
+        val started = runCatching {
             ServiceCompat.startForeground(
                 service,
                 NotificationIds.MEDIA_PLAYBACK,
                 notification,
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
             )
+        }.isSuccess
+        if (started) {
             isForeground = true
         } else {
+            // Android 12 and above can refuse a foreground start outright. The notification is
+            // still worth posting, and playback itself is unaffected.
             runCatching {
                 NotificationManagerCompat.from(service)
                     .notify(NotificationIds.MEDIA_PLAYBACK, notification)
@@ -210,12 +239,17 @@ class MediaPlaybackNotification(
     }
 
     private fun createServicePendingIntent(requestCode: Int, intent: Intent): PendingIntent =
-        PendingIntent.getService(
-            service,
-            requestCode,
-            intent,
-            pendingIntentFlags(PendingIntent.FLAG_UPDATE_CURRENT)
-        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // The service may have left the foreground while paused, and a plain service start from
+            // the background is not allowed. onStartCommand() re-enters the foreground for this.
+            PendingIntent.getForegroundService(
+                service, requestCode, intent, pendingIntentFlags(PendingIntent.FLAG_UPDATE_CURRENT)
+            )
+        } else {
+            PendingIntent.getService(
+                service, requestCode, intent, pendingIntentFlags(PendingIntent.FLAG_UPDATE_CURRENT)
+            )
+        }
 
     private fun pendingIntentFlags(flags: Int): Int =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {

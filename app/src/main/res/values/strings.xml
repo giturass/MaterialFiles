@@ -309,6 +309,8 @@
     <string name="file_list_action_show_hidden_files">Show hidden files</string>
     <string name="file_list_action_copy_path">Copy path</string>
     <string name="file_list_action_open_in_terminal">Open in terminal</string>
+    <string name="file_list_open_in_terminal_termux_permission_denied">Termux needs permission to run commands. Grant it, and set allow-external-apps=true in ~/.termux/termux.properties.</string>
+    <string name="file_list_open_in_terminal_unsupported_path">Only local files can be opened in a terminal</string>
     <string name="file_list_action_add_bookmark">Add bookmark</string>
     <string name="file_list_action_create_shortcut">Create shortcut</string>
     <string name="file_list_breadcrumb_action_copy_path" translatable="false">@string/file_list_action_copy_path</string>
