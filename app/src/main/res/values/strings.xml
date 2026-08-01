@@ -86,6 +86,8 @@
         <item quantity="one">Compressing %1$,d file into “%2$s”</item>
         <item quantity="other">Compressing %1$,d files into “%2$s”</item>
     </plurals>
+    <string name="file_job_archive_progress_title">Compressing</string>
+    <string name="file_job_progress_background">Background</string>
     <plurals name="file_job_copy_scan_notification_title_format">
         <item quantity="one">Preparing to copy %1$,d file (%2$s)</item>
         <item quantity="other">Preparing to copy %1$,d files (%2$s)</item>

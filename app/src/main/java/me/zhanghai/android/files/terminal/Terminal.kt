@@ -11,7 +11,9 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.core.content.ContextCompat
+import me.zhanghai.android.files.R
 import me.zhanghai.android.files.app.packageManager
+import java.io.File
 
 /**
  * Opens a directory in whichever terminal application is installed.
@@ -34,6 +36,9 @@ object Terminal {
     private const val TERMUX_EXTRA_WORK_DIRECTORY = "com.termux.RUN_COMMAND_WORKDIR"
     private const val TERMUX_EXTRA_BACKGROUND = "com.termux.RUN_COMMAND_BACKGROUND"
     private const val TERMUX_EXTRA_SESSION_ACTION = "com.termux.RUN_COMMAND_SESSION_ACTION"
+    private const val TERMUX_EXTRA_COMMAND_LABEL = "com.termux.RUN_COMMAND_COMMAND_LABEL"
+    private const val TERMUX_EXTRA_COMMAND_DESCRIPTION =
+        "com.termux.RUN_COMMAND_COMMAND_DESCRIPTION"
 
     /**
      * `SESSION_ACTION_SWITCH_TO_NEW_SESSION_AND_OPEN_ACTIVITY`, which is what brings Termux to the
@@ -104,12 +109,19 @@ object Terminal {
             .setComponent(component)
             .setAction(Intent.ACTION_SEND)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            .putExtra(Intent.EXTRA_STREAM, Uri.parse(path))
+            .putExtra(Intent.EXTRA_STREAM, Uri.fromFile(File(path)))
 
     /**
      * Asks Termux to open a session in [path]. Termux additionally requires `allow-external-apps` to
      * be set in its own `termux.properties`; when it isn't, it refuses and says so itself, which is
      * why the session is asked to come to the front either way.
+     *
+     * Since Android 10 a background app may not start an activity, so `TermuxService` cannot bring
+     * its own terminal to the front - it leaves the session waiting behind a notification unless
+     * Termux was granted "Draw over other apps". We are the foreground app at this point, so the
+     * restriction doesn't apply to us and we can simply start Termux ourselves.
+     *
+     * @see <a href="https://github.com/termux/termux-app/wiki/RUN_COMMAND-Intent">RUN_COMMAND Intent</a>
      */
     private fun openInTermux(path: String, context: Context): Boolean {
         val intent = Intent(TERMUX_RUN_COMMAND_ACTION)
@@ -118,14 +130,21 @@ object Terminal {
             .putExtra(TERMUX_EXTRA_WORK_DIRECTORY, path)
             .putExtra(TERMUX_EXTRA_BACKGROUND, false)
             .putExtra(TERMUX_EXTRA_SESSION_ACTION, TERMUX_SESSION_ACTION_OPEN_ACTIVITY)
-        return try {
+            // Shown by Termux in the popup it displays when it refuses to run the command.
+            .putExtra(TERMUX_EXTRA_COMMAND_LABEL, context.getString(R.string.app_name))
+            .putExtra(TERMUX_EXTRA_COMMAND_DESCRIPTION, path)
+        val started = try {
             context.startService(intent) != null
         } catch (e: Exception) {
             // A background start restriction, or a Termux build that refuses the command.
             e.printStackTrace()
-            // Bringing Termux up is still closer to what was asked for than doing nothing.
-            start(packageManager.getLaunchIntentForPackage(TERMUX_PACKAGE_NAME), context)
+            false
         }
+        // Also worth doing when the command itself failed: Termux reports why in its own UI, which
+        // the user can only see once Termux is actually on screen.
+        val broughtToFront =
+            start(packageManager.getLaunchIntentForPackage(TERMUX_PACKAGE_NAME), context)
+        return started || broughtToFront
     }
 
     private fun start(intent: Intent?, context: Context): Boolean {

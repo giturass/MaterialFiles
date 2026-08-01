@@ -94,7 +94,8 @@ class FileJobService : Service() {
     }
 
     companion object {
-        private var instance: FileJobService? = null
+        internal var instance: FileJobService? = null
+            private set
 
         private val pendingJobs = mutableListOf<FileJob>()
 
@@ -102,8 +103,10 @@ class FileJobService : Service() {
             @MainThread
             get() = instance?.jobCount ?: 0
 
+        /** @return the id of the started job, for [FileJobProgressManager]. */
         @MainThread
-        private fun startJob(job: FileJob, context: Context) {
+        private fun startJob(job: FileJob, context: Context): Int {
+            FileJobProgressManager.start(job.id)
             val instance = instance
             if (instance != null) {
                 instance.startJob(job)
@@ -111,6 +114,7 @@ class FileJobService : Service() {
                 pendingJobs.add(job)
                 context.startService(Intent(context, FileJobService::class.java))
             }
+            return job.id
         }
 
         fun archive(
@@ -122,14 +126,13 @@ class FileJobService : Service() {
             encryptFileNames: Boolean,
             deleteSources: Boolean,
             context: Context
-        ) {
+        ): Int =
             startJob(
                 ArchiveFileJob(
                     sources, archiveFile, format, filter, password, encryptFileNames, deleteSources
                 ),
                 context
             )
-        }
 
         fun copy(sources: List<Path>, targetDirectory: Path, context: Context) {
             startJob(CopyFileJob(sources, targetDirectory), context)
@@ -226,7 +229,8 @@ class FileJobService : Service() {
 
         @MainThread
         fun cancelJob(id: Int) {
-            pendingJobs.removeFirst { it.id == id }
+            // A job that never started has no run() to clean up its progress for it.
+            pendingJobs.removeFirst { it.id == id }?.let { FileJobProgressManager.finish(id) }
             instance?.cancelJob(id)
         }
     }

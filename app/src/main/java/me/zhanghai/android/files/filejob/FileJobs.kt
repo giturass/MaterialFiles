@@ -5,7 +5,6 @@
 
 package me.zhanghai.android.files.filejob
 
-import android.app.PendingIntent
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -135,29 +134,12 @@ private fun FileJob.postNotification(
     indeterminate: Boolean,
     showCancel: Boolean
 ) {
-    val notification = fileJobNotificationTemplate.createBuilder(service).apply {
-        setContentTitle(title)
-        setContentText(text)
-        setSubText(subText)
-        setContentInfo(info)
-        setProgress(max, progress, indeterminate)
-        // TODO
-        //setContentIntent()
-        if (showCancel) {
-            val intent = FileJobReceiver.createIntent(id)
-            var pendingIntentFlags = PendingIntent.FLAG_UPDATE_CURRENT
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                pendingIntentFlags = pendingIntentFlags or PendingIntent.FLAG_IMMUTABLE
-            }
-            val pendingIntent = PendingIntent.getBroadcast(
-                service, id + 1, intent, pendingIntentFlags
-            )
-            addAction(
-                R.drawable.close_icon_white_24dp, getString(android.R.string.cancel), pendingIntent
-            )
-        }
-    }.build()
-    service.notificationManager.notify(id, notification)
+    // Where this ends up - a notification, a dialog, or both - is up to the progress manager.
+    FileJobProgressManager.setProgress(
+        id,
+        FileJobProgress(title, text, subText, info, max, progress, indeterminate, showCancel),
+        service
+    )
 }
 
 private const val PROGRESS_INTERVAL_MILLIS = 200L

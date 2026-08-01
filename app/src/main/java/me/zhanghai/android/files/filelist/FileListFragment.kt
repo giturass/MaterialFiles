@@ -76,6 +76,7 @@ import me.zhanghai.android.files.file.isPlayableMedia
 import me.zhanghai.android.files.file.isSqlite
 import me.zhanghai.android.files.fileaction.ArchivePasswordDialogActivity
 import me.zhanghai.android.files.fileaction.ArchivePasswordDialogFragment
+import me.zhanghai.android.files.filejob.FileJobProgressDialogFragment
 import me.zhanghai.android.files.filejob.FileJobService
 import me.zhanghai.android.files.filelist.FileSortOptions.By
 import me.zhanghai.android.files.filelist.FileSortOptions.Order
@@ -1042,9 +1043,12 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         deleteSources: Boolean
     ) {
         val archiveFile = viewModel.currentPath.resolve(name)
-        FileJobService.archive(
+        val jobId = FileJobService.archive(
             makePathListForJob(files), archiveFile, format, filter, password, encryptFileNames,
             deleteSources, requireContext()
+        )
+        FileJobProgressDialogFragment.show(
+            jobId, getString(R.string.file_job_archive_progress_title), this
         )
         viewModel.selectFiles(files, false)
     }

@@ -21,17 +21,32 @@ class ForegroundNotificationManager(private val service: Service) {
     fun notify(id: Int, notification: Notification) {
         synchronized(notifications) {
             if (notifications.isEmpty()) {
-                service.startForeground(id, notification)
+                startForegroundSafe(id, notification)
                 notifications[id] = notification
                 foregroundId = id
             } else {
                 if (id == foregroundId) {
-                    service.startForeground(id, notification)
+                    startForegroundSafe(id, notification)
                 } else {
                     notificationManager.notify(id, notification)
                 }
                 notifications[id] = notification
             }
+        }
+    }
+
+    /**
+     * Android 12 and above may refuse to let a service go foreground while its app is in the
+     * background. The work is still running and its progress is still worth showing, so show it as
+     * an ordinary notification rather than letting the exception take the app down.
+     */
+    @SuppressLint("MissingPermission")
+    private fun startForegroundSafe(id: Int, notification: Notification) {
+        try {
+            service.startForeground(id, notification)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            notificationManager.notify(id, notification)
         }
     }
 
@@ -43,11 +58,13 @@ class ForegroundNotificationManager(private val service: Service) {
             if (id == foregroundId) {
                 if (notifications.size == 1) {
                     service.stopForegroundCompat(ServiceCompat.STOP_FOREGROUND_REMOVE)
+                    // No-op unless startForegroundSafe() had to fall back to a plain notification.
+                    notificationManager.cancel(id)
                     notifications -= id
                     foregroundId = 0
                 } else {
                     notifications.entries.find { it.key != id }!!.let {
-                        service.startForeground(it.key, it.value)
+                        startForegroundSafe(it.key, it.value)
                         foregroundId = it.key
                     }
                     notificationManager.cancel(id)
