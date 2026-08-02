@@ -17,6 +17,12 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/action_scan_directories"
+        android:orderInCategory="20"
+        android:title="@string/media_player_scan_directories"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_playback_speed"
         android:orderInCategory="30"
         android:title="@string/media_player_playback_speed"

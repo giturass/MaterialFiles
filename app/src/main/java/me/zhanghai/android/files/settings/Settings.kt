@@ -23,6 +23,7 @@ import me.zhanghai.android.files.storage.FileSystemRoot
 import me.zhanghai.android.files.storage.PrimaryStorageVolume
 import me.zhanghai.android.files.storage.Storage
 import me.zhanghai.android.files.theme.night.NightMode
+import me.zhanghai.android.files.viewer.media.MediaScanDirectory
 import java.io.File
 
 object Settings {
@@ -189,6 +190,12 @@ object Settings {
         BooleanSettingLiveData(
             R.string.pref_key_media_player_hardware_decoding,
             R.bool.pref_default_value_media_player_hardware_decoding
+        )
+
+    /** Empty means the playlist falls back to the folder the song being played sits in. */
+    val MEDIA_PLAYER_SCAN_DIRECTORIES: SettingLiveData<List<MediaScanDirectory>> =
+        ParcelValueSettingLiveData(
+            R.string.pref_key_media_player_scan_directories, emptyList()
         )
 
     val ARCHIVE_FILE_NAME_ENCODING: SettingLiveData<String> =

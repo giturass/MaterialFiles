@@ -300,15 +300,15 @@
                 android:layout_weight="1">
 
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/repeatButton"
+                    android:id="@+id/playModeButton"
                     style="@style/Widget.Material3.Button.IconButton"
                     android:layout_width="48dp"
                     android:layout_height="48dp"
                     android:layout_gravity="start|center_vertical"
-                    android:contentDescription="@string/media_player_repeat"
-                    app:icon="@drawable/media_repeat_one_icon_white_24dp"
+                    android:contentDescription="@string/media_player_play_mode"
+                    app:icon="@drawable/media_repeat_icon_white_24dp"
                     app:iconSize="24dp"
-                    app:iconTint="@color/media_player_control_icon_tint" />
+                    app:iconTint="@color/media_player_play_mode_icon_tint" />
             </FrameLayout>
 
             <com.google.android.material.button.MaterialButton
@@ -381,6 +381,21 @@
                     app:icon="@drawable/media_screen_rotation_icon_white_24dp"
                     app:iconSize="24dp"
                     app:iconTint="@color/media_player_control_icon_tint" />
+
+                <!-- Shares the slot with the rotate button, which only a video needs, since only a
+                     song has a folder of other songs to move around in. -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/playlistButton"
+                    style="@style/Widget.Material3.Button.IconButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_gravity="end|center_vertical"
+                    android:contentDescription="@string/media_player_playlist"
+                    android:visibility="gone"
+                    app:icon="@drawable/media_playlist_icon_white_24dp"
+                    app:iconSize="24dp"
+                    app:iconTint="@color/media_player_control_icon_tint"
+                    tools:visibility="visible" />
             </FrameLayout>
         </LinearLayout>
     </LinearLayout>

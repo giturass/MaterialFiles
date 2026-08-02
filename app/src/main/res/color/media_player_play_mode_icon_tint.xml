@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  ~ Copyright (c) 2026 Hai Zhang <dreaming.in.code.zh@gmail.com>
+  ~ All Rights Reserved.
+  -->
+
+<!-- Unlike the transport controls, a play mode is always one of three, so the button takes the
+     primary role throughout and lets its icon say which mode is on. Disabled controls still need to
+     read as disabled, which a flat colour cannot express. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:alpha="@dimen/material_emphasis_disabled"
+        android:color="?attr/colorPrimary"
+        android:state_enabled="false" />
+
+    <item android:color="?attr/colorPrimary" />
+</selector>

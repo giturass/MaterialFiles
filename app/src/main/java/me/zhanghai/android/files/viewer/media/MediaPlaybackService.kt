@@ -23,6 +23,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Observer
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
@@ -57,6 +58,22 @@ class MediaPlaybackService : Service() {
         STOPPED,
         ENDED,
         ERROR
+    }
+
+    /**
+     * What happens when a track ends, and the order the previous and next controls move through the
+     * playlist in.
+     */
+    enum class PlayMode {
+        /** The engine loops the track, so the playlist is never advanced on its own. */
+        REPEAT_ONE,
+        /** The folder plays through and starts over at its first track. */
+        REPEAT_ALL,
+        /** The folder plays through in a random order that is fixed once, so back still works. */
+        SHUFFLE;
+
+        val next: PlayMode
+            get() = entries[(ordinal + 1) % entries.size]
     }
 
     interface Listener {
@@ -120,7 +137,9 @@ class MediaPlaybackService : Service() {
     var currentMimeType: String? = null
         private set
     private var currentPath: Path? = null
-    private var playlist: MediaPlaylist? = null
+    /** The audio files of the current track's folder, once they have been listed. */
+    var playlist: MediaPlaylist? = null
+        private set
     private var currentSourceTitle = ""
     var displayTitle = ""
         private set
@@ -136,7 +155,7 @@ class MediaPlaybackService : Service() {
         private set
     var errorMessage: String? = null
         private set
-    var repeat = false
+    var playMode = DEFAULT_PLAY_MODE
         private set
     var playbackRate = 1f
         private set
@@ -164,19 +183,34 @@ class MediaPlaybackService : Service() {
     val isSeekable: Boolean
         get() = engine?.isSeekable == true
 
-    /** Whether there is another audio file before the current one in its folder. */
-    val hasPrevious: Boolean
-        get() = playlist?.hasPrevious == true
+    /**
+     * Whether the two ends of the playlist are joined, which every mode but repeat one does, since
+     * repeat one never leaves the track it is on.
+     */
+    private val wrapsAround: Boolean
+        get() = playMode != PlayMode.REPEAT_ONE
 
-    /** Whether there is another audio file after the current one in its folder. */
+    /** The track a finished one hands over to, or null when the session should end instead. */
+    private val autoAdvanceTarget: MediaPlaylist?
+        get() = if (playMode == PlayMode.REPEAT_ONE) null else playlist?.movedBy(1, wrap = true)
+
+    /** Whether there is another audio file to move back to, wrapping around if the mode does. */
+    val hasPrevious: Boolean
+        get() = playlist?.let { it.hasPrevious || (wrapsAround && it.size > 1) } == true
+
+    /** Whether there is another audio file to move on to, wrapping around if the mode does. */
     val hasNext: Boolean
-        get() = playlist?.hasNext == true
+        get() = playlist?.let { it.hasNext || (wrapsAround && it.size > 1) } == true
 
     val bufferingPercent: Float
         get() = engine?.bufferingPercent ?: 0f
 
     private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { change ->
         mainHandler.post { onAudioFocusChanged(change) }
+    }
+
+    private val scanDirectoriesObserver = Observer<List<MediaScanDirectory>> {
+        onScanDirectoriesChanged()
     }
 
     private val engineListener = object : MediaPlaybackEngine.Listener {
@@ -197,14 +231,16 @@ class MediaPlaybackService : Service() {
                     wakeWifiLock.isAcquired = true
                 }
                 Status.ENDED -> {
-                    if (!repeat && hasNext) {
+                    // Repeat one never gets here, since the engine loops the track itself.
+                    val next = autoAdvanceTarget
+                    if (next != null) {
                         // Continue with the folder instead of ending the session. Releasing the
                         // engine from inside its own callback is asking for trouble, so let this
                         // callback return first.
                         this@MediaPlaybackService.status = newStatus
                         mainHandler.post {
                             if (this@MediaPlaybackService.status == Status.ENDED) {
-                                playNext()
+                                openPlaylistItem(next)
                             }
                         }
                         return
@@ -305,6 +341,8 @@ class MediaPlaybackService : Service() {
         notification = MediaPlaybackNotification(this, mediaSession.sessionToken)
         updateMediaSessionMetadata()
         updateMediaSessionPlaybackState()
+        // Fires once immediately, which is a no-op while nothing is open yet.
+        Settings.MEDIA_PLAYER_SCAN_DIRECTORIES.observeForever(scanDirectoriesObserver)
     }
 
     override fun onBind(intent: Intent): IBinder {
@@ -383,6 +421,7 @@ class MediaPlaybackService : Service() {
 
     override fun onDestroy() {
         metadataGeneration++
+        Settings.MEDIA_PLAYER_SCAN_DIRECTORIES.removeObserver(scanDirectoriesObserver)
         sourceExecutor.shutdownNow()
         mainHandler.removeCallbacks(leavePausedForegroundRunnable)
         mainHandler.removeCallbacks(stopTerminalServiceRunnable)
@@ -508,12 +547,20 @@ class MediaPlaybackService : Service() {
     }
 
     private fun moveInPlaylist(offset: Int) {
-        val moved = playlist?.movedBy(offset) ?: return
-        val item = moved.current ?: return
+        openPlaylistItem(playlist?.movedBy(offset, wrapsAround) ?: return)
+    }
+
+    /** Jumps straight to a track the user picked out of the playlist. */
+    fun playPlaylistItem(index: Int) {
+        openPlaylistItem(playlist?.movedToIndex(index) ?: return)
+    }
+
+    private fun openPlaylistItem(playlist: MediaPlaylist) {
+        val item = playlist.current ?: return
         openMedia(
             item.uri, item.mimeType, item.title, audio = true, force = true,
-            // Playback speed and repeat belong to the session rather than to a single track.
-            preserveSessionSettings = true, path = item.path, playlist = moved
+            // Playback speed and play mode belong to the session rather than to a single track.
+            preserveSessionSettings = true, path = item.path, playlist = playlist
         )
     }
 
@@ -539,11 +586,21 @@ class MediaPlaybackService : Service() {
         notification.startOrUpdate()
     }
 
-    fun setRepeat(enabled: Boolean) {
-        repeat = enabled
-        engine?.setRepeat(enabled)
-        menuRevision++
-        notifyListeners()
+    fun setPlayMode(mode: PlayMode) {
+        if (playMode == mode) {
+            return
+        }
+        val wasShuffled = playMode == PlayMode.SHUFFLE
+        playMode = mode
+        engine?.setRepeat(mode == PlayMode.REPEAT_ONE)
+        playlist = when {
+            mode == PlayMode.SHUFFLE -> playlist?.shuffled()
+            wasShuffled -> playlist?.inFileOrder()
+            else -> playlist
+        }
+        // Whether the playlist wraps around decides whether there is a previous or a next track,
+        // which the media session advertises to the notification and to the lock screen.
+        notifyStateChanged(updateNotification = true)
     }
 
     fun setVideoScale(scale: VideoScaleType) {
@@ -632,9 +689,12 @@ class MediaPlaybackService : Service() {
         triedBassFallback = false
         playWhenReady = !pauseAfterStart
         if (!preserveSessionSettings) {
-            repeat = false
+            playMode = DEFAULT_PLAY_MODE
             playbackRate = 1f
             videoScale = VideoScaleType.BEST_FIT
+            // A track picked by hand starts a new session, so a shuffled order goes with the old
+            // one rather than outliving the mode that created it.
+            this.playlist = this.playlist?.inFileOrder()
         }
         menuRevision++
 
@@ -667,7 +727,7 @@ class MediaPlaybackService : Service() {
             return
         }
         this.engine = engine
-        engine.setRepeat(repeat)
+        engine.setRepeat(playMode == PlayMode.REPEAT_ONE)
         engine.setRate(playbackRate)
         if (!isAudio) {
             attachedVideoLayout?.let {
@@ -700,19 +760,35 @@ class MediaPlaybackService : Service() {
     }
 
     /**
-     * Lists the folder of [path] in the background, since it may be a remote file system, and
-     * enables the previous/next controls once it is known what surrounds the current track.
+     * Lists the tracks that go with [path] in the background, since a scan may cross a remote file
+     * system, and enables the previous/next controls once it is known what surrounds the current
+     * track.
      */
     private fun loadPlaylist(path: Path, generation: Int) {
+        // Read on the main thread, where the setting is published, and hand the result over.
+        val scanDirectories = MediaScanDirectories.value.map { it.path }
         sourceExecutor.execute {
-            val playlist = MediaPlaylist.load(path)
+            val playlist = MediaPlaylist.load(path, scanDirectories)
             mainHandler.post {
                 if (generation == metadataGeneration && playlist != null) {
-                    this.playlist = playlist
+                    this.playlist =
+                        if (playMode == PlayMode.SHUFFLE) playlist.shuffled() else playlist
                     notifyStateChanged(updateNotification = true)
                 }
             }
         }
+    }
+
+    /**
+     * Rebuilds the playlist around whatever is playing when the scanned folders change. The old
+     * list stays until the new one is ready, so the controls don't blink out during the scan.
+     */
+    private fun onScanDirectoriesChanged() {
+        val path = currentPath ?: return
+        if (!isAudio) {
+            return
+        }
+        loadPlaylist(path, metadataGeneration)
     }
 
     /**
@@ -996,6 +1072,9 @@ class MediaPlaybackService : Service() {
         const val SEEK_INTERVAL_MILLIS = 10_000L
         const val MIN_PLAYBACK_RATE = 0.5f
         const val MAX_PLAYBACK_RATE = 2f
+
+        /** A folder of songs is expected to keep going, so it loops until it is stopped. */
+        private val DEFAULT_PLAY_MODE = PlayMode.REPEAT_ALL
 
         private const val MAX_ARTWORK_DIMENSION_PX = 384
         private const val PAUSED_FOREGROUND_TIMEOUT_MILLIS = 30_000L

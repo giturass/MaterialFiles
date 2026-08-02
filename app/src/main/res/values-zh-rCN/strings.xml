@@ -582,7 +582,19 @@
     <string name="media_player_buffering">正在缓冲…</string>
     <string name="media_player_error">无法播放此媒体</string>
     <string name="media_player_background_playback">后台播放</string>
-    <string name="media_player_repeat">单曲循环</string>
+    <string name="media_player_play_mode">播放方式</string>
+    <string name="media_player_play_mode_repeat_one">单曲循环</string>
+    <string name="media_player_play_mode_repeat_all">列表循环</string>
+    <string name="media_player_play_mode_shuffle">随机播放</string>
+    <string name="media_player_playlist">播放列表</string>
+    <string name="media_player_scan_directories">音乐扫描文件夹</string>
+    <string name="media_player_scan_directory_add">添加文件夹</string>
+    <string name="media_player_scan_directory_remove">移除文件夹</string>
+    <string name="media_player_scan_directory_already_added">该文件夹已添加</string>
+    <string name="media_player_scan_directory_list_empty">尚未添加扫描文件夹\n\n播放列表将使用当前歌曲所在的文件夹。添加后会连同子文件夹一起扫描，跨文件夹播放。</string>
+    <plurals name="media_player_playlist_track_count_format">
+        <item quantity="other">%1$d 首</item>
+    </plurals>
     <string name="media_player_playback_speed">播放速度</string>
     <string name="media_player_playback_speed_value_format">%1$s 倍</string>
     <string name="media_player_video_scale">画面尺寸</string>

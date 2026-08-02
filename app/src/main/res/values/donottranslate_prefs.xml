@@ -83,6 +83,7 @@
     <bool name="pref_default_value_media_player_background_playback">true</bool>
     <string name="pref_key_media_player_hardware_decoding">key_media_player_hardware_decoding</string>
     <bool name="pref_default_value_media_player_hardware_decoding">true</bool>
+    <string name="pref_key_media_player_scan_directories">key_media_player_scan_directories</string>
     <string name="pref_key_archive_file_name_encoding">key_archive_file_name_encoding</string>
     <string name="pref_default_value_archive_file_name_encoding">UTF-8</string>
     <string name="pref_key_open_apk_default_action">key_open_apk_default_action</string>

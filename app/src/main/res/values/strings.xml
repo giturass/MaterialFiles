@@ -732,7 +732,20 @@
     <string name="media_player_error_bass_format">%1$s failed (BASS error %2$d)</string>
     <string name="media_player_track_format">Track %1$d</string>
     <string name="media_player_background_playback">Background playback</string>
-    <string name="media_player_repeat">Repeat</string>
+    <string name="media_player_play_mode">Play mode</string>
+    <string name="media_player_play_mode_repeat_one">Repeat one</string>
+    <string name="media_player_play_mode_repeat_all">Repeat all</string>
+    <string name="media_player_play_mode_shuffle">Shuffle</string>
+    <string name="media_player_playlist">Playlist</string>
+    <string name="media_player_scan_directories">Music folders</string>
+    <string name="media_player_scan_directory_add">Add folder</string>
+    <string name="media_player_scan_directory_remove">Remove folder</string>
+    <string name="media_player_scan_directory_already_added">This folder has already been added</string>
+    <string name="media_player_scan_directory_list_empty">No music folders yet\n\nThe playlist uses the folder the current song is in. Add folders to play across all of them, subfolders included.</string>
+    <plurals name="media_player_playlist_track_count_format">
+        <item quantity="one">%1$d track</item>
+        <item quantity="other">%1$d tracks</item>
+    </plurals>
     <string name="media_player_playback_speed">Playback speed</string>
     <string name="media_player_playback_speed_value_format">%1$s×</string>
     <string name="media_player_video_scale">Video size</string>

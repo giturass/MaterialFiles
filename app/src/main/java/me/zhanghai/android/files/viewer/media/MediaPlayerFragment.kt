@@ -58,10 +58,13 @@ import me.zhanghai.android.files.file.isPlayableMedia
 import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.util.ParcelableArgs
 import me.zhanghai.android.files.util.args
+import me.zhanghai.android.files.util.createIntent
 import me.zhanghai.android.files.util.extraPath
 import me.zhanghai.android.files.util.finish
 import me.zhanghai.android.files.util.getColorByAttr
 import me.zhanghai.android.files.util.mediumAnimTime
+import me.zhanghai.android.files.util.showToast
+import me.zhanghai.android.files.util.startActivitySafe
 import me.zhanghai.android.files.util.valueCompat
 import me.zhanghai.android.systemuihelper.SystemUiHelper
 import kotlin.math.roundToInt
@@ -74,7 +77,14 @@ class MediaPlayerFragment : Fragment() {
     private lateinit var binding: MediaPlayerFragmentBinding
     private lateinit var systemUiHelper: SystemUiHelper
 
-    private var playbackService: MediaPlaybackService? = null
+    /** Read by the playlist sheet, which acts on the same session rather than binding its own. */
+    internal var playbackService: MediaPlaybackService? = null
+        private set
+
+    /** The playlist sheet while it is open, which survives a rotation with the fragment. */
+    private val playlistDialog: MediaPlaylistDialogFragment?
+        get() = childFragmentManager.findFragmentByTag(MediaPlaylistDialogFragment.TAG)
+            as? MediaPlaylistDialogFragment
     private var serviceBindRequested = false
     private var viewStarted = false
     private var shouldOpenMedia = false
@@ -92,19 +102,6 @@ class MediaPlayerFragment : Fragment() {
     private var displayedLyrics: Lyrics? = null
     private var lyricsUserScrolling = false
     private var displayedActivityTitle: CharSequence? = null
-
-    /** Resolved once, since the theme cannot change while the view is alive. */
-    private val repeatOnTint by lazy {
-        ColorStateList.valueOf(
-            requireContext().getColorByAttr(androidx.appcompat.R.attr.colorPrimary)
-        )
-    }
-    private val repeatOffTint by lazy {
-        ColorStateList.valueOf(
-            requireContext()
-                .getColorByAttr(com.google.android.material.R.attr.colorOnSurfaceVariant)
-        )
-    }
 
     private val lyricsAdapter = LyricsAdapter { line ->
         playbackService?.seekTo(line.timeMillis)
@@ -247,8 +244,16 @@ class MediaPlayerFragment : Fragment() {
             playbackService?.playNext()
             scheduleHideControls()
         }
-        binding.repeatButton.setOnClickListener {
-            playbackService?.let { it.setRepeat(!it.repeat) }
+        binding.playModeButton.setOnClickListener {
+            val service = playbackService ?: return@setOnClickListener
+            val mode = service.playMode.next
+            service.setPlayMode(mode)
+            // Three modes are a lot to tell apart by icon alone, so each change says its name.
+            showToast(playModeNameRes(mode))
+            scheduleHideControls()
+        }
+        binding.playlistButton.setOnClickListener {
+            showPlaylist()
             scheduleHideControls()
         }
         binding.rotateButton.setOnClickListener {
@@ -384,6 +389,8 @@ class MediaPlayerFragment : Fragment() {
         menu.findItem(R.id.action_hardware_decoding)?.isChecked =
             Settings.MEDIA_PLAYER_HARDWARE_DECODING.valueCompat
         menu.findItem(R.id.action_video_scale)?.isVisible = !displayedAsAudio
+        // Scanned folders only ever build a playlist of songs.
+        menu.findItem(R.id.action_scan_directories)?.isVisible = displayedAsAudio
         menu.findItem(R.id.action_audio_track)?.apply {
             // A track can only be picked where there is more than one to pick from.
             isVisible = !displayedAsAudio
@@ -416,6 +423,10 @@ class MediaPlayerFragment : Fragment() {
             }
             R.id.action_playback_speed -> {
                 showPlaybackSpeedDialog()
+                true
+            }
+            R.id.action_scan_directories -> {
+                startActivitySafe(MediaScanDirectoryListActivity::class.createIntent())
                 true
             }
             R.id.action_video_scale -> {
@@ -494,11 +505,12 @@ class MediaPlayerFragment : Fragment() {
         binding.forwardButton.isEnabled = seekable
         binding.previousButton.isEnabled = service?.hasPrevious == true
         binding.nextButton.isEnabled = service?.hasNext == true
-        binding.repeatButton.isEnabled = service?.hasMedia == true
-        // Material 3's checkable icon button reads as primary when on and as on-surface-variant when
-        // off, which is exactly the distinction repeat needs.
-        binding.repeatButton.iconTint =
-            if (service?.repeat == true) repeatOnTint else repeatOffTint
+        val playMode = service?.playMode ?: MediaPlaybackService.PlayMode.REPEAT_ALL
+        binding.playModeButton.isEnabled = service?.hasMedia == true
+        binding.playModeButton.setIconResource(playModeIconRes(playMode))
+        binding.playModeButton.contentDescription = getString(playModeNameRes(playMode))
+        binding.playlistButton.isEnabled = (service?.playlist?.size ?: 0) > 0
+        playlistDialog?.updatePlaylist()
         binding.seekBar.isEnabled = seekable && duration > 0L
         binding.root.keepScreenOn = viewStarted && !displayedAsAudio && playing
         updateArtwork(service?.artwork)
@@ -581,6 +593,7 @@ class MediaPlayerFragment : Fragment() {
         binding.lyricsPanel.isVisible = isAudio && lyricsVisible
         binding.videoLayout.isVisible = !isAudio
         binding.rotateButton.isVisible = !isAudio
+        binding.playlistButton.isVisible = isAudio
         // Music moves between tracks rather than within one, so the folder replaces seeking by a
         // fixed interval for audio.
         binding.previousButton.isVisible = isAudio
@@ -764,6 +777,31 @@ class MediaPlayerFragment : Fragment() {
             ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         }
     }
+
+    /** Opens the folder of songs as a sheet, unless it is already open or there is none. */
+    private fun showPlaylist() {
+        if (playbackService?.playlist == null || playlistDialog != null) {
+            return
+        }
+        MediaPlaylistDialogFragment().show(childFragmentManager, MediaPlaylistDialogFragment.TAG)
+    }
+
+    private fun playModeIconRes(mode: MediaPlaybackService.PlayMode): Int =
+        when (mode) {
+            MediaPlaybackService.PlayMode.REPEAT_ONE ->
+                R.drawable.media_repeat_one_icon_white_24dp
+            MediaPlaybackService.PlayMode.REPEAT_ALL -> R.drawable.media_repeat_icon_white_24dp
+            MediaPlaybackService.PlayMode.SHUFFLE -> R.drawable.media_shuffle_icon_white_24dp
+        }
+
+    private fun playModeNameRes(mode: MediaPlaybackService.PlayMode): Int =
+        when (mode) {
+            MediaPlaybackService.PlayMode.REPEAT_ONE ->
+                R.string.media_player_play_mode_repeat_one
+            MediaPlaybackService.PlayMode.REPEAT_ALL ->
+                R.string.media_player_play_mode_repeat_all
+            MediaPlaybackService.PlayMode.SHUFFLE -> R.string.media_player_play_mode_shuffle
+        }
 
     private fun applyBackdropBlur() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {

@@ -278,6 +278,12 @@
             android:theme="@style/Theme.MaterialFiles" />
 
         <activity
+            android:name="me.zhanghai.android.files.viewer.media.MediaScanDirectoryListActivity"
+            android:label="@string/media_player_scan_directories"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.MaterialFiles" />
+
+        <activity
             android:name="me.zhanghai.android.files.about.AboutActivity"
             android:label="@string/about_title"
             android:launchMode="singleTop"
