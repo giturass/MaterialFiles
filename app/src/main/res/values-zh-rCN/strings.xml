@@ -714,8 +714,6 @@
     <string name="database_editor_exported_format">已导出 %1$,d 行</string>
     <string name="database_editor_exported_database">已导出数据库</string>
     <string name="database_editor_imported_format">已导入 %1$,d 行</string>
-    <string name="file_list_action_create_database">新建数据库</string>
-    <string name="file_create_database_title">新建数据库</string>
     <string name="sign_apk_title">签名 APK</string>
     <string name="sign_apk_keystore_none">未选择密钥库</string>
     <string name="sign_apk_choose_keystore">选择…</string>

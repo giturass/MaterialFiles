@@ -35,7 +35,6 @@ import me.zhanghai.android.files.apksigner.ApkSigningSchemes
 import me.zhanghai.android.files.apksigner.ApkVerificationResult
 import me.zhanghai.android.files.apksigner.KeyStores
 import me.zhanghai.android.files.compat.mainExecutorCompat
-import me.zhanghai.android.files.database.DatabaseRepository
 import me.zhanghai.android.files.file.FileItem
 import me.zhanghai.android.files.file.MimeType
 import me.zhanghai.android.files.file.asFileSize
@@ -983,31 +982,6 @@ private fun FileJob.create(path: Path, createDirectory: Boolean) {
             }
         }
     } while (retry)
-}
-
-/**
- * Creates an empty but valid SQLite database. SQLite can only write to a real file, so the database
- * is built in the cache and its bytes are then written to [path], which may live anywhere.
- */
-class CreateDatabaseFileJob(private val path: Path) : FileJob() {
-    @Throws(IOException::class)
-    override fun run() {
-        // Create the file first so that an existing one is reported the same way as for any other
-        // new file, instead of being silently overwritten.
-        create(path, false)
-        val cacheFile = File(cacheDirectory, CACHE_FILE_NAME)
-        try {
-            cacheFile.delete()
-            DatabaseRepository.create(cacheFile)
-            write(path, cacheFile.readBytes())
-        } finally {
-            cacheFile.delete()
-        }
-    }
-
-    companion object {
-        private const val CACHE_FILE_NAME = "new_database.db"
-    }
 }
 
 class DeleteFileJob(private val paths: List<Path>) : FileJob() {

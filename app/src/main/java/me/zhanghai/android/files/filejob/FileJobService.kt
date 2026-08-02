@@ -142,10 +142,6 @@ class FileJobService : Service() {
             startJob(CreateFileJob(path, createDirectory), context)
         }
 
-        fun createDatabase(path: Path, context: Context) {
-            startJob(CreateDatabaseFileJob(path), context)
-        }
-
         fun delete(paths: List<Path>, context: Context) {
             startJob(DeleteFileJob(paths), context)
         }

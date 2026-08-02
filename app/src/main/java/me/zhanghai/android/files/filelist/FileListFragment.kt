@@ -144,7 +144,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     ConfirmReplaceFileDialogFragment.Listener, OpenApkDialogFragment.Listener,
     ConfirmDeleteFilesDialogFragment.Listener, CreateArchiveDialogFragment.Listener,
     RenameFileDialogFragment.Listener, CreateFileDialogFragment.Listener,
-    CreateDirectoryDialogFragment.Listener, CreateDatabaseDialogFragment.Listener,
+    CreateDirectoryDialogFragment.Listener,
     NavigationFragment.Listener, ShowRequestAllFilesAccessRationaleDialogFragment.Listener,
     ShowRequestNotificationPermissionRationaleDialogFragment.Listener,
     ShowRequestNotificationPermissionInSettingsRationaleDialogFragment.Listener,
@@ -515,10 +515,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             }
             R.id.action_create_directory -> {
                 showCreateDirectoryDialog()
-                true
-            }
-            R.id.action_create_database -> {
-                showCreateDatabaseDialog()
                 true
             }
             R.id.action_refresh -> {
@@ -1504,15 +1500,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     override fun createDirectory(name: String) {
         val path = currentPath.resolve(name)
         FileJobService.create(path, true, requireContext())
-    }
-
-    private fun showCreateDatabaseDialog() {
-        CreateDatabaseDialogFragment.show(this)
-    }
-
-    override fun createDatabase(name: String) {
-        val path = currentPath.resolve(name)
-        FileJobService.createDatabase(path, requireContext())
     }
 
     override val currentPath: Path

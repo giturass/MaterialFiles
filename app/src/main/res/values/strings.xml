@@ -866,8 +866,6 @@
     <string name="database_editor_exported_format">Exported %1$,d rows</string>
     <string name="database_editor_exported_database">Database exported</string>
     <string name="database_editor_imported_format">Imported %1$,d rows</string>
-    <string name="file_list_action_create_database">New database</string>
-    <string name="file_create_database_title">New database</string>
 
     <string name="sign_apk_title">Sign APK</string>
     <string name="sign_apk_keystore_none">No keystore selected</string>

@@ -448,17 +448,6 @@ class DatabaseRepository private constructor(private val database: SQLiteDatabas
                 e.printStackTrace()
                 open(file, readOnly = true)
             }
-
-        /** Creates a valid, empty database file at [file]. */
-        fun create(file: File) {
-            SQLiteDatabase.openOrCreateDatabase(file, null).use {
-                // SQLite only lays down the file header once something makes it write a page.
-                it.execSQL("PRAGMA user_version = 0")
-                if (file.length() == 0L) {
-                    it.execSQL("VACUUM")
-                }
-            }
-        }
     }
 }
 
