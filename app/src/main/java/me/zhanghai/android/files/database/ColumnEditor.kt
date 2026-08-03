@@ -91,11 +91,20 @@ class ColumnEditor(
             return null
         }
         binding.nameLayout.error = null
+        val type = binding.typeEdit.text?.toString()?.trim().orEmpty()
+        // A type name goes into the statement as typed, so anything that isn't one is caught here
+        // rather than coming back as a SQLite syntax error nobody can act on.
+        if (!type.isSqlColumnType()) {
+            binding.typeLayout.error =
+                context.getString(R.string.database_editor_column_type_invalid)
+            return null
+        }
+        binding.typeLayout.error = null
         val defaultValue = binding.defaultEdit.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }
         val isNotNull = binding.notNullCheckBox.isChecked
         return NewColumn(
             name,
-            binding.typeEdit.text?.toString()?.trim().orEmpty(),
+            type,
             isNotNull,
             binding.primaryKeyCheckBox.isVisible && binding.primaryKeyCheckBox.isChecked,
             defaultValue

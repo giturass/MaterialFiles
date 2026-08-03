@@ -51,7 +51,7 @@ class Lyrics(val lines: List<Line>, val isSynced: Boolean) {
             val syncedLines = mutableListOf<Line>()
             val plainLines = mutableListOf<String>()
             for (rawLine in text.lineSequence()) {
-                val line = rawLine.trim().removePrefix("﻿").trim()
+                val line = rawLine.trim().removePrefix("\uFEFF").trim()
                 if (line.isEmpty()) {
                     continue
                 }

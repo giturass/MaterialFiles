@@ -179,7 +179,12 @@ class TextEditorViewModel(file: Path) : ViewModel() {
     }
 
     data class EditorState(
-        val text: String,
+        /**
+         * The edited document, or null when it still matches what was loaded from the file - in
+         * which case [textState] already holds it and keeping a second copy would only double the
+         * memory a large file needs.
+         */
+        val text: String?,
         val leftLine: Int,
         val leftColumn: Int,
         val rightLine: Int,

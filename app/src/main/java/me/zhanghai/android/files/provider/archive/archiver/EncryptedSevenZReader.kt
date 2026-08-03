@@ -22,6 +22,10 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.nio.charset.Charset
+import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 
 /**
  * Reads 7z archives whose header is encrypted, i.e. the ones that hide entry names as well as
@@ -311,12 +315,25 @@ object EncryptedSevenZReader {
      *
      * A single slot, because the only access pattern this helps is one caller walking one archive.
      * Anything else simply misses and opens its own.
+     *
+     * What is held is an open channel and the decompression buffers behind it, and nothing says the
+     * caller is ever coming back for the next entry - reading one entry out of an archive and then
+     * leaving it alone is ordinary. So the slot is given up on its own after
+     * [IDLE_TIMEOUT_SECONDS] rather than waiting for a different archive to come along and evict it.
      */
     private object SequentialArchiveCache {
         private var file: Path? = null
         private var archive: SevenZFile? = null
         /** The name of the entry the held archive is already positioned on. */
         private var heldEntryName: String? = null
+        private var expiryFuture: ScheduledFuture<*>? = null
+
+        private val scheduler by lazy {
+            Executors.newSingleThreadScheduledExecutor { runnable ->
+                Thread(runnable, SequentialArchiveCache::class.java.simpleName)
+                    .apply { isDaemon = true }
+            }
+        }
 
         /** Takes the held archive when it is already positioned on [entryName]. */
         @Synchronized
@@ -353,10 +370,25 @@ object EncryptedSevenZReader {
             this.file = file
             this.archive = archive
             heldEntryName = nextEntry.name
+            expiryFuture = try {
+                scheduler.schedule(::closeHeld, IDLE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            } catch (e: RejectedExecutionException) {
+                // Without a timer to give it up again this must not be held at all.
+                e.printStackTrace()
+                closeHeldLocked()
+                return false
+            }
             return true
         }
 
+        @Synchronized
+        private fun closeHeld() {
+            closeHeldLocked()
+        }
+
         private fun clearLocked() {
+            expiryFuture?.cancel(false)
+            expiryFuture = null
             file = null
             archive = null
             heldEntryName = null
@@ -366,6 +398,9 @@ object EncryptedSevenZReader {
             archive?.closeSafe()
             clearLocked()
         }
+
+        /** Long enough to span one caller's pause between entries, short enough not to be a leak. */
+        private const val IDLE_TIMEOUT_SECONDS = 30L
     }
 
     // See also libarchive/archive_read_support_format_7zip.c .

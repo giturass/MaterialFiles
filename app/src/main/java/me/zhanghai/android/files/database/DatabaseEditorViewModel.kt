@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import java8.nio.file.Path
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -34,6 +35,7 @@ import me.zhanghai.android.files.util.isReady
 import me.zhanghai.android.files.util.localFileOrNull
 import me.zhanghai.android.files.util.toError
 import me.zhanghai.android.files.util.toLoading
+import java.io.BufferedReader
 import java.io.File
 import java.io.IOException
 
@@ -44,6 +46,18 @@ class DatabaseEditorViewModel(val path: Path) : ViewModel() {
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     private val databaseDispatcher = Dispatchers.IO.limitedParallelism(1)
+
+    /**
+     * Outlives [viewModelScope], for the teardown that has to happen after the work already queued
+     * on [databaseDispatcher] rather than being cancelled along with it.
+     */
+    private val closeScope = CoroutineScope(databaseDispatcher)
+
+    /** Set on the main thread once [onCleared] has run, so a write-back knows it is on its own. */
+    private var isCleared = false
+
+    /** Set on the main thread for as long as a write-back may still touch the database. */
+    private var isWritingBack = false
 
     private val _databaseState = MutableStateFlow<DataState<OpenedDatabase>>(DataState.Loading())
     val databaseState = _databaseState.asStateFlow()
@@ -392,31 +406,29 @@ class DatabaseEditorViewModel(val path: Path) : ViewModel() {
         runIo { repository ->
             // Streamed rather than read whole, so that the size of the file is the file system's
             // problem rather than ours.
-            path.newInputStream().use { inputStream ->
-                inputStream.reader().buffered().use { reader ->
-                    val rows = parseCsvRows(reader).iterator()
-                    require(rows.hasNext()) { "The file has no rows" }
-                    // Columns are matched by header name, so a file holding extra or reordered
-                    // columns still imports, and one that shares no column at all is refused rather
-                    // than guessed at.
-                    val mappings = rows.next().mapIndexedNotNull { index, field ->
-                        table.columns.firstOrNull { it.name.equals(field.text, ignoreCase = true) }
-                            ?.let { index to it }
-                    }
-                    require(mappings.isNotEmpty()) {
-                        "No column in this file matches ${table.name}"
-                    }
-                    val values = rows.asSequence()
-                        .filterNot { it.size == 1 && !it[0].isQuoted && it[0].text.isEmpty() }
-                        .map { fields ->
-                            mappings.map { (index, column) ->
-                                fields.getOrNull(index)?.toSqlValue(column) ?: SqlValue.Null
-                            }
-                        }
-                    IoResult.RowsImported(
-                        repository.insertRows(table.name, mappings.map { it.second.name }, values)
-                    )
+            path.importReader().use { reader ->
+                val rows = parseCsvRows(reader).iterator()
+                require(rows.hasNext()) { "The file has no rows" }
+                // Columns are matched by header name, so a file holding extra or reordered
+                // columns still imports, and one that shares no column at all is refused rather
+                // than guessed at.
+                val mappings = rows.next().mapIndexedNotNull { index, field ->
+                    table.columns.firstOrNull { it.name.equals(field.text, ignoreCase = true) }
+                        ?.let { index to it }
                 }
+                require(mappings.isNotEmpty()) {
+                    "No column in this file matches ${table.name}"
+                }
+                val values = rows.asSequence()
+                    .filterNot { it.size == 1 && !it[0].isQuoted && it[0].text.isEmpty() }
+                    .map { fields ->
+                        mappings.map { (index, column) ->
+                            fields.getOrNull(index)?.toSqlValue(column) ?: SqlValue.Null
+                        }
+                    }
+                IoResult.RowsImported(
+                    repository.insertRows(table.name, mappings.map { it.second.name }, values)
+                )
             }
         }
     }
@@ -495,7 +507,9 @@ class DatabaseEditorViewModel(val path: Path) : ViewModel() {
      * live on the local file system to begin with.
      *
      * The copy itself is [NonCancellable]: it overwrites the file the user opened, and being
-     * interrupted halfway would leave them with neither the old database nor the new one.
+     * interrupted halfway would leave them with neither the old database nor the new one. Since it
+     * therefore outlives the view model, it also takes over closing the database when [onCleared]
+     * finds it still in flight.
      */
     fun writeBack() {
         val database = (_databaseState.value as? DataState.Success)?.data ?: return
@@ -503,6 +517,9 @@ class DatabaseEditorViewModel(val path: Path) : ViewModel() {
             return
         }
         _writeBackState.value = ActionState.Running(path)
+        // Claimed before the coroutine starts rather than inside it, so that a clear arriving in
+        // between still sees that there is a write-back to wait for.
+        isWritingBack = true
         viewModelScope.launch {
             try {
                 withContext(NonCancellable + databaseDispatcher) {
@@ -517,6 +534,11 @@ class DatabaseEditorViewModel(val path: Path) : ViewModel() {
             } catch (e: Exception) {
                 e.printStackTrace()
                 _writeBackState.value = ActionState.Error(path, e)
+            } finally {
+                isWritingBack = false
+                if (isCleared) {
+                    closeDatabase(database)
+                }
             }
         }
     }
@@ -551,16 +573,34 @@ class DatabaseEditorViewModel(val path: Path) : ViewModel() {
     override fun onCleared() {
         super.onCleared()
 
-        val database = (_databaseState.value as? DataState.Success)?.data
-        // Not on the database dispatcher: onCleared() must not outlive the ViewModel scope, and
-        // closing is quick.
-        try {
-            database?.repository?.close()
-        } catch (e: Exception) {
-            e.printStackTrace()
+        isCleared = true
+        val database = (_databaseState.value as? DataState.Success)?.data ?: return
+        // A write-back deliberately outlives this view model, and until it finishes it is still
+        // reading the database and the file underneath. Closing the one and deleting the other here
+        // would pull both out from under it, so whichever of the two finishes last does the closing.
+        if (isWritingBack) {
+            return
         }
-        if (database?.isCacheCopy == true) {
-            deleteCacheFile(database.file)
+        closeDatabase(database)
+    }
+
+    /**
+     * Closes [database] and, when it was only a working copy, removes it.
+     *
+     * Queued onto [databaseDispatcher] rather than run here: that dispatcher is single threaded, so
+     * this lands after whatever is still on it. A query that cancellation has not managed to stop
+     * yet would otherwise find its connection closed underneath it.
+     */
+    private fun closeDatabase(database: OpenedDatabase) {
+        closeScope.launch {
+            try {
+                database.repository.close()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            if (database.isCacheCopy) {
+                deleteCacheFile(database.file)
+            }
         }
     }
 
@@ -604,8 +644,22 @@ class DatabaseEditorViewModel(val path: Path) : ViewModel() {
  * Reads a file being imported. Whole rather than streamed, because [org.json.JSONArray] needs the
  * entire document; the CSV importer streams instead.
  */
-private fun Path.readImportText(): String =
-    newInputStream().use { it.reader().readText() }
+private fun Path.readImportText(): String = importReader().use { it.readText() }
+
+/**
+ * Opens a file being imported as UTF-8, past the byte order mark that a Windows editor writes in
+ * front of it. Left in, it would become part of the first column's name and stop it matching
+ * anything in the table.
+ */
+private fun Path.importReader(): BufferedReader =
+    newInputStream().reader().buffered().apply {
+        mark(1)
+        if (read() != BYTE_ORDER_MARK.code) {
+            reset()
+        }
+    }
+
+private const val BYTE_ORDER_MARK = '\uFEFF'
 
 /** Overwrites [path] with this file's contents. */
 @Throws(IOException::class)

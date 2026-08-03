@@ -192,11 +192,12 @@ object ShizukuFileServiceLauncher {
             State.UNSUPPORTED -> finishPermissionRequest(PermissionResult.ERROR)
             State.PERMISSION_DENIED -> finishPermissionRequest(PermissionResult.DENIED)
             State.PERMISSION_REQUIRED -> {
+                // The binder is there, so whatever we were waiting for it has happened either way.
+                mainHandler.removeCallbacks(binderTimeoutRunnable)
                 if (request.isPermissionRequested) {
                     return
                 }
                 request.isPermissionRequested = true
-                mainHandler.removeCallbacks(binderTimeoutRunnable)
                 mainHandler.postDelayed(
                     permissionTimeoutRunnable, REQUEST_PERMISSION_TIMEOUT_MILLIS
                 )
@@ -214,32 +215,29 @@ object ShizukuFileServiceLauncher {
             mainHandler.post { finishPermissionRequest(result) }
             return
         }
-        val request = pendingPermissionRequest ?: return
-        pendingPermissionRequest = null
+        // Dropped whether or not there is still a request, so that a timeout armed for one that has
+        // already been answered cannot fire against the next.
         mainHandler.removeCallbacks(binderTimeoutRunnable)
         mainHandler.removeCallbacks(permissionTimeoutRunnable)
+        val request = pendingPermissionRequest ?: return
+        pendingPermissionRequest = null
         request.callbacks.forEach { it(result) }
     }
 
     @RequiresApi(Build.VERSION_CODES.M)
     @Throws(RemoteFileSystemException::class)
     fun launchService(): IRemoteFileService {
+        if (BuildConfig.DEBUG && Looper.myLooper() == Looper.getMainLooper()) {
+            throw IllegalStateException(
+                "launchService() blocks for up to ${RootFileService.TIMEOUT_MILLIS} ms and must" +
+                    " not be called on the main thread"
+            )
+        }
+        // Checked before the lock as well as under it: a state that cannot produce a service should
+        // say so at once, rather than wait out another thread's bind attempt to say the same thing.
+        checkState()
         synchronized(serviceLock) {
-            when (getState()) {
-                State.UNAVAILABLE -> throw RemoteFileSystemException(
-                    "Shizuku is not running"
-                )
-                State.UNSUPPORTED -> throw RemoteFileSystemException(
-                    "This version of Shizuku is not supported"
-                )
-                State.PERMISSION_REQUIRED -> throw RemoteFileSystemException(
-                    "Shizuku authorization is required; grant it from Settings first"
-                )
-                State.PERMISSION_DENIED -> throw RemoteFileSystemException(
-                    "Shizuku authorization was denied; allow My Files in Shizuku"
-                )
-                State.GRANTED -> Unit
-            }
+            checkState()
             return try {
                 runBlocking {
                     try {
@@ -338,6 +336,26 @@ object ShizukuFileServiceLauncher {
             } catch (e: Throwable) {
                 throw RemoteFileSystemException(e)
             }
+        }
+    }
+
+    /** Throws unless the current state is one a service can actually be launched from. */
+    @Throws(RemoteFileSystemException::class)
+    private fun checkState() {
+        when (getState()) {
+            State.UNAVAILABLE -> throw RemoteFileSystemException(
+                "Shizuku is not running"
+            )
+            State.UNSUPPORTED -> throw RemoteFileSystemException(
+                "This version of Shizuku is not supported"
+            )
+            State.PERMISSION_REQUIRED -> throw RemoteFileSystemException(
+                "Shizuku authorization is required; grant it from Settings first"
+            )
+            State.PERMISSION_DENIED -> throw RemoteFileSystemException(
+                "Shizuku authorization was denied; allow My Files in Shizuku"
+            )
+            State.GRANTED -> Unit
         }
     }
 

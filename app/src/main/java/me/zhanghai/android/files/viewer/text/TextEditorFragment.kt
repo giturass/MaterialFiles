@@ -330,7 +330,9 @@ class TextEditorFragment : Fragment(), ConfirmReloadDialogFragment.Listener,
         }
         val state = binding.editor.cursor.let { cursor ->
             TextEditorViewModel.EditorState(
-                binding.editor.text.toString(),
+                // Only kept when it has actually been edited: an untouched document is restored
+                // from the view model's own copy instead of being held a second time.
+                binding.editor.text.toString().takeIf { viewModel.isTextChanged.value },
                 cursor.leftLine,
                 cursor.leftColumn,
                 cursor.rightLine,
@@ -464,7 +466,7 @@ class TextEditorFragment : Fragment(), ConfirmReloadDialogFragment.Listener,
                 val editorState = pendingEditorState
                 if (editorState != null) {
                     val changed = viewModel.isTextChanged.value
-                    setText(editorState.text, changed)
+                    setText(editorState.text ?: state.data, changed)
                     restoreSelection(editorState)
                     pendingEditorState = null
                 } else if (!hasEditorText ||
@@ -851,13 +853,7 @@ class TextEditorFragment : Fragment(), ConfirmReloadDialogFragment.Listener,
     }
 
     private fun showEncodingDialog() {
-        // The platform ships around 170 charsets in an alphabetical order that buries the handful
-        // anyone actually picks, so those go to the top.
-        val available = Charset.availableCharsets().values.toList()
-        val common = COMMON_CHARSET_NAMES.mapNotNull { name ->
-            available.firstOrNull { it.name().equals(name, ignoreCase = true) }
-        }
-        val charsets = common + available.filterNot { it in common }
+        val charsets = orderedCharsets
         val labels = charsets.map { it.displayName() }.toTypedArray()
         val selected = charsets.indexOfFirst { it.name() == viewModel.encoding.value.name() }
         MaterialAlertDialogBuilder(requireContext())
@@ -935,6 +931,24 @@ class TextEditorFragment : Fragment(), ConfirmReloadDialogFragment.Listener,
             "UTF-8", "GB18030", "GBK", "Big5", "Shift_JIS", "EUC-KR", "UTF-16", "UTF-16LE",
             "UTF-16BE", "windows-1252", "ISO-8859-1", "US-ASCII"
         )
+
+        /**
+         * The charsets the encoding picker offers, in the order it shows them.
+         *
+         * Built once: the platform ships around 170 of them in an alphabetical order that buries
+         * the handful anyone actually picks, and enumerating them all is not something to do on the
+         * main thread every time the dialog opens. Which charsets exist cannot change while the
+         * process is alive, and the labels are formatted per dialog so a locale change is still
+         * picked up.
+         */
+        private val orderedCharsets: List<Charset> by lazy {
+            val available = Charset.availableCharsets().values.toList()
+            val common = COMMON_CHARSET_NAMES.mapNotNull { name ->
+                available.firstOrNull { it.name().equals(name, ignoreCase = true) }
+            }
+            val commonSet = common.toSet()
+            common + available.filterNot { it in commonSet }
+        }
     }
 
     private data class SearchOptionsState(

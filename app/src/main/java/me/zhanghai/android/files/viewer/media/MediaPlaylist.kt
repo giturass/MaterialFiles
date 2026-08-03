@@ -43,15 +43,35 @@ class MediaPlaylist private constructor(
     val current: Item?
         get() = items.getOrNull(index)
 
-    /** Where the current track sits in the play order, as opposed to in the file order. */
-    private val orderPosition: Int
-        get() = order.indexOf(index)
+    /**
+     * Where the current track sits in the play order, as opposed to in the file order.
+     *
+     * Computed once rather than on each access: this is read for every previous/next check, which
+     * the media session re-evaluates on every progress tick, and a scanned playlist can hold
+     * thousands of tracks.
+     */
+    private val orderPosition: Int = order.indexOf(index)
 
     val hasPrevious: Boolean
         get() = orderPosition > 0
 
     val hasNext: Boolean
         get() = orderPosition.let { it >= 0 && it < order.size - 1 }
+
+    /** Whether [other] lists exactly the same tracks in the same file order. */
+    fun hasSameItemsAs(other: MediaPlaylist): Boolean {
+        if (other === this) {
+            return true
+        }
+        if (other.items.size != items.size) {
+            return false
+        }
+        return items.indices.all { other.items[it].path == items[it].path }
+    }
+
+    /** The same tracks, but played in [other]'s order and pointing at [other]'s current track. */
+    fun withOrderOf(other: MediaPlaylist): MediaPlaylist =
+        MediaPlaylist(items, other.index, other.order)
 
     /**
      * The same playlist moved by [offset] tracks in play order. Without [wrap] this is null once the

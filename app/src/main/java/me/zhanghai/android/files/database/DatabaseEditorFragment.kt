@@ -621,7 +621,10 @@ class DatabaseEditorFragment : Fragment(), RowEditorDialogFragment.Listener,
         // The dialog only needs the row count to know whether a NOT NULL column has existing rows
         // to fill in, and the table may not be the one on screen.
         viewModel.getRowCount(tableName) { rowCount ->
-            if (!isAdded) {
+            // Counted on a background dispatcher, so by the time it comes back the fragment may be
+            // gone, or still here but with its state already saved - in which case showing the
+            // dialog would be a transaction after onSaveInstanceState(), which throws.
+            if (!isAdded || childFragmentManager.isStateSaved) {
                 return@getRowCount
             }
             AddColumnDialogFragment.show(tableName, rowCount > 0, this)

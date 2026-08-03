@@ -8,6 +8,7 @@ package me.zhanghai.android.files.viewer.media
 import android.content.ContentResolver
 import android.content.Context
 import android.content.res.AssetFileDescriptor
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -50,6 +51,9 @@ class BassPlaybackEngine(
     private var repeat = false
     private var rate = 1f
     private var volumeScale = 1f
+
+    /** Only ever touched on [sourceExecutor], which is the only thread that initializes BASS. */
+    private var hasRetainedLibrary = false
 
     // BASS only keeps a weak reference to sync callbacks in some configurations, and the file
     // callbacks must outlive stream creation, so both are held here.
@@ -248,7 +252,19 @@ class BassPlaybackEngine(
         listener = null
         mainHandler.removeCallbacks(progressRunnable)
         freeChannel()
-        sourceExecutor.shutdownNow()
+        // Queued onto the source thread rather than done here: a stream may still be being created
+        // on it, and taking the output device away mid-call is not something BASS expects. A single
+        // thread means this runs once that has finished, and shutdown() lets it through where
+        // shutdownNow() would drop it.
+        runCatching {
+            sourceExecutor.execute {
+                if (hasRetainedLibrary) {
+                    hasRetainedLibrary = false
+                    BassLibrary.release()
+                }
+            }
+        }
+        sourceExecutor.shutdown()
     }
 
     private fun onSourceCreated(source: Source) {
@@ -326,7 +342,11 @@ class BassPlaybackEngine(
 
     /** Runs on [sourceExecutor]. */
     private fun createSource(uri: Uri): Source {
-        BassLibrary.ensureInitialized(context)
+        if (!hasRetainedLibrary) {
+            BassLibrary.retain(context)
+            // Only once it actually succeeded, so that a failed initialization isn't released.
+            hasRetainedLibrary = true
+        }
         val flags = BASS.BASS_STREAM_DECODE or BASS.BASS_SAMPLE_FLOAT or BASS.BASS_ASYNCFILE
         var descriptor: AssetFileDescriptor? = null
         var inputStream: InputStream? = null
@@ -455,30 +475,72 @@ class BassPlaybackEngine(
         }
     }
 
-    /** Initializes BASS and its decoder plugins once for the process. */
+    /**
+     * Initializes BASS and its decoder plugins for the process, and hands the output device back
+     * once nothing is using it any more.
+     *
+     * Held by count rather than left initialized for good: an initialized BASS keeps the output
+     * device open, and there is no reason to hold on to it while nothing is playing.
+     */
     private object BassLibrary {
+        private var retainCount = 0
         private var initialized = false
+        private var pluginsLoaded = false
         private var initializationError: Throwable? = null
 
         @Synchronized
-        fun ensureInitialized(context: Context) {
-            initializationError?.let { throw it }
-            if (initialized) {
+        fun retain(context: Context) {
+            if (!initialized) {
+                initializationError?.let { throw it }
+                try {
+                    val frequency = deviceFrequency(context)
+                    if (!BASS.BASS_Init(-1, frequency, 0)
+                        && BASS.BASS_ErrorGetCode() != BASS.BASS_ERROR_ALREADY) {
+                        throw IOException(
+                            "BASS_Init() failed with error ${BASS.BASS_ErrorGetCode()}"
+                        )
+                    }
+                    // Plugins outlive BASS_Free(), so they are only ever loaded once.
+                    if (!pluginsLoaded) {
+                        loadPlugins(context)
+                        pluginsLoaded = true
+                    }
+                    initialized = true
+                } catch (t: Throwable) {
+                    initializationError = t
+                    throw t
+                }
+            }
+            retainCount++
+        }
+
+        @Synchronized
+        fun release() {
+            if (retainCount == 0) {
                 return
             }
-            try {
-                if (!BASS.BASS_Init(-1, DEVICE_FREQUENCY, 0)
-                    && BASS.BASS_ErrorGetCode() != BASS.BASS_ERROR_ALREADY) {
-                    throw IOException(
-                        "BASS_Init() failed with error ${BASS.BASS_ErrorGetCode()}"
-                    )
-                }
-                loadPlugins(context)
-                initialized = true
-            } catch (t: Throwable) {
-                initializationError = t
-                throw t
+            retainCount--
+            if (retainCount > 0 || !initialized) {
+                return
             }
+            initialized = false
+            // Whatever went wrong last time is worth trying again from a clean device.
+            initializationError = null
+            BASS.BASS_Free()
+        }
+
+        /**
+         * The rate the device actually outputs at. Asking BASS for anything else would have it
+         * resample, only for the platform to resample the result right back.
+         */
+        private fun deviceFrequency(context: Context): Int {
+            val audioManager =
+                context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                    ?: return DEFAULT_DEVICE_FREQUENCY
+            return audioManager.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)
+                ?.toIntOrNull()
+                ?.takeIf { it > 0 }
+                ?: DEFAULT_DEVICE_FREQUENCY
         }
 
         private fun loadPlugins(context: Context) {
@@ -496,7 +558,7 @@ class BassPlaybackEngine(
             }
         }
 
-        private const val DEVICE_FREQUENCY = 44100
+        private const val DEFAULT_DEVICE_FREQUENCY = 44100
         private const val BASS_FX_LIBRARY_NAME = "libbass_fx.so"
         private val PLUGIN_NAME_REGEX = Regex("libbass.+\\.so")
     }

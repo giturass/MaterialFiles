@@ -29,7 +29,14 @@ object CacheFiles {
     const val DATABASE_EDITOR = "database_editor"
     const val KEY_STORE = "key_store"
 
-    private val ALL = listOf(DATABASE_EDITOR, KEY_STORE)
+    /**
+     * Where the APK signer stages its input, its output and a copy of the key store. Every entry
+     * here has to be in [ALL], or a process that dies mid-signing leaves an APK and an unprotected
+     * key store behind for good.
+     */
+    const val SIGN_APK = "sign_apk"
+
+    private val ALL = listOf(DATABASE_EDITOR, KEY_STORE, SIGN_APK)
 
     /**
      * Removes every working copy left behind by a process that died before it could delete its own.

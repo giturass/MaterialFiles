@@ -10,8 +10,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.AsyncTask
 import androidx.core.content.ContextCompat
 import me.zhanghai.android.files.R
+import me.zhanghai.android.files.app.mainExecutor
 import me.zhanghai.android.files.app.packageManager
 import java.io.File
 
@@ -56,8 +58,36 @@ object Terminal {
     private const val ANDROID_TERMINAL_EMULATOR_PACKAGE_NAME = "jackpal.androidterm"
     private const val ANDROID_TERMINAL_EMULATOR_ACTIVITY_NAME = "jackpal.androidterm.TermHere"
 
-    /** Whether opening a terminal is worth offering at all, i.e. whether one is installed. */
+    @Volatile
+    private var cachedIsAvailable: Boolean? = null
+
+    /**
+     * Whether opening a terminal is worth offering at all, i.e. whether one is installed.
+     *
+     * Answered from the last known result once there is one, because working it out takes a package
+     * manager query and two package lookups - three binder calls - and this is asked while a menu is
+     * being prepared. [refreshAvailability] is what keeps that answer current.
+     */
     fun isAvailable(): Boolean =
+        cachedIsAvailable ?: resolveIsAvailable().also { cachedIsAvailable = it }
+
+    /**
+     * Works the answer out again off the calling thread, and calls [onChanged] on the main thread
+     * only if it moved - which is how a terminal installed while we were in the background gets
+     * noticed. Safe to call from the main thread.
+     */
+    fun refreshAvailability(onChanged: (Boolean) -> Unit) {
+        AsyncTask.THREAD_POOL_EXECUTOR.execute {
+            val isAvailable = resolveIsAvailable()
+            val hasChanged = cachedIsAvailable != isAvailable
+            cachedIsAvailable = isAvailable
+            if (hasChanged) {
+                mainExecutor.execute { onChanged(isAvailable) }
+            }
+        }
+    }
+
+    private fun resolveIsAvailable(): Boolean =
         findTermHereComponent() != null || isInstalled(TERMUX_PACKAGE_NAME)
             || isInstalled(ANDROID_TERMINAL_EMULATOR_PACKAGE_NAME)
 

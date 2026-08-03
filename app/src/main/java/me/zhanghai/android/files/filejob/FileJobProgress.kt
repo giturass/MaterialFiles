@@ -44,6 +44,12 @@ object FileJobProgressManager {
     /** Jobs whose progress is currently on screen, and whose notification is therefore hidden. */
     private val foregroundIds = mutableSetOf<Int>()
 
+    /**
+     * Bumped whenever [foregroundIds] changes, so that a job thread can tell whether a dialog came
+     * or went while it was posting a notification without the lock.
+     */
+    private var foregroundGeneration = 0
+
     @MainThread
     fun start(id: Int) {
         synchronized(lock) {
@@ -56,6 +62,7 @@ object FileJobProgressManager {
         val liveData = synchronized(lock) {
             lastProgresses -= id
             foregroundIds -= id
+            foregroundGeneration++
             liveDatas.remove(id)
         }
         // The dialog holds on to the live data it observes, so it still hears about this.
@@ -65,15 +72,30 @@ object FileJobProgressManager {
     /** Null once the job has finished, or before it was ever started. */
     fun getLiveData(id: Int): LiveData<FileJobProgress?>? = synchronized(lock) { liveDatas[id] }
 
+    /**
+     * Records what a job is doing and, unless its dialog is up, shows it as a notification.
+     *
+     * Building and posting the notification is a binder call, and it happens on the job's own
+     * thread, so it is deliberately kept out of the lock - [setShownInForeground] runs on the main
+     * thread and would otherwise have to wait it out. What the lock would have bought is instead
+     * recovered afterwards: if a dialog appeared while we were posting, it cancelled a notification
+     * that did not exist yet, and this takes the one we did post straight back down.
+     */
     fun setProgress(id: Int, progress: FileJobProgress, service: FileJobService) {
-        // Held across posting so that a dialog appearing right now cannot have its notification
-        // put back up behind it.
-        synchronized(lock) {
+        val generation = synchronized(lock) {
             lastProgresses[id] = progress
             liveDatas[id]?.postValue(progress)
-            if (id !in foregroundIds) {
-                service.notificationManager.notify(id, progress.createNotification(id, service))
+            if (id in foregroundIds) {
+                return
             }
+            foregroundGeneration
+        }
+        service.notificationManager.notify(id, progress.createNotification(id, service))
+        val hasBeenHidden = synchronized(lock) {
+            foregroundGeneration != generation && id in foregroundIds
+        }
+        if (hasBeenHidden) {
+            service.notificationManager.cancel(id)
         }
     }
 
@@ -83,23 +105,25 @@ object FileJobProgressManager {
      */
     @MainThread
     fun setShownInForeground(id: Int, shownInForeground: Boolean) {
-        synchronized(lock) {
+        val progress = synchronized(lock) {
             if (shownInForeground) {
                 foregroundIds += id
             } else {
                 foregroundIds -= id
             }
+            foregroundGeneration++
             if (id !in liveDatas) {
                 // Finished, so there is neither a notification to hide nor one to bring back.
                 return
             }
-            val service = FileJobService.instance ?: return
-            if (shownInForeground) {
-                service.notificationManager.cancel(id)
-            } else {
-                lastProgresses[id]?.let {
-                    service.notificationManager.notify(id, it.createNotification(id, service))
-                }
+            lastProgresses[id]
+        }
+        val service = FileJobService.instance ?: return
+        if (shownInForeground) {
+            service.notificationManager.cancel(id)
+        } else {
+            progress?.let {
+                service.notificationManager.notify(id, it.createNotification(id, service))
             }
         }
     }

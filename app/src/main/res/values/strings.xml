@@ -853,6 +853,7 @@
     <string name="database_editor_column_name">Column name</string>
     <string name="database_editor_column_name_required">Give every column a name.</string>
     <string name="database_editor_column_type">Type</string>
+    <string name="database_editor_column_type_invalid">Not a type name, such as TEXT or VARCHAR(255).</string>
     <string name="database_editor_column_default">Default</string>
     <string name="database_editor_column_default_helper">SQL, such as 0, \'none\' or CURRENT_TIMESTAMP</string>
     <string name="database_editor_column_primary_key">Primary key</string>

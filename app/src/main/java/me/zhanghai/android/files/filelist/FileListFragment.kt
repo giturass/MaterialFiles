@@ -174,9 +174,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         this::onRequestTermuxRunCommandPermissionResult
     )
 
-    /** Whether any terminal is installed, which cannot change while we are on screen. */
-    private val isTerminalAvailable by lazy { Terminal.isAvailable() }
-
     private val args by args<Args>()
     private val argsPath by lazy { args.intent.extraPath }
 
@@ -386,6 +383,13 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         }
         if (!viewModel.isStorageAccessRequested) {
             ensureNotificationPermission()
+        }
+        // A terminal may have been installed or removed while we were away. Worked out in the
+        // background, since preparing a menu must not wait on the package manager.
+        Terminal.refreshAvailability {
+            if (isResumed) {
+                updateOpenInTerminalMenuItem()
+            }
         }
     }
 
@@ -751,7 +755,8 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         if (!this::menuBinding.isInitialized) {
             return
         }
-        menuBinding.openInTerminalItem.isVisible = isTerminalAvailable
+        // Answered from Terminal's cache, so preparing a menu never waits on the package manager.
+        menuBinding.openInTerminalItem.isVisible = Terminal.isAvailable()
     }
 
     private fun share() {

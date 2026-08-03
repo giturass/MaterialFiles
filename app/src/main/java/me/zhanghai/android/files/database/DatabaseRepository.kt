@@ -146,7 +146,10 @@ class DatabaseRepository private constructor(private val database: SQLiteDatabas
             whereArguments.mapTo(arguments) { it.bindArgument }
             arguments += limit.toLong()
             arguments += offset
-            "SELECT * FROM $quotedName$whereClause LIMIT ? OFFSET ?"
+            // OFFSET only means something against a defined order: without one SQLite may hand back
+            // the rows of two queries in two different orders, and paging would then repeat some
+            // rows and skip others.
+            "SELECT * FROM $quotedName$whereClause${table.pageOrderClause()} LIMIT ? OFFSET ?"
         }
         return database.rawQuery(sql, arguments.toTypedArray()).use { cursor ->
             val valueOffset = if (table.hasRowId) 1 else 0
@@ -475,6 +478,22 @@ private fun Cursor.getSqlValue(index: Int): SqlValue =
         Cursor.FIELD_TYPE_BLOB -> SqlValue.Blob(getBlob(index))
         else -> SqlValue.Text(getString(index).orEmpty())
     }
+
+/**
+ * A stable order for the tables that have no `rowid` to page by, i.e. `WITHOUT ROWID` tables and
+ * views.
+ *
+ * The primary key is what a `WITHOUT ROWID` table is physically stored in, so ordering by it is
+ * free. A view has no key to lean on, and every one of its columns has to go into the order for it
+ * to be unambiguous - which costs a sort, and is the price of paging a view at all.
+ */
+private fun SqlTable.pageOrderClause(): String {
+    val orderColumns = columns.filter { it.isPrimaryKey }.ifEmpty { columns }
+    if (orderColumns.isEmpty()) {
+        return ""
+    }
+    return orderColumns.joinToString(", ", " ORDER BY ") { it.name.quoteSqlIdentifier() }
+}
 
 /**
  * Builds the `WHERE` clause addressing [row]: by `rowid` when there is one, otherwise by matching

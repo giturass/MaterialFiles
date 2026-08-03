@@ -22,6 +22,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Observer
 import android.support.v4.media.MediaMetadataCompat
@@ -31,7 +32,9 @@ import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import java8.nio.file.Path
 import java.util.concurrent.CopyOnWriteArraySet
-import java.util.concurrent.Executors
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import me.zhanghai.android.files.compat.getSystemServiceCompat
 import me.zhanghai.android.files.compat.use
 import me.zhanghai.android.files.settings.Settings
@@ -39,6 +42,7 @@ import me.zhanghai.android.files.util.RuntimeBroadcastReceiver
 import me.zhanghai.android.files.util.WakeWifiLock
 import me.zhanghai.android.files.util.extraPath
 import me.zhanghai.android.files.util.valueCompat
+import kotlin.math.abs
 
 /**
  * Owns the playback session: audio focus, the media session, the notification, wake locks and the
@@ -96,9 +100,14 @@ class MediaPlaybackService : Service() {
     private val binder = LocalBinder()
     private val listeners = CopyOnWriteArraySet<Listener>()
     private val mainHandler = Handler(Looper.getMainLooper())
-    // Opening a remote provider or extracting artwork can block. A cached pool prevents a stale
-    // metadata request from delaying a newly selected media file.
-    private val sourceExecutor = Executors.newCachedThreadPool()
+    // Opening a remote provider or extracting artwork can block, so none of it happens on the main
+    // thread. Bounded, because a stale request is already discarded by its generation and an
+    // unbounded pool would let a slow remote file system spawn a thread per track the user skips
+    // past; the threads it does keep are allowed to time out while nothing is playing.
+    private val sourceExecutor = ThreadPoolExecutor(
+        SOURCE_THREAD_COUNT, SOURCE_THREAD_COUNT, SOURCE_THREAD_KEEP_ALIVE_SECONDS,
+        TimeUnit.SECONDS, LinkedBlockingQueue()
+    ).apply { allowCoreThreadTimeOut(true) }
 
     private lateinit var audioManager: AudioManager
     private var audioFocusRequest: AudioFocusRequest? = null
@@ -117,6 +126,16 @@ class MediaPlaybackService : Service() {
     private var metadataGeneration = 0
     private var playWhenReady = false
     private var hasBoundClients = false
+
+    // The last playback state actually handed to the media session, so that a tick which tells a
+    // controller nothing it couldn't work out itself can be skipped. See needsPlaybackStateUpdate().
+    private var hasPublishedPlaybackState = false
+    private var publishedPlaybackState = PlaybackStateCompat.STATE_NONE
+    private var publishedPlaybackActions = 0L
+    private var publishedPlaybackErrorMessage: String? = null
+    private var publishedPlaybackSpeed = 0f
+    private var publishedPlaybackPosition = 0L
+    private var publishedPlaybackTimeMillis = 0L
 
     private val leavePausedForegroundRunnable = Runnable {
         if (status == Status.PAUSED) {
@@ -476,9 +495,11 @@ class MediaPlaybackService : Service() {
         mainHandler.removeCallbacks(stopTerminalServiceRunnable)
         if (status == Status.ERROR || status == Status.STOPPED) {
             val uri = currentUri ?: return
+            // Retrying continues the same session, so the speed, the play mode and the shuffled
+            // order the user chose outlive the failure.
             openMedia(
                 uri, currentMimeType, currentSourceTitle, isAudio, force = true,
-                path = currentPath
+                preserveSessionSettings = true, path = currentPath
             )
             return
         }
@@ -663,6 +684,9 @@ class MediaPlaybackService : Service() {
 
         metadataGeneration++
         val generation = metadataGeneration
+        // A new track starts a new timeline, so nothing about the last published state is worth
+        // extrapolating from.
+        hasPublishedPlaybackState = false
         mainHandler.removeCallbacks(leavePausedForegroundRunnable)
         mainHandler.removeCallbacks(stopTerminalServiceRunnable)
         resumeOnAudioFocusGain = false
@@ -770,11 +794,19 @@ class MediaPlaybackService : Service() {
         sourceExecutor.execute {
             val playlist = MediaPlaylist.load(path, scanDirectories)
             mainHandler.post {
-                if (generation == metadataGeneration && playlist != null) {
-                    this.playlist =
-                        if (playMode == PlayMode.SHUFFLE) playlist.shuffled() else playlist
-                    notifyStateChanged(updateNotification = true)
+                if (generation != metadataGeneration || playlist == null) {
+                    return@post
                 }
+                val current = this.playlist
+                this.playlist = when {
+                    // A rescan that turned up the same tracks keeps the order it already had, so
+                    // that reloading a shuffled playlist doesn't change what plays next.
+                    current != null && playlist.hasSameItemsAs(current) ->
+                        playlist.withOrderOf(current)
+                    playMode == PlayMode.SHUFFLE -> playlist.shuffled()
+                    else -> playlist
+                }
+                notifyStateChanged(updateNotification = true)
             }
         }
     }
@@ -836,38 +868,42 @@ class MediaPlaybackService : Service() {
         }
     }.getOrNull()
 
+    /**
+     * Decodes embedded artwork down to at most [MAX_ARTWORK_DIMENSION_PX].
+     *
+     * The scaling is asked for as part of the decode rather than applied to the result: `inSampleSize
+     * ` alone only halves, so it leaves an image up to twice the size we want, and scaling that
+     * afterwards would mean allocating the full intermediate and throwing it away. Combined with
+     * `inDensity`/`inTargetDensity` the decoder produces the final size in one allocation.
+     *
+     * The bitmap it returns is published to the notification, the media session and the player UI,
+     * so it is never recycled here - it is dropped when the next one replaces it and collected once
+     * all three have let go.
+     */
     private fun decodeArtwork(data: ByteArray): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+        val width = bounds.outWidth
+        val height = bounds.outHeight
+        if (width <= 0 || height <= 0) {
             return null
         }
+        val largestDimension = maxOf(width, height)
+        if (largestDimension <= MAX_ARTWORK_DIMENSION_PX) {
+            return BitmapFactory.decodeByteArray(data, 0, data.size)
+        }
         var sampleSize = 1
-        while (bounds.outWidth / sampleSize > MAX_ARTWORK_DIMENSION_PX
-            || bounds.outHeight / sampleSize > MAX_ARTWORK_DIMENSION_PX) {
+        while (largestDimension / (sampleSize * 2) >= MAX_ARTWORK_DIMENSION_PX) {
             sampleSize *= 2
         }
-        val decoded = BitmapFactory.decodeByteArray(
-            data,
-            0,
-            data.size,
-            BitmapFactory.Options().apply { inSampleSize = sampleSize }
-        ) ?: return null
-        val largestDimension = maxOf(decoded.width, decoded.height)
-        if (largestDimension <= MAX_ARTWORK_DIMENSION_PX) {
-            return decoded
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = sampleSize
+            // Applied to what sampling already produced, so the two together land on the target.
+            inScaled = true
+            inDensity = largestDimension / sampleSize
+            inTargetDensity = MAX_ARTWORK_DIMENSION_PX
         }
-        val scale = MAX_ARTWORK_DIMENSION_PX.toFloat() / largestDimension
-        val scaled = Bitmap.createScaledBitmap(
-            decoded,
-            (decoded.width * scale).toInt().coerceAtLeast(1),
-            (decoded.height * scale).toInt().coerceAtLeast(1),
-            true
-        )
-        if (scaled !== decoded) {
-            decoded.recycle()
-        }
-        return scaled
+        return BitmapFactory.decodeByteArray(data, 0, data.size, options)
     }
 
     private fun onOpenError(throwable: Throwable) {
@@ -967,11 +1003,60 @@ class MediaPlaybackService : Service() {
         if (hasNext) {
             actions = actions or PlaybackStateCompat.ACTION_SKIP_TO_NEXT
         }
+        val currentErrorMessage = errorMessage?.takeIf { status == Status.ERROR }
+        val speed = if (isPlaying) playbackRate else 0f
+        val position = currentTime
+        val timeMillis = SystemClock.elapsedRealtime()
+        if (!needsPlaybackStateUpdate(
+                state, actions, currentErrorMessage, speed, position, timeMillis
+            )) {
+            return
+        }
         val builder = PlaybackStateCompat.Builder()
             .setActions(actions)
-            .setState(state, currentTime, if (isPlaying) playbackRate else 0f)
-        errorMessage?.takeIf { status == Status.ERROR }?.let { builder.setErrorMessage(it) }
+            .setState(state, position, speed, timeMillis)
+        currentErrorMessage?.let { builder.setErrorMessage(it) }
         mediaSession.setPlaybackState(builder.build())
+        hasPublishedPlaybackState = true
+        publishedPlaybackState = state
+        publishedPlaybackActions = actions
+        publishedPlaybackErrorMessage = currentErrorMessage
+        publishedPlaybackSpeed = speed
+        publishedPlaybackPosition = position
+        publishedPlaybackTimeMillis = timeMillis
+    }
+
+    /**
+     * Whether the media session has to be told about this state.
+     *
+     * A controller works the current position out from the last state it was given and the speed
+     * that came with it, so a tick whose position has only moved on by as much as playback did is
+     * one it already knows about. Publishing every one of them would be a binder round trip four
+     * times a second that changes nothing on screen. Anything else - a new state, different
+     * controls, a seek, or simply enough time passing for the extrapolation to be worth correcting -
+     * is still published.
+     */
+    private fun needsPlaybackStateUpdate(
+        state: Int,
+        actions: Long,
+        errorMessage: String?,
+        speed: Float,
+        position: Long,
+        timeMillis: Long
+    ): Boolean {
+        if (!hasPublishedPlaybackState || state != publishedPlaybackState
+            || actions != publishedPlaybackActions
+            || errorMessage != publishedPlaybackErrorMessage
+            || speed != publishedPlaybackSpeed) {
+            return true
+        }
+        val elapsedMillis = timeMillis - publishedPlaybackTimeMillis
+        if (elapsedMillis >= PLAYBACK_STATE_REFRESH_INTERVAL_MILLIS) {
+            return true
+        }
+        val expectedPosition =
+            publishedPlaybackPosition + (elapsedMillis * publishedPlaybackSpeed).toLong()
+        return abs(position - expectedPosition) >= PLAYBACK_STATE_POSITION_TOLERANCE_MILLIS
     }
 
     private fun updateMediaSessionMetadata() {
@@ -1080,6 +1165,19 @@ class MediaPlaybackService : Service() {
         private const val PAUSED_FOREGROUND_TIMEOUT_MILLIS = 30_000L
         private const val TERMINAL_STOP_DELAY_MILLIS = 2_000L
         private const val DUCKING_VOLUME_SCALE = 0.2f
+
+        /** Enough threads for one track's metadata, lyrics and playlist to be read at once. */
+        private const val SOURCE_THREAD_COUNT = 4
+        private const val SOURCE_THREAD_KEEP_ALIVE_SECONDS = 30L
+
+        /**
+         * How long a published playback state is left to be extrapolated from before it is
+         * refreshed anyway, so that rounding never accumulates into a visible drift.
+         */
+        private const val PLAYBACK_STATE_REFRESH_INTERVAL_MILLIS = 5_000L
+
+        /** How far the real position may sit from the extrapolated one before it is republished. */
+        private const val PLAYBACK_STATE_POSITION_TOLERANCE_MILLIS = 1_000L
 
         /**
          * Audio formats that ExoPlayer has no extractor for at all, so there is no point letting it

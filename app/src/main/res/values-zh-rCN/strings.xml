@@ -700,6 +700,7 @@
     <string name="database_editor_column_name">列名</string>
     <string name="database_editor_column_name_required">请为每一列填写列名。</string>
     <string name="database_editor_column_type">类型</string>
+    <string name="database_editor_column_type_invalid">不是类型名，例如 TEXT 或 VARCHAR(255)。</string>
     <string name="database_editor_column_default">默认值</string>
     <string name="database_editor_column_default_helper">SQL，例如 0、\'none\' 或 CURRENT_TIMESTAMP</string>
     <string name="database_editor_column_primary_key">主键</string>

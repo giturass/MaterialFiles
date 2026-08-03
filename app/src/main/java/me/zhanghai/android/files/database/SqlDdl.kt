@@ -12,6 +12,22 @@ fun String.quoteSqlIdentifier(): String = "\"${replace("\"", "\"\"")}\""
 fun String.quoteSqlString(): String = "'${replace("'", "''")}'"
 
 /**
+ * What SQLite accepts as a column type: a name, optionally followed by one or two numbers in
+ * parentheses, as in `VARCHAR(255)` or `DECIMAL(10, 5)`. Names may hold spaces, because several of
+ * the ones SQLite documents do - `UNSIGNED BIG INT` among them.
+ *
+ * A type name cannot be quoted the way an identifier can, since SQLite takes any name at all and
+ * works out an affinity for it, so it goes into the statement as typed. Checking it against this is
+ * what keeps something that isn't a type name from changing the shape of the statement it lands in.
+ */
+private val COLUMN_TYPE_REGEX =
+    Regex("""[A-Za-z_][A-Za-z0-9_ ]*(\(\s*-?\d+\s*(,\s*-?\d+\s*)?\))?""")
+
+/** Whether this is a column type SQLite would accept. Blank counts: a type is optional. */
+fun String.isSqlColumnType(): Boolean =
+    trim().let { it.isEmpty() || COLUMN_TYPE_REGEX.matches(it) }
+
+/**
  * Builds the `CREATE TABLE` statement for [columns].
  *
  * A single primary key column is declared inline, because that is what makes an `INTEGER PRIMARY

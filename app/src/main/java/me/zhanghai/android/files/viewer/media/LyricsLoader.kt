@@ -8,6 +8,7 @@ package me.zhanghai.android.files.viewer.media
 import android.content.Context
 import android.net.Uri
 import java8.nio.file.Path
+import me.zhanghai.android.files.provider.common.newDirectoryStream
 import me.zhanghai.android.files.provider.common.newInputStream
 import me.zhanghai.android.files.util.localFileOrNull
 import java.io.BufferedInputStream
@@ -46,17 +47,33 @@ object LyricsLoader {
         val parent = path.parent ?: return null
         val name = path.fileName?.toString()?.takeIf { it.isNotEmpty() } ?: return null
         val baseName = name.substringBeforeLast('.', name)
-        for (extension in LRC_EXTENSIONS) {
-            val bytes = try {
-                parent.resolve(baseName + extension).newInputStream()
-                    .use { it.readAtMost(MAX_LYRICS_BYTES) }
-            } catch (e: Exception) {
-                // Almost always just a missing file.
-                continue
+        val sidecarName = baseName + LRC_EXTENSION
+        // The spelling almost every file uses, and the only one worth opening blind: guessing at
+        // the others would cost a failed round trip each on a remote file system.
+        readSidecar(parent.resolve(sidecarName))?.let { return it }
+        // Anything else means finding out what is really there. One listing covers every spelling,
+        // rather than one open per spelling we thought to guess at.
+        val sidecar = try {
+            parent.newDirectoryStream().use { directoryStream ->
+                directoryStream.firstOrNull {
+                    it.fileName?.toString().equals(sidecarName, ignoreCase = true)
+                }
             }
-            Lyrics.parse(bytes.decodeText())?.let { return it }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        } ?: return null
+        return readSidecar(sidecar)
+    }
+
+    private fun readSidecar(path: Path): Lyrics? {
+        val bytes = try {
+            path.newInputStream().use { it.readAtMost(MAX_LYRICS_BYTES) }
+        } catch (e: Exception) {
+            // Almost always just a missing file.
+            return null
         }
-        return null
+        return Lyrics.parse(bytes.decodeText())
     }
 
     private fun openStream(context: Context, path: Path?, uri: Uri): InputStream? {
@@ -111,12 +128,19 @@ object LyricsLoader {
         val tag = ByteArray(size)
         stream.readFully(tag)
         var offset = 0
-        if (flags and 0x40 != 0) {
+        if (version < 3) {
+            // ID3v2.2 has no extended header - this bit means the frames are compressed, for which
+            // the specification never settled on a scheme and says to skip the tag instead.
+            if (flags and 0x40 != 0) {
+                return null
+            }
+        } else if (flags and 0x40 != 0) {
             // An extended header sits before the frames and carries no lyrics.
             if (tag.size < 4) {
                 return null
             }
             val extendedSize = if (version >= 4) {
+                // 2.4 counts the size field itself towards the size, 2.3 does not.
                 tag.readSynchsafeInt(0)
             } else {
                 tag.readInt(0, 4) + 4
@@ -456,7 +480,7 @@ object LyricsLoader {
     /** `©lyr`, the iTunes lyrics atom. */
     private const val MP4_LYRICS_TYPE = "©lyr"
 
-    private val LRC_EXTENSIONS = listOf(".lrc", ".LRC", ".Lrc")
+    private val LRC_EXTENSION = ".lrc"
     private val ID3_MAGIC = "ID3".toByteArray(StandardCharsets.ISO_8859_1)
     private val FLAC_MAGIC = "fLaC".toByteArray(StandardCharsets.ISO_8859_1)
     private val FTYP_MAGIC = "ftyp".toByteArray(StandardCharsets.ISO_8859_1)

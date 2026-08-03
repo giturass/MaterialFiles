@@ -85,6 +85,7 @@ import me.zhanghai.android.files.provider.common.toByteString
 import me.zhanghai.android.files.provider.common.toModeString
 import me.zhanghai.android.files.provider.linux.isLinuxPath
 import me.zhanghai.android.files.util.asFileName
+import me.zhanghai.android.files.util.CacheFiles
 import me.zhanghai.android.files.util.createInstallPackageIntent
 import me.zhanghai.android.files.util.createIntent
 import me.zhanghai.android.files.util.createViewIntent
@@ -2395,23 +2396,24 @@ class SignApkFileJob(
 ) : FileJob() {
     @Throws(IOException::class)
     override fun run() {
-        val workingDirectory = File(cacheDirectory, CACHE_DIRECTORY_NAME)
+        // A directory of this job's own, because two signings running at once would otherwise write
+        // over each other's staged copies.
+        val workingDirectory = File(File(cacheDirectory, CacheFiles.SIGN_APK), id.toString())
         if (!workingDirectory.isDirectory && !workingDirectory.mkdirs()) {
             throw IOException("Cannot create cache directory ${workingDirectory.path}")
         }
-        val temporaryFiles = mutableListOf<File>()
         try {
             postSignApkNotification(getFileName(inputApk))
-            val keyStoreFile = localize(keyStore, workingDirectory, "keystore", temporaryFiles)
+            val keyStoreFile = localize(keyStore, workingDirectory, "keystore")
             val signingKey = try {
                 KeyStores.load(keyStoreFile, storePassword)
                     .getSigningKey(keyAlias, keyPassword)
             } catch (e: GeneralSecurityException) {
                 throw IOException(e)
             }
-            val inputFile = localize(inputApk, workingDirectory, "input.apk", temporaryFiles)
+            val inputFile = localize(inputApk, workingDirectory, "input.apk")
             val outputLocalFile = outputApk.localFileOrNull
-                ?: File(workingDirectory, "output.apk").also { temporaryFiles += it }
+                ?: File(workingDirectory, "output.apk")
             try {
                 ApkSigning.sign(inputFile, outputLocalFile, signingKey, schemes)
             } catch (e: IOException) {
@@ -2451,21 +2453,17 @@ class SignApkFileJob(
         } finally {
             storePassword.fill('\u0000')
             keyPassword.fill('\u0000')
-            temporaryFiles.forEach { it.delete() }
+            // Everything staged - a copy of the key store among it - went in here, so the whole
+            // directory is what has to go, however far the signing got.
+            workingDirectory.deleteRecursively()
         }
     }
 
     /** Returns the local file for [path], copying it into the cache when it isn't local already. */
     @Throws(IOException::class)
-    private fun localize(
-        path: Path,
-        workingDirectory: File,
-        cacheFileName: String,
-        temporaryFiles: MutableList<File>
-    ): File {
+    private fun localize(path: Path, workingDirectory: File, cacheFileName: String): File {
         path.localFileOrNull?.let { return it }
         val file = File(workingDirectory, cacheFileName)
-        temporaryFiles += file
         path.newInputStream().use { inputStream ->
             file.outputStream().use { outputStream -> inputStream.copyTo(outputStream) }
         }
@@ -2492,7 +2490,4 @@ class SignApkFileJob(
             }
         }.joinToString(", ")
 
-    companion object {
-        private const val CACHE_DIRECTORY_NAME = "sign_apk"
-    }
 }

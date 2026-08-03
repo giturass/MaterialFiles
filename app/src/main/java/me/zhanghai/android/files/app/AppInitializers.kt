@@ -22,6 +22,7 @@ import me.zhanghai.android.files.storage.SftpServerAuthenticator
 import me.zhanghai.android.files.storage.SmbServerAuthenticator
 import me.zhanghai.android.files.storage.StorageVolumeListLiveData
 import me.zhanghai.android.files.storage.WebDavServerAuthenticator
+import me.zhanghai.android.files.terminal.Terminal
 import me.zhanghai.android.files.theme.custom.CustomThemeHelper
 import me.zhanghai.android.files.theme.night.NightModeHelper
 import me.zhanghai.android.files.util.CacheFiles
@@ -43,7 +44,8 @@ val appInitializers = listOf(
     ::initializeCustomTheme,
     ::initializeNightMode,
     ::createNotificationChannels,
-    ::pruneCacheFiles
+    ::pruneCacheFiles,
+    ::warmTerminalAvailability
 )
 
 private fun initializeShizuku() {
@@ -92,7 +94,8 @@ private fun initializeNightMode() {
     NightModeHelper.initialize(application)
 }
 
-private fun createNotificationChannels() {    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+private fun createNotificationChannels() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         notificationManager.createNotificationChannels(
             listOf(
                 backgroundActivityStartNotificationTemplate.channelTemplate,
@@ -111,4 +114,12 @@ private fun createNotificationChannels() {    if (Build.VERSION.SDK_INT >= Build
  */
 private fun pruneCacheFiles() {
     AsyncTask.THREAD_POOL_EXECUTOR.execute { CacheFiles.pruneAll(application) }
+}
+
+/**
+ * Works out whether a terminal is installed before the file list first asks, so that preparing its
+ * menu never waits on the three binder calls it takes to find out.
+ */
+private fun warmTerminalAvailability() {
+    AsyncTask.THREAD_POOL_EXECUTOR.execute { Terminal.isAvailable() }
 }
