@@ -41,6 +41,7 @@ import java8.nio.file.PathMatcher;
 import java8.nio.file.StandardOpenOption;
 import java8.nio.file.WatchService;
 import java8.nio.file.attribute.BasicFileAttributes;
+import java8.nio.file.attribute.BasicFileAttributeView;
 import java8.nio.file.attribute.FileAttribute;
 import java8.nio.file.attribute.FileAttributeView;
 import java8.nio.file.attribute.FileTime;
@@ -518,6 +519,13 @@ public final class ArchiveVolumeTest {
                                 return makePath(new File(child).isAbsolute() ? child : new File(text, child).getPath());
                             }
                             case "normalize": return makePath(new File(text).getCanonicalPath());
+                            case "startsWith": {
+                                Object other = args[0];
+                                if (other instanceof Path && ((Path) other).getFileSystem() != this) return false;
+                                String prefix = other.toString();
+                                return text.equals(prefix) || text.startsWith(prefix.endsWith(File.separator)
+                                        ? prefix : prefix + File.separator);
+                            }
                             case "hashCode": return 31 * System.identityHashCode(this) + text.hashCode();
                             case "equals": return args[0] instanceof Path && ((Path) args[0]).getFileSystem() == this
                                     && text.equals(args[0].toString());
@@ -696,13 +704,30 @@ public final class ArchiveVolumeTest {
         @Override public FileSystem getFileSystem(URI uri) { return fixture; }
         @Override public Path getPath(URI uri) { return fixture.getPath(new File(uri).getPath()); }
         @Override public DirectoryStream<Path> newDirectoryStream(Path path, DirectoryStream.Filter<? super Path> filter) { throw unsupported("directory stream"); }
-        @Override public void createDirectory(Path path, FileAttribute<?>... attributes) { throw unsupported("create directory"); }
+        @Override public void createDirectory(Path path, FileAttribute<?>... attributes) throws IOException {
+            File directory = fixture.disk(path);
+            if (directory.exists()) throw new FileAlreadyExistsException(path.toString());
+            if (!directory.mkdir()) throw new IOException("Unable to create fixture directory: " + path);
+        }
         @Override public void copy(Path source, Path target, CopyOption... options) { throw unsupported("copy"); }
         @Override public void move(Path source, Path target, CopyOption... options) { throw unsupported("move"); }
         @Override public boolean isSameFile(Path first, Path second) { return first.equals(second); }
         @Override public boolean isHidden(Path path) { return false; }
         @Override public FileStore getFileStore(Path path) { throw unsupported("file store"); }
-        @Override public <V extends FileAttributeView> V getFileAttributeView(Path path, Class<V> type, LinkOption... options) { throw unsupported("attribute view"); }
+        @Override public <V extends FileAttributeView> V getFileAttributeView(Path path, Class<V> type, LinkOption... options) {
+            if (type != BasicFileAttributeView.class) throw unsupported("attribute view: " + type);
+            return type.cast(new BasicFileAttributeView() {
+                @Override public String name() { return "basic"; }
+                @Override public BasicFileAttributes readAttributes() throws IOException {
+                    return Provider.this.readAttributes(path, BasicFileAttributes.class, options);
+                }
+                @Override public void setTimes(FileTime modified, FileTime accessed, FileTime created) throws IOException {
+                    if (modified != null && !existing(path).setLastModified(modified.toMillis())) {
+                        throw new IOException("Unable to set fixture modification time: " + path);
+                    }
+                }
+            });
+        }
         @Override public java.util.Map<String, Object> readAttributes(Path path, String names, LinkOption... options) { throw unsupported("named attributes"); }
         @Override public void setAttribute(Path path, String name, Object value, LinkOption... options) { throw unsupported("set attribute"); }
     }

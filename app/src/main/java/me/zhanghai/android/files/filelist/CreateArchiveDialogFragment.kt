@@ -11,10 +11,13 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.EditText
+import android.widget.LinearLayout
 import androidx.annotation.IdRes
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AlertDialog
@@ -36,6 +39,7 @@ import me.zhanghai.android.files.provider.archive.archiver.ArchiveCompressionPre
 import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.util.ParcelableArgs
 import me.zhanghai.android.files.util.args
+import me.zhanghai.android.files.util.dpToDimensionPixelSize
 import me.zhanghai.android.files.util.putArgs
 import me.zhanghai.android.files.util.setOnEditorConfirmActionListener
 import me.zhanghai.android.files.util.setTextWithSelection
@@ -67,8 +71,14 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
     override val listener: Listener
         get() = super.listener as Listener
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        isCancelable = false
+    }
+
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         val dialog = super.onCreateDialog(savedInstanceState) as AlertDialog
+        dialog.setCanceledOnTouchOutside(false)
 
         val savedTypeId = savedInstanceState?.getInt(STATE_ARCHIVE_TYPE)
             ?: Settings.CREATE_ARCHIVE_TYPE.valueCompat
@@ -117,13 +127,17 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
             val files = args.files
             var name: String? = null
             if (files.size == 1) {
-                val sourceName = files.single().path.fileName.toString()
+                val file = files.single()
+                val baseName = file.baseName.ifEmpty {
+                    file.name.substringBeforeLast('.').ifEmpty { file.name }
+                }
                 val suffix = ".${archiveType.extension}"
-                // Keep the source archive's extension as part of the new archive name.
-                name = if (sourceName.endsWith(suffix, ignoreCase = true)) {
-                    sourceName + suffix
+                // A directory's dotted name is not an extension and must remain intact.
+                name = if (file.attributes.isDirectory &&
+                    baseName.endsWith(suffix, ignoreCase = true)) {
+                    baseName + suffix
                 } else {
-                    sourceName
+                    baseName
                 }
             } else {
                 val parent = files.mapTo(mutableSetOf()) { it.path.parent }.singleOrNull()
@@ -163,8 +177,10 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
     override fun onStart() {
         super.onStart()
 
+        val dialog = requireDialog() as AlertDialog
+        arrangeButtons(dialog)
         // Set this after the dialog creates its buttons so invalid input does not dismiss it.
-        (requireDialog() as AlertDialog).getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+        dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
             val name = name
             if (isNameValid(name) && ensureBackgroundNotifications()) {
                 archive(name, true)
@@ -172,6 +188,47 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
             }
         }
         updateFormatFields()
+    }
+
+    private fun arrangeButtons(dialog: AlertDialog) {
+        val buttons = listOf(
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL),
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE),
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+        )
+        val oldRow = buttons.first().parent as ViewGroup
+        val parent = oldRow.parent as ViewGroup
+        val buttonHeight = dpToDimensionPixelSize(48)
+        val buttonMargin = dpToDimensionPixelSize(4)
+        // Keep the themed buttons and their listeners, while replacing the spacer and automatic
+        // stacking with one row of equally sized actions outside the scrolling form.
+        val row = LinearLayout(oldRow.context).apply {
+            id = oldRow.id
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutDirection = oldRow.layoutDirection
+            setPaddingRelative(
+                oldRow.paddingStart, oldRow.paddingTop, oldRow.paddingEnd, oldRow.paddingBottom
+            )
+            minimumHeight = buttonHeight + paddingTop + paddingBottom
+        }
+        for (button in buttons) {
+            oldRow.removeView(button)
+            button.minWidth = 0
+            button.minimumWidth = 0
+            button.minHeight = maxOf(button.minHeight, buttonHeight)
+            button.gravity = Gravity.CENTER
+            row.addView(
+                button, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginStart = buttonMargin
+                    marginEnd = buttonMargin
+                }
+            )
+        }
+        val rowIndex = parent.indexOfChild(oldRow)
+        val rowLayoutParams = oldRow.layoutParams
+        parent.removeView(oldRow)
+        parent.addView(row, rowIndex, rowLayoutParams)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

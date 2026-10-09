@@ -7,10 +7,10 @@ package me.zhanghai.android.files.filejob
 
 import android.content.Context
 import android.util.AttributeSet
+import android.view.ViewGroup
 import android.view.ViewGroup.MarginLayoutParams
 import android.view.WindowInsets
 import android.widget.ScrollView
-import me.zhanghai.android.files.R
 
 // A platform ScrollView leaves RecyclerView as the ScrollingView that receives bottom insets.
 class ArchiveJobProgressScrollView : ScrollView {
@@ -35,15 +35,32 @@ class ArchiveJobProgressScrollView : ScrollView {
             super.onMeasure(widthMeasureSpec, heightMeasureSpec)
             return
         }
-        val rowHeight = resources.getDimensionPixelSize(R.dimen.touch_target_size) +
-            2 * resources.getDimensionPixelSize(R.dimen.list_vertical_padding)
-        var maximumHeight = 2 * rowHeight
-        if (heightMode == MeasureSpec.AT_MOST) {
+        val limitedHeightMeasureSpec = if (heightMode == MeasureSpec.AT_MOST) {
             // Leave room for the files, including in landscape and a small split-screen window.
-            maximumHeight = maximumHeight.coerceAtMost(MeasureSpec.getSize(heightMeasureSpec) / 2)
+            MeasureSpec.makeMeasureSpec(
+                MeasureSpec.getSize(heightMeasureSpec) / 2, MeasureSpec.AT_MOST
+            )
+        } else {
+            heightMeasureSpec
         }
-        super.onMeasure(
-            widthMeasureSpec, MeasureSpec.makeMeasureSpec(maximumHeight, MeasureSpec.AT_MOST)
-        )
+        super.onMeasure(widthMeasureSpec, limitedHeightMeasureSpec)
+
+        val progressLayout = getChildAt(0) as? ViewGroup ?: return
+        if (progressLayout.childCount <= 2) {
+            return
+        }
+        // Use the actual card heights so the two-task limit follows the user's font size.
+        var twoCardsHeight = paddingTop + paddingBottom +
+            progressLayout.paddingTop + progressLayout.paddingBottom
+        for (index in 0 until 2) {
+            val card = progressLayout.getChildAt(index)
+            val params = card.layoutParams as MarginLayoutParams
+            twoCardsHeight += card.measuredHeight + params.topMargin + params.bottomMargin
+        }
+        if (measuredHeight > twoCardsHeight) {
+            super.onMeasure(
+                widthMeasureSpec, MeasureSpec.makeMeasureSpec(twoCardsHeight, MeasureSpec.AT_MOST)
+            )
+        }
     }
 }

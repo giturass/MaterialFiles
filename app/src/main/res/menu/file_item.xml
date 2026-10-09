@@ -32,14 +32,6 @@
         android:title="@string/file_item_action_extract" />
 
     <item
-        android:id="@+id/action_extract_here"
-        android:title="@string/file_item_action_extract_here" />
-
-    <item
-        android:id="@+id/action_extract_to_directory"
-        android:title="@string/file_item_action_extract_to_directory" />
-
-    <item
         android:id="@+id/action_archive"
         android:title="@string/file_item_action_archive" />
 

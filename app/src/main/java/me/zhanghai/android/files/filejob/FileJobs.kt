@@ -205,7 +205,14 @@ private fun FileJob.getTargetFileName(source: Path): Path {
         val archiveRoot = archiveFile.createArchiveRootPath()
         if (source == archiveRoot) {
             val archiveName = archiveFile.archiveFileNameWithoutVolume()
-            val baseName = archiveName.asFileName().baseName.ifEmpty { archiveName }
+            // Match the compression suffixes recognized by ArchiveReader, including those
+            // not treated as double extensions for ordinary file names.
+            val compressedTarSuffix = listOf(
+                ".tar.gz", ".tar.gzip", ".tar.bz2", ".tar.bzip2", ".tar.xz",
+                ".tar.lzma", ".tar.lz", ".tar.zst"
+            ).firstOrNull { archiveName.endsWith(it, ignoreCase = true) }
+            val baseName = (compressedTarSuffix?.let { archiveName.dropLast(it.length) }
+                ?: archiveName.asFileName().baseName).ifEmpty { archiveName }
             return archiveFile.fileSystem.getPath(baseName)
         }
     }
@@ -1505,51 +1512,53 @@ private fun FileJob.copyOrMove(
             else -> throw AssertionError(result.action)
         }
     }
-    if (source.startsWith(target)) {
-        // Don't allow copy/move over the source itself or its ancestors.
-        if (actionAllInfo.skipCopyMoveOverItself) {
-            transferInfo.skipFile(source)
-            postCopyMoveNotification(transferInfo, source, type)
-            return false
-        }
-        val result = showErrorDialog(
-            getString(
-                type.getResourceId(
-                    R.string.file_job_cannot_copy_over_itself_title,
-                    R.string.file_job_cannot_extract_over_itself_title,
-                    R.string.file_job_cannot_move_over_itself_title
-                )
-            ),
-            getString(R.string.file_job_cannot_copy_move_over_itself_message),
-            null,
-            true,
-            getString(R.string.skip),
-            getString(android.R.string.cancel),
-            null
-        )
-        return when (result.action) {
-            FileJobErrorAction.POSITIVE -> {
-                if (result.isAll) {
-                    actionAllInfo.skipCopyMoveOverItself = true
-                }
-                transferInfo.skipFile(source)
-                postCopyMoveNotification(transferInfo, source, type)
-                false
-            }
-            FileJobErrorAction.CANCELED -> {
-                transferInfo.skipFile(source)
-                postCopyMoveNotification(transferInfo, source, type)
-                false
-            }
-            FileJobErrorAction.NEGATIVE -> throw InterruptedIOException()
-            else -> throw AssertionError(result.action)
-        }
-    }
     var target = target
     var replaceExisting = false
     var retry: Boolean
     do {
         retry = false
+        if (source.startsWith(target)
+            || (source.isArchivePath && source.archiveFile == target)) {
+            // Check each resolved target, including renames. An archive entry has a different
+            // provider from its backing file, but must never overwrite that file either.
+            if (actionAllInfo.skipCopyMoveOverItself) {
+                transferInfo.skipFile(source)
+                postCopyMoveNotification(transferInfo, source, type)
+                return false
+            }
+            val result = showErrorDialog(
+                getString(
+                    type.getResourceId(
+                        R.string.file_job_cannot_copy_over_itself_title,
+                        R.string.file_job_cannot_extract_over_itself_title,
+                        R.string.file_job_cannot_move_over_itself_title
+                    )
+                ),
+                getString(R.string.file_job_cannot_copy_move_over_itself_message),
+                null,
+                true,
+                getString(R.string.skip),
+                getString(android.R.string.cancel),
+                null
+            )
+            return when (result.action) {
+                FileJobErrorAction.POSITIVE -> {
+                    if (result.isAll) {
+                        actionAllInfo.skipCopyMoveOverItself = true
+                    }
+                    transferInfo.skipFile(source)
+                    postCopyMoveNotification(transferInfo, source, type)
+                    false
+                }
+                FileJobErrorAction.CANCELED -> {
+                    transferInfo.skipFile(source)
+                    postCopyMoveNotification(transferInfo, source, type)
+                    false
+                }
+                FileJobErrorAction.NEGATIVE -> throw InterruptedIOException()
+                else -> throw AssertionError(result.action)
+            }
+        }
         val options = mutableListOf<CopyOption>().apply {
             this += LinkOption.NOFOLLOW_LINKS
             if (copyAttributes) {
@@ -1573,6 +1582,17 @@ private fun FileJob.copyOrMove(
             transferInfo.incrementTransferredFileCount()
             postCopyMoveNotification(transferInfo, source, type)
         } catch (e: FileAlreadyExistsException) {
+            if (type == CopyMoveType.EXTRACT && source.isArchivePath
+                && source.isAbsolute && source.nameCount == 0
+                && target.isDirectory(LinkOption.NOFOLLOW_LINKS)) {
+                // The archive root represents the generated extraction container, not an
+                // archived entry. Reuse it without prompting; conflicts inside are handled
+                // individually, and a file or symbolic link here still requires a decision.
+                transferInfo.addTransferredFile(source)
+                postCopyMoveNotification(transferInfo, source, type)
+                onTargetResolved?.invoke(target)
+                return true
+            }
             val sourceFile = source.loadFileItem()
             val targetFile = target.loadFileItem()
             val sourceIsDirectory = sourceFile.attributesNoFollowLinks.isDirectory

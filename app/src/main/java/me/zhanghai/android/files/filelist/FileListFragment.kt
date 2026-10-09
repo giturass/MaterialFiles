@@ -134,7 +134,8 @@ import java.text.NumberFormat
 
 class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.Listener,
     ConfirmReplaceFileDialogFragment.Listener, OpenApkDialogFragment.Listener,
-    ConfirmDeleteFilesDialogFragment.Listener, CreateArchiveDialogFragment.Listener,
+    ConfirmDeleteFilesDialogFragment.Listener, ExtractFilesDialogFragment.Listener,
+    CreateArchiveDialogFragment.Listener,
     RenameFileDialogFragment.Listener, CreateFileDialogFragment.Listener,
     CreateDirectoryDialogFragment.Listener, NavigateToPathDialogFragment.Listener,
     NavigationFragment.Listener, ShowRequestAllFilesAccessRationaleDialogFragment.Listener,
@@ -384,13 +385,19 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 }
                 progressBinding.titleText.text = job.title
                 progressBinding.detailText.text = job.text
+                val maximum = job.max.coerceAtLeast(1)
+                val current = job.progress.coerceIn(0, maximum)
                 progressBinding.progress.apply {
-                    isIndeterminate = job.indeterminate
-                    max = job.max.coerceAtLeast(1)
-                    progress = job.progress.coerceIn(0, max)
+                    max = maximum
+                    if (job.indeterminate) {
+                        isIndeterminate = true
+                    } else {
+                        isIndeterminate = false
+                        setProgressCompat(current, isLaidOut)
+                    }
                 }
                 progressBinding.percentText.text = if (!job.indeterminate && job.max > 0) {
-                    percentFormat.format(job.progress.toDouble() / job.max)
+                    percentFormat.format(current.toDouble() / maximum)
                 } else {
                     null
                 }
@@ -845,10 +852,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             val areAllFilesArchiveFiles = files.all { it.isArchiveFile }
             menu.findItem(R.id.action_extract).isVisible = areAllFilesArchiveFiles
             val isCurrentPathReadOnly = viewModel.currentPath.fileSystem.isReadOnly
-            menu.findItem(R.id.action_extract_here).isVisible =
-                areAllFilesArchiveFiles && !isCurrentPathReadOnly
-            menu.findItem(R.id.action_extract_to_directory).isVisible =
-                areAllFilesArchiveFiles && !isCurrentPathReadOnly
             menu.findItem(R.id.action_archive).isVisible = !isCurrentPathReadOnly
         }
         if (!overlayActionMode.isActive) {
@@ -893,14 +896,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             }
             R.id.action_extract -> {
                 extractFiles(viewModel.selectedFiles)
-                true
-            }
-            R.id.action_extract_here -> {
-                extractFiles(viewModel.selectedFiles, false)
-                true
-            }
-            R.id.action_extract_to_directory -> {
-                extractFiles(viewModel.selectedFiles, true)
                 true
             }
             R.id.action_archive -> {
@@ -957,13 +952,22 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     private fun extractFiles(files: FileItemSet) {
-        copyFiles(files.mapTo(fileItemSetOf()) { it.createDummyArchiveRoot() })
-        viewModel.selectFiles(files, false)
+        val targetDirectory = viewModel.currentPath
+        if (targetDirectory.fileSystem.isReadOnly) {
+            copyFiles(files.mapTo(fileItemSetOf()) { it.createDummyArchiveRoot() })
+            viewModel.selectFiles(files, false)
+            return
+        }
+        ExtractFilesDialogFragment.show(files, targetDirectory, this)
     }
 
-    private fun extractFiles(files: FileItemSet, intoSeparateDirectories: Boolean) {
+    override fun extractFiles(
+        files: FileItemSet,
+        targetDirectory: Path,
+        intoSeparateDirectories: Boolean
+    ) {
         FileJobService.extract(
-            makePathListForJob(files).map { it.createArchiveRootPath() }, viewModel.currentPath,
+            makePathListForJob(files).map { it.createArchiveRootPath() }, targetDirectory,
             intoSeparateDirectories, requireContext()
         )
         viewModel.selectFiles(files, false)
@@ -1322,11 +1326,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     override fun extractFile(file: FileItem) {
-        copyFile(file.createDummyArchiveRoot())
-    }
-
-    override fun extractFile(file: FileItem, intoSeparateDirectory: Boolean) {
-        extractFiles(fileItemSetOf(file), intoSeparateDirectory)
+        extractFiles(fileItemSetOf(file))
     }
 
     override fun showCreateArchiveDialog(file: FileItem) {

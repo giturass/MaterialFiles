@@ -102,14 +102,15 @@ def main(default_suite="all"):
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
     add_apk_arguments(parser, root, "materialfiles-archive-check")
-    parser.add_argument("--suite", choices=("all", "native", "password", "volumes", "formats"),
+    parser.add_argument("--suite", choices=("all", "native", "password", "volumes", "formats", "extraction"),
                         default=default_suite)
     parser.add_argument("--writer-fixtures", type=Path,
                         help="Also read encrypted 7z archives from the previous app writer")
     args = parser.parse_args()
     if args.suite in ("native", "formats", "all") and not args.seven_zip:
         parser.error("Install official 7zz or specify --seven-zip")
-    harness = ApkHarness(args, parser, root, need_fixtures=args.suite in ("all", "native", "password"))
+    harness = ApkHarness(args, parser, root,
+                         need_fixtures=args.suite in ("all", "native", "password", "extraction"))
     if args.suite in ("all", "native"):
         output = harness.work / "native-output"
         arguments = [harness.fixture_dir, output]
@@ -121,6 +122,10 @@ def main(default_suite="all"):
     if args.suite in ("all", "password"):
         harness.run("ArchivePasswordFlowTest", [harness.fixture_dir],
                     r"PASS: \d+ APK password-flow checks")
+    if args.suite in ("all", "extraction"):
+        harness.run("ArchiveExtractionTest", [harness.fixture_dir, harness.work / "extraction"],
+                    r"PASS: \d+ archive extraction destination checks",
+                    extra_sources=("ArchiveVolumeTest",))
     if args.suite in ("all", "volumes"):
         harness.run("ArchiveVolumeTest", [harness.work / "volumes"],
                     r"PASS: \d+ .*volume.*checks")
