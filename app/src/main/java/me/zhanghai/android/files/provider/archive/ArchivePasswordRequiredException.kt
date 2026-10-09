@@ -27,7 +27,7 @@ class ArchivePasswordRequiredException(
             ArchivePasswordDialogActivity::class.createIntent().putArgs(
                 ArchivePasswordDialogFragment.Args(file) { continuation.resume(it) }
             ), ArchivePasswordDialogFragment.getTitle(context),
-            ArchivePasswordDialogFragment.getMessage(file, context)
+            ArchivePasswordDialogFragment.getMessage(file.archiveFile, context)
         )
     }
 }

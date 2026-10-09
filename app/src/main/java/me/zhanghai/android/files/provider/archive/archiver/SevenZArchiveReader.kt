@@ -10,13 +10,14 @@ import androidx.annotation.RequiresApi
 import java8.nio.file.Path
 import java8.nio.file.attribute.FileTime
 import me.zhanghai.android.files.app.application
-import me.zhanghai.android.files.provider.archive.ArchivePasswordRequiredException
+import me.zhanghai.android.files.provider.archive.ARCHIVE_ERRNO_MISC
 import me.zhanghai.android.files.provider.common.PosixFileMode
 import me.zhanghai.android.files.provider.common.PosixFileType
 import me.zhanghai.android.files.provider.common.newByteChannel
 import me.zhanghai.android.files.provider.common.newInputStream
 import me.zhanghai.android.files.provider.root.isRunningAsRoot
 import me.zhanghai.android.files.provider.root.rootContext
+import me.zhanghai.android.libarchive.ArchiveException
 import org.apache.commons.compress.MemoryLimitException
 import org.apache.commons.compress.PasswordRequiredException
 import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry
@@ -38,7 +39,6 @@ import java.nio.channels.SeekableByteChannel
 /** Supplies the encrypted 7z support missing from libarchive, keeping other formats unchanged. */
 @RequiresApi(Build.VERSION_CODES.N)
 internal class SevenZArchiveReader private constructor(
-    private val file: Path,
     private val channel: SeekableByteChannel,
     private val owner: Closeable,
     private val passwords: List<String>
@@ -165,11 +165,13 @@ internal class SevenZArchiveReader private constructor(
         }
     }
 
-    private fun passwordException(cause: IOException?): ArchivePasswordRequiredException =
-        ArchivePasswordRequiredException(
-            file, if (passwords.isEmpty()) "Passphrase required for this entry"
-            else "Incorrect passphrase"
-        ).apply { initCause(cause) }
+    // Match libarchive's password errors so the file system and stream wrapper attach the
+    // ArchivePath needed by the password dialog, rather than the archive's physical file path.
+    private fun passwordException(cause: IOException?): ArchiveException =
+        ArchiveException(
+            ARCHIVE_ERRNO_MISC, if (passwords.isEmpty()) "Passphrase required for this entry"
+            else "Incorrect passphrase", cause
+        )
 
     override fun close() {
         try {
@@ -210,7 +212,7 @@ internal class SevenZArchiveReader private constructor(
                     providerChannel.position(0)
                     successful = true
                     return SevenZArchiveReader(
-                        file, CommonsSeekableByteChannel(providerChannel), providerChannel, passwords
+                        CommonsSeekableByteChannel(providerChannel), providerChannel, passwords
                     )
                 } catch (e: UnsupportedOperationException) {
                     // A provider can return a channel while still rejecting seek operations.
@@ -270,7 +272,7 @@ internal class SevenZArchiveReader private constructor(
                         override fun close() = Unit
                     }
                     successful = true
-                    return SevenZArchiveReader(file, borrowedChannel, owner, passwords)
+                    return SevenZArchiveReader(borrowedChannel, owner, passwords)
                 } finally {
                     if (!successful) {
                         temporary.delete()

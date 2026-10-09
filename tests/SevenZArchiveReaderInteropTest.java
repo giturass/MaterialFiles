@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Proxy;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.SeekableByteChannel;
@@ -20,11 +19,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import me.zhanghai.android.files.provider.archive.ArchivePasswordRequiredException;
 import me.zhanghai.android.files.provider.archive.archiver.ReadArchive;
 import me.zhanghai.android.files.provider.archive.archiver.SevenZArchiveReader;
 import me.zhanghai.android.files.provider.common.PosixFileModeBit;
 import me.zhanghai.android.files.provider.common.PosixFileType;
+import me.zhanghai.android.libarchive.ArchiveException;
 
 /** Exercises the compiled application reader, not a replacement or Commons Compress directly. */
 public final class SevenZArchiveReaderInteropTest {
@@ -90,10 +89,10 @@ public final class SevenZArchiveReaderInteropTest {
                     while (input.read(buffer) >= 0) {}
                 }
                 throw new AssertionError("Encrypted content accepted an absent or incorrect key");
-            } catch (ArchivePasswordRequiredException expected) {
+            } catch (ArchiveException expected) {
                 require(expected.getCause() instanceof IOException, "Password error lost its cause");
-                require(expected.getFile().equals(path.toString()), "Password error lost archive path");
-                require(expected.getReason().equals(passwords.isEmpty()
+                require(expected.getCode() == -1, "Password error lost libarchive's error code");
+                require(expected.getMessage().equals(passwords.isEmpty()
                         ? "Passphrase required for this entry" : "Incorrect passphrase"),
                         "Incorrect user-facing password error");
             }
@@ -108,8 +107,9 @@ public final class SevenZArchiveReaderInteropTest {
                 try {
                     readEntries(handle.reader);
                     throw new AssertionError("Encrypted names accepted an absent or incorrect key");
-                } catch (ArchivePasswordRequiredException expected) {
+                } catch (ArchiveException expected) {
                     require(expected.getCause() instanceof IOException, "Password error lost its cause");
+                    require(expected.getCode() == -1, "Password error lost libarchive's error code");
                 }
                 handle.assertStillOwned();
             }
@@ -309,20 +309,12 @@ public final class SevenZArchiveReaderInteropTest {
         ReaderHandle(Path path, List<String> passwords) throws Exception {
             file = FileChannel.open(path, StandardOpenOption.READ);
             channel = new BorrowedChannel(file);
-            java8.nio.file.Path providerPath = (java8.nio.file.Path) Proxy.newProxyInstance(
-                    java8.nio.file.Path.class.getClassLoader(), new Class<?>[]{java8.nio.file.Path.class},
-                    (proxy, method, args) -> {
-                        if (method.getName().equals("toString")) {
-                            return path.toString();
-                        }
-                        throw new UnsupportedOperationException("Unexpected provider access: " + method);
-                    });
             Constructor<SevenZArchiveReader> constructor = SevenZArchiveReader.class
-                    .getDeclaredConstructor(java8.nio.file.Path.class, SeekableByteChannel.class,
+                    .getDeclaredConstructor(SeekableByteChannel.class,
                             Closeable.class, List.class);
             constructor.setAccessible(true);
             try {
-                reader = constructor.newInstance(providerPath, channel, (Closeable) () -> {
+                reader = constructor.newInstance(channel, (Closeable) () -> {
                     ++ownerCloseCount;
                     file.close();
                 }, passwords);

@@ -257,6 +257,20 @@ private fun FileJob.throwIfInterrupted() {
 
 @Throws(IOException::class)
 private fun FileJob.scan(sources: List<Path?>, @PluralsRes notificationTitleRes: Int): ScanInfo {
+    while (true) {
+        throwIfInterrupted()
+        try {
+            return scanOnce(sources, notificationTitleRes)
+        } catch (e: UserActionRequiredException) {
+            if (!showUserAction(e)) {
+                throw InterruptedIOException().apply { initCause(e) }
+            }
+        }
+    }
+}
+
+@Throws(IOException::class)
+private fun FileJob.scanOnce(sources: List<Path?>, @PluralsRes notificationTitleRes: Int): ScanInfo {
     val scanInfo = ScanInfo()
     for (source in sources) {
         Files.walkFileTree(source, object : SimpleFileVisitor<Path>() {

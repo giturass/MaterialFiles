@@ -15,7 +15,7 @@ import java.io.InputStream
 import java.io.InterruptedIOException
 
 // See also libarchive/archive_platform.h .
-private const val ARCHIVE_ERRNO_MISC = -1
+internal const val ARCHIVE_ERRNO_MISC = -1
 
 fun ArchiveException.toFileSystemOrInterruptedIOException(file: Path): IOException =
     when {
