@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sora_editor_title">代码编辑器</string>
+    <string name="sora_editor_status">行 %1$d，列 %2$d · %3$s · %4$s · %5$s</string>
+    <string name="sora_editor_status_selection"> · 已选 %1$d 个字符</string>
+    <string name="sora_editor_status_read_only"> · 只读</string>
+    <string name="sora_editor_language_loading">加载语法…</string>
+    <string name="sora_editor_language_failed">语法加载失败，已切换为纯文本</string>
+    <string name="sora_editor_searching">查找中…</string>
+    <string name="sora_editor_replacing">替换中…</string>
+    <string name="sora_editor_search_count">%1$d / %2$d</string>
+    <string name="sora_editor_invalid_regex">正则表达式无效</string>
+    <string name="sora_editor_invalid_replacement">替换内容中的分组引用无效</string>
+    <string name="sora_editor_line_hint">行号（1–%1$d）</string>
+    <string name="sora_editor_line_error">请输入 1 到 %1$d 之间的行号</string>
+    <string name="sora_editor_tab_width_value">%1$d 个字符</string>
+    <string name="sora_editor_font_size_value">%1$d</string>
+    <string name="sora_editor_symbols_tab">缩进</string>
+    <string name="sora_editor_file_missing">无法获取要编辑的文件</string>
+</resources>

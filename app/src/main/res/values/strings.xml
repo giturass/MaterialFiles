@@ -667,10 +667,54 @@
     <string name="save_as_title">另存为</string>
     <string name="save_as_error">保存时发生错误</string>
     <string name="save_as_success_format">已将“%1$s”保存到“%2$s”</string>
-    <string name="text_editor_title">文本编辑器</string>
     <string name="text_editor_title_format">%1$s</string>
     <string name="text_editor_title_changed_format">*%1$s</string>
     <string name="text_editor_save_success">已保存</string>
+    <string name="text_editor_undo">撤销</string>
+    <string name="text_editor_redo">重做</string>
+    <string name="text_editor_word_wrap">自动换行</string>
+    <string name="text_editor_search_replace">查找与替换</string>
+    <string name="text_editor_search_query">查找文本</string>
+    <string name="text_editor_replacement">替换为</string>
+    <string name="text_editor_search_previous">上一个匹配项</string>
+    <string name="text_editor_search_next">下一个匹配项</string>
+    <string name="text_editor_search_close">关闭查找</string>
+    <string name="text_editor_replace_current">替换</string>
+    <string name="text_editor_replace_all">全部替换</string>
+    <string name="text_editor_search_no_matches">无匹配</string>
+    <string name="text_editor_search_match_case">区分大小写</string>
+    <string name="text_editor_search_whole_word">全字匹配</string>
+    <string name="text_editor_search_regex">正则表达式</string>
+    <string name="text_editor_go_to_line">跳转到行</string>
+    <string name="text_editor_font_size">字体大小</string>
+    <string name="text_editor_line_numbers">显示行号</string>
+    <string name="text_editor_read_only">只读模式</string>
+    <string name="text_editor_whitespace">显示空白字符</string>
+    <string name="text_editor_edit">编辑</string>
+    <string name="text_editor_indent">增加缩进</string>
+    <string name="text_editor_unindent">减少缩进</string>
+    <string name="text_editor_duplicate_line">复制行或选区</string>
+    <string name="text_editor_settings">编辑器设置</string>
+    <string name="text_editor_tab_width">缩进宽度</string>
+    <string name="text_editor_auto_completion">自动补全</string>
+    <string name="text_editor_sticky_scroll">固定显示作用域</string>
+    <string name="text_editor_language">语法语言</string>
+    <string name="text_editor_language_auto">自动识别</string>
+    <string name="text_editor_language_plain">纯文本</string>
+    <string name="text_editor_language_c" translatable="false">C</string>
+    <string name="text_editor_language_cpp" translatable="false">C++</string>
+    <string name="text_editor_language_java" translatable="false">Java</string>
+    <string name="text_editor_language_kotlin" translatable="false">Kotlin</string>
+    <string name="text_editor_language_javascript" translatable="false">JavaScript</string>
+    <string name="text_editor_language_typescript" translatable="false">TypeScript</string>
+    <string name="text_editor_language_json" translatable="false">JSON</string>
+    <string name="text_editor_language_xml" translatable="false">XML</string>
+    <string name="text_editor_language_html" translatable="false">HTML</string>
+    <string name="text_editor_language_css" translatable="false">CSS</string>
+    <string name="text_editor_language_markdown" translatable="false">Markdown</string>
+    <string name="text_editor_language_python" translatable="false">Python</string>
+    <string name="text_editor_language_shell" translatable="false">Shell</string>
+    <string name="text_editor_language_yaml" translatable="false">YAML</string>
     <string name="text_editor_reload_message">您确定要重新加载吗？对此文档未保存的变更将丢失。</string>
     <string name="text_editor_encoding">编码</string>
     <string name="text_editor_close_message">您确定要舍弃对此文档未保存的变更吗？</string>

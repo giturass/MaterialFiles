@@ -1,0 +1,257 @@
+{
+  "description": "Pinned upstream files bundled for Sora TextMate support; licenses are included under licenses/.",
+  "files": [
+    {
+      "path": "grammars/java.tmLanguage.json",
+      "url": "https://raw.githubusercontent.com/Rosemoe/sora-editor/87055c459e346cac6c619b3350f0bfba076228cc/app/src/main/assets/textmate/java/syntaxes/java.tmLanguage.json",
+      "sourceSha256": "ac19c60cbd1ee364fda59b257230a519e388f37642d39a00e5beec274320c15d",
+      "sha256": "ac19c60cbd1ee364fda59b257230a519e388f37642d39a00e5beec274320c15d"
+    },
+    {
+      "path": "config/java.json",
+      "url": "https://raw.githubusercontent.com/Rosemoe/sora-editor/87055c459e346cac6c619b3350f0bfba076228cc/app/src/main/assets/textmate/java/language-configuration.json",
+      "sourceSha256": "6be1829af2545511690582ecb8a44a9542e1888517b201a08c332f67ee3c4a2d",
+      "sha256": "6be1829af2545511690582ecb8a44a9542e1888517b201a08c332f67ee3c4a2d"
+    },
+    {
+      "path": "grammars/Kotlin.tmLanguage",
+      "url": "https://raw.githubusercontent.com/Rosemoe/sora-editor/87055c459e346cac6c619b3350f0bfba076228cc/app/src/main/assets/textmate/kotlin/syntaxes/Kotlin.tmLanguage",
+      "sourceSha256": "b0ae4531f06c7d139e564b8e90c629472bddcafbfec3aa4fc6e92621d2b3ac1e",
+      "sha256": "b0ae4531f06c7d139e564b8e90c629472bddcafbfec3aa4fc6e92621d2b3ac1e"
+    },
+    {
+      "path": "config/kotlin.json",
+      "url": "https://raw.githubusercontent.com/Rosemoe/sora-editor/87055c459e346cac6c619b3350f0bfba076228cc/app/src/main/assets/textmate/kotlin/language-configuration.json",
+      "sourceSha256": "e45d22af49277987a1c17c8237225366a7c91d08ce246ab82c873264dd99b440",
+      "sha256": "e45d22af49277987a1c17c8237225366a7c91d08ce246ab82c873264dd99b440"
+    },
+    {
+      "path": "grammars/python.tmLanguage.json",
+      "url": "https://raw.githubusercontent.com/Rosemoe/sora-editor/87055c459e346cac6c619b3350f0bfba076228cc/app/src/main/assets/textmate/python/syntaxes/python.tmLanguage.json",
+      "sourceSha256": "d365948b3bb0f1d889eb8315d8bbbf02c11d07c28598c220936a53149b70f706",
+      "sha256": "d365948b3bb0f1d889eb8315d8bbbf02c11d07c28598c220936a53149b70f706"
+    },
+    {
+      "path": "config/python.json",
+      "url": "https://raw.githubusercontent.com/Rosemoe/sora-editor/87055c459e346cac6c619b3350f0bfba076228cc/app/src/main/assets/textmate/python/language-configuration.json",
+      "sourceSha256": "141f93a99e92b9d399cbe4e18f36757fc6bcb94df765607b57b149c1749fda28",
+      "sha256": "141f93a99e92b9d399cbe4e18f36757fc6bcb94df765607b57b149c1749fda28"
+    },
+    {
+      "path": "grammars/xml.tmLanguage.json",
+      "url": "https://raw.githubusercontent.com/Rosemoe/sora-editor/87055c459e346cac6c619b3350f0bfba076228cc/app/src/main/assets/textmate/xml/syntaxes/xml.tmLanguage.json",
+      "sourceSha256": "10c40dad70e6b2c46fa3c862f3611764049043fc6fe46f0ffc1dbce71fcfca9c",
+      "sha256": "10c40dad70e6b2c46fa3c862f3611764049043fc6fe46f0ffc1dbce71fcfca9c"
+    },
+    {
+      "path": "config/xml.json",
+      "url": "https://raw.githubusercontent.com/Rosemoe/sora-editor/87055c459e346cac6c619b3350f0bfba076228cc/app/src/main/assets/textmate/xml/language-configuration.json",
+      "sourceSha256": "25e257133abcbc3953ab8feedde865ab9e29f2b470b7c9b8504062035a9f1ab6",
+      "sha256": "25e257133abcbc3953ab8feedde865ab9e29f2b470b7c9b8504062035a9f1ab6"
+    },
+    {
+      "path": "grammars/html.tmLanguage.json",
+      "url": "https://raw.githubusercontent.com/Rosemoe/sora-editor/87055c459e346cac6c619b3350f0bfba076228cc/app/src/main/assets/textmate/html/syntaxes/html.tmLanguage.json",
+      "sourceSha256": "47222953305135c33553c6d7e1973ea9a2da5c6a87bd3084cf2b7c390f96bf47",
+      "sha256": "47222953305135c33553c6d7e1973ea9a2da5c6a87bd3084cf2b7c390f96bf47"
+    },
+    {
+      "path": "config/html.json",
+      "url": "https://raw.githubusercontent.com/Rosemoe/sora-editor/87055c459e346cac6c619b3350f0bfba076228cc/app/src/main/assets/textmate/html/language-configuration.json",
+      "sourceSha256": "a7ce98fe37d01e7b11711c8ded1c34d4b22fa71a8f8ad7cdb687d788a4404cb2",
+      "sha256": "a7ce98fe37d01e7b11711c8ded1c34d4b22fa71a8f8ad7cdb687d788a4404cb2"
+    },
+    {
+      "path": "grammars/JavaScript.tmLanguage.json",
+      "url": "https://raw.githubusercontent.com/Rosemoe/sora-editor/87055c459e346cac6c619b3350f0bfba076228cc/app/src/main/assets/textmate/javascript/syntaxes/JavaScript.tmLanguage.json",
+      "sourceSha256": "4cfeb9a4067ec7f2b7d827ddf6ebc687980f3a9b557bd74b80edcf250b47feb4",
+      "sha256": "4cfeb9a4067ec7f2b7d827ddf6ebc687980f3a9b557bd74b80edcf250b47feb4"
+    },
+    {
+      "path": "config/javascript.json",
+      "url": "https://raw.githubusercontent.com/Rosemoe/sora-editor/87055c459e346cac6c619b3350f0bfba076228cc/app/src/main/assets/textmate/javascript/language-configuration.json",
+      "sourceSha256": "e4d4ff6047fc02e40ac1c8757bb9019b63417bb744a224b114d9610cb62b7827",
+      "sha256": "e4d4ff6047fc02e40ac1c8757bb9019b63417bb744a224b114d9610cb62b7827"
+    },
+    {
+      "path": "grammars/markdown.tmLanguage.json",
+      "url": "https://raw.githubusercontent.com/Rosemoe/sora-editor/87055c459e346cac6c619b3350f0bfba076228cc/app/src/main/assets/textmate/markdown/syntaxes/markdown.tmLanguage.json",
+      "sourceSha256": "c9ebc43152005c2419612f4fa7e3ba97c54c26d019a22207c0cb1c70cb2bbaa2",
+      "sha256": "c9ebc43152005c2419612f4fa7e3ba97c54c26d019a22207c0cb1c70cb2bbaa2"
+    },
+    {
+      "path": "config/markdown.json",
+      "url": "https://raw.githubusercontent.com/Rosemoe/sora-editor/87055c459e346cac6c619b3350f0bfba076228cc/app/src/main/assets/textmate/markdown/language-configuration.json",
+      "sourceSha256": "3a137b7c8d8a697ed5c0c5c7e2fc07ac87f603a5b5dbaac33c3a523151d88898",
+      "sha256": "3a137b7c8d8a697ed5c0c5c7e2fc07ac87f603a5b5dbaac33c3a523151d88898"
+    },
+    {
+      "path": "themes/light.json",
+      "url": "https://raw.githubusercontent.com/Rosemoe/sora-editor/87055c459e346cac6c619b3350f0bfba076228cc/app/src/main/assets/textmate/quietlight.json",
+      "sourceSha256": "acfb395ec7afe76b187cf8c1aa7edfee5acd5aa72e6387aa5010c85756259cdc",
+      "sha256": "acfb395ec7afe76b187cf8c1aa7edfee5acd5aa72e6387aa5010c85756259cdc"
+    },
+    {
+      "path": "themes/dark.json",
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/cd4ee3b1c348a13bafd8f9ad8060705f6d4b9cba/extensions/theme-defaults/themes/dark_vs.json",
+      "sourceSha256": "97517bb4bdcdd6d4642453bf0114000ed74ff28aa1a8ef5d0a83f0440b8108b1",
+      "sha256": "9b5e472afe835f3204f423f7c51d98425954b3e6960d3c1faf65399d9aacd9ec",
+      "modification": "JSONC comments and trailing commas removed; JSON formatting normalized."
+    },
+    {
+      "path": "grammars/css.tmLanguage.json",
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/cd4ee3b1c348a13bafd8f9ad8060705f6d4b9cba/extensions/css/syntaxes/css.tmLanguage.json",
+      "sourceSha256": "bcc97d1a3a6bf112f72d8bdb58bc438eb68aa0e070b94d00c6064b75f5cab69b",
+      "sha256": "bcc97d1a3a6bf112f72d8bdb58bc438eb68aa0e070b94d00c6064b75f5cab69b"
+    },
+    {
+      "path": "config/css.json",
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/cd4ee3b1c348a13bafd8f9ad8060705f6d4b9cba/extensions/css/language-configuration.json",
+      "sourceSha256": "97891fb0d515aa124c0eab14e961aeebb50ea0c7d3634e01853f6f41ce61f28d",
+      "sha256": "97891fb0d515aa124c0eab14e961aeebb50ea0c7d3634e01853f6f41ce61f28d"
+    },
+    {
+      "path": "grammars/JSON.tmLanguage.json",
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/cd4ee3b1c348a13bafd8f9ad8060705f6d4b9cba/extensions/json/syntaxes/JSON.tmLanguage.json",
+      "sourceSha256": "d7238f1cc9033993b9816b0945cab4bb8ea108de0399663c551f28f913e94c70",
+      "sha256": "d7238f1cc9033993b9816b0945cab4bb8ea108de0399663c551f28f913e94c70"
+    },
+    {
+      "path": "config/json.json",
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/cd4ee3b1c348a13bafd8f9ad8060705f6d4b9cba/extensions/json/language-configuration.json",
+      "sourceSha256": "1b0d161916d1e35bbcfa545cc3554d1e757eed632208f99c242535235c06c600",
+      "sha256": "21a8a7f4adeac2b67032fde53fc50eacce9596c198db4704f9740027905595a2",
+      "modification": "Added the folding markers from config/javascript.json to enable Sora indentation-based code blocks and sticky scroll for JSON/JSONC; JSON formatting normalized.",
+      "adaptedFrom": "config/javascript.json"
+    },
+    {
+      "path": "grammars/TypeScript.tmLanguage.json",
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/cd4ee3b1c348a13bafd8f9ad8060705f6d4b9cba/extensions/typescript-basics/syntaxes/TypeScript.tmLanguage.json",
+      "sourceSha256": "4e92e0d7de560217d6c8d3236d85e6e17a5d77825b15729a230c761743122661",
+      "sha256": "4e92e0d7de560217d6c8d3236d85e6e17a5d77825b15729a230c761743122661"
+    },
+    {
+      "path": "config/typescript.json",
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/cd4ee3b1c348a13bafd8f9ad8060705f6d4b9cba/extensions/typescript-basics/language-configuration.json",
+      "sourceSha256": "6dec46d25f57187923f69f1ad53ea73dca345d16aa4f56ca0bfb33abea8dbbdd",
+      "sha256": "28d0c494ba100d9ba0e55031d20c9f3cd2bc768b2f324d7b810975024f5f9903",
+      "modification": "JSONC comments and trailing commas removed; JSON formatting normalized."
+    },
+    {
+      "path": "grammars/shell-unix-bash.tmLanguage.json",
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/cd4ee3b1c348a13bafd8f9ad8060705f6d4b9cba/extensions/shellscript/syntaxes/shell-unix-bash.tmLanguage.json",
+      "sourceSha256": "838a597b9bbc29bcfc89ca0190118550ae57517ec3e4b4baa1f8500edcf601d1",
+      "sha256": "838a597b9bbc29bcfc89ca0190118550ae57517ec3e4b4baa1f8500edcf601d1"
+    },
+    {
+      "path": "config/shell.json",
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/cd4ee3b1c348a13bafd8f9ad8060705f6d4b9cba/extensions/shellscript/language-configuration.json",
+      "sourceSha256": "fb8dec83d74b1fc928862b966fd86adac1d7fab5eaa9d425ba813c92169c8a89",
+      "sha256": "fb8dec83d74b1fc928862b966fd86adac1d7fab5eaa9d425ba813c92169c8a89"
+    },
+    {
+      "path": "grammars/yaml.tmLanguage.json",
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/cd4ee3b1c348a13bafd8f9ad8060705f6d4b9cba/extensions/yaml/syntaxes/yaml.tmLanguage.json",
+      "sourceSha256": "0e9e3669a65b5d1f957398844f50ee6e51e713f5a18f782ec458cdfbaebf1bb6",
+      "sha256": "0e9e3669a65b5d1f957398844f50ee6e51e713f5a18f782ec458cdfbaebf1bb6"
+    },
+    {
+      "path": "config/yaml.json",
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/cd4ee3b1c348a13bafd8f9ad8060705f6d4b9cba/extensions/yaml/language-configuration.json",
+      "sourceSha256": "306c8f6951dddc6214ff80766123a0315fc63773a0bd2909423968fa712b4a26",
+      "sha256": "306c8f6951dddc6214ff80766123a0315fc63773a0bd2909423968fa712b4a26"
+    },
+    {
+      "path": "grammars/c.tmLanguage.json",
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/cd4ee3b1c348a13bafd8f9ad8060705f6d4b9cba/extensions/cpp/syntaxes/c.tmLanguage.json",
+      "sourceSha256": "9d0a305bc6595526ffc0680eccbf23a12512ded99a632d9f1deab3ce81b62957",
+      "sha256": "9d0a305bc6595526ffc0680eccbf23a12512ded99a632d9f1deab3ce81b62957"
+    },
+    {
+      "path": "config/c.json",
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/cd4ee3b1c348a13bafd8f9ad8060705f6d4b9cba/extensions/cpp/language-configuration.json",
+      "sourceSha256": "ccb1b20bfe8397e7fb4b323f5dc33b4135d7cecdee0222f1c8eb2483e7762f7c",
+      "sha256": "3b2b279b2e561cde3e00e1896d8ae56bfcbed54d1aa6ee1b8c0ca1339b191e6f",
+      "modification": "JSONC comments and trailing commas removed; JSON formatting normalized."
+    },
+    {
+      "path": "grammars/cpp.tmLanguage.json",
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/cd4ee3b1c348a13bafd8f9ad8060705f6d4b9cba/extensions/cpp/syntaxes/cpp.tmLanguage.json",
+      "sourceSha256": "82b39c8f2aec095b45a287ab155fcf868c197b216ba8d6fe0c95674b82863182",
+      "sha256": "82b39c8f2aec095b45a287ab155fcf868c197b216ba8d6fe0c95674b82863182"
+    },
+    {
+      "path": "config/cpp.json",
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/cd4ee3b1c348a13bafd8f9ad8060705f6d4b9cba/extensions/cpp/language-configuration.json",
+      "sourceSha256": "ccb1b20bfe8397e7fb4b323f5dc33b4135d7cecdee0222f1c8eb2483e7762f7c",
+      "sha256": "3b2b279b2e561cde3e00e1896d8ae56bfcbed54d1aa6ee1b8c0ca1339b191e6f",
+      "modification": "JSONC comments and trailing commas removed; JSON formatting normalized."
+    },
+    {
+      "path": "grammars/JSONC.tmLanguage.json",
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/cd4ee3b1c348a13bafd8f9ad8060705f6d4b9cba/extensions/json/syntaxes/JSONC.tmLanguage.json",
+      "sourceSha256": "9f927bb3aa53e66efc3cace9d2fa1185822b2adfa3f4a9299e7c078f136e1ee2",
+      "sha256": "9f927bb3aa53e66efc3cace9d2fa1185822b2adfa3f4a9299e7c078f136e1ee2"
+    },
+    {
+      "path": "grammars/TypeScriptReact.tmLanguage.json",
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/cd4ee3b1c348a13bafd8f9ad8060705f6d4b9cba/extensions/typescript-basics/syntaxes/TypeScriptReact.tmLanguage.json",
+      "sourceSha256": "532fb887df3117e9f4eaf5d3ea1e850114fb6899fe3d3ddabedb153bec08b32a",
+      "sha256": "532fb887df3117e9f4eaf5d3ea1e850114fb6899fe3d3ddabedb153bec08b32a"
+    },
+    {
+      "path": "grammars/cpp.embedded.macro.tmLanguage.json",
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/cd4ee3b1c348a13bafd8f9ad8060705f6d4b9cba/extensions/cpp/syntaxes/cpp.embedded.macro.tmLanguage.json",
+      "sourceSha256": "5eea760dd0fe8f10df3cc39afbd01c5b5feeab5bb80fd15a95601e386828c903",
+      "sha256": "5eea760dd0fe8f10df3cc39afbd01c5b5feeab5bb80fd15a95601e386828c903"
+    },
+    {
+      "path": "licenses/sora-editor-LICENSE.txt",
+      "url": "https://raw.githubusercontent.com/Rosemoe/sora-editor/87055c459e346cac6c619b3350f0bfba076228cc/LICENSE",
+      "sourceSha256": "7ffe1954587c77dfba1cf8eb9b2ea743671fa6e63f9e7a2f258119d42e14eefe",
+      "sha256": "7ffe1954587c77dfba1cf8eb9b2ea743671fa6e63f9e7a2f258119d42e14eefe"
+    },
+    {
+      "path": "licenses/vscode-LICENSE.txt",
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/cd4ee3b1c348a13bafd8f9ad8060705f6d4b9cba/LICENSE.txt",
+      "sourceSha256": "9480271317925265e806a9a196aaa33410a962fa9d4d1e248a4a5187bc8c9df9",
+      "sha256": "9480271317925265e806a9a196aaa33410a962fa9d4d1e248a4a5187bc8c9df9"
+    },
+    {
+      "path": "licenses/vscode-ThirdPartyNotices.txt",
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/cd4ee3b1c348a13bafd8f9ad8060705f6d4b9cba/ThirdPartyNotices.txt",
+      "sourceSha256": "f535cbbbb957f5bdec5afb41ac4c20ab316c369db7a5279420eb2939ff0b98f1",
+      "sha256": "f535cbbbb957f5bdec5afb41ac4c20ab316c369db7a5279420eb2939ff0b98f1"
+    },
+    {
+      "path": "licenses/kotlin-Apache-2.0.txt",
+      "url": "https://raw.githubusercontent.com/mathiasfrohlich/vscode-kotlin/090fe4cd054d6142d7eaefdb69c12d4b063a089e/syntaxes/LICENSE",
+      "sourceSha256": "28926b41b87ba22c0828ff025419d4698663698666f826d6ea924a512432c3a8",
+      "sha256": "28926b41b87ba22c0828ff025419d4698663698666f826d6ea924a512432c3a8"
+    },
+    {
+      "path": "licenses/atom-language-java-MIT.txt",
+      "url": "https://raw.githubusercontent.com/atom/language-java/29f977dc42a7e2568b39bb6fb34c4ef108eb59b3/LICENSE.md",
+      "sourceSha256": "8b23352754eb15bd7a51f43a6cb28198a1ef15c148104af5382e53e94886e58a",
+      "sha256": "8b23352754eb15bd7a51f43a6cb28198a1ef15c148104af5382e53e94886e58a"
+    },
+    {
+      "path": "licenses/atom-language-xml-MIT.txt",
+      "url": "https://raw.githubusercontent.com/atom/language-xml/7bc75dfe779ad5b35d9bf4013d9181864358cb49/LICENSE.md",
+      "sourceSha256": "2163297c9906af4c85a986964dab265420db519a53c088cbed9a6820fc7d73c1",
+      "sha256": "2163297c9906af4c85a986964dab265420db519a53c088cbed9a6820fc7d73c1"
+    },
+    {
+      "path": "licenses/MagicPython-MIT.txt",
+      "url": "https://raw.githubusercontent.com/MagicStack/MagicPython/b2b4f4ae7b4e6284e80bda8080106b93bd588f9e/LICENSE",
+      "sourceSha256": "9185f3c77e9f6ef8859a6ba4c94128ac1329876be3e813aad32d7645e51ae409",
+      "sha256": "9185f3c77e9f6ef8859a6ba4c94128ac1329876be3e813aad32d7645e51ae409"
+    },
+    {
+      "path": "grammars/html-derivative.tmLanguage.json",
+      "url": "https://raw.githubusercontent.com/microsoft/vscode/cd4ee3b1c348a13bafd8f9ad8060705f6d4b9cba/extensions/html/syntaxes/html-derivative.tmLanguage.json",
+      "sourceSha256": "57c6b53a014fe87301f8716caf4e79f69796e556068d33641b0ed9ff77db70c5",
+      "sha256": "57c6b53a014fe87301f8716caf4e79f69796e556068d33641b0ed9ff77db70c5"
+    }
+  ]
+}

@@ -1,0 +1,131 @@
+{
+  "languages": [
+    {
+      "name": "java",
+      "scopeName": "source.java",
+      "grammar": "sora/grammars/java.tmLanguage.json",
+      "languageConfiguration": "sora/config/java.json"
+    },
+    {
+      "name": "kotlin",
+      "scopeName": "source.kotlin",
+      "grammar": "sora/grammars/Kotlin.tmLanguage",
+      "languageConfiguration": "sora/config/kotlin.json"
+    },
+    {
+      "name": "python",
+      "scopeName": "source.python",
+      "grammar": "sora/grammars/python.tmLanguage.json",
+      "languageConfiguration": "sora/config/python.json"
+    },
+    {
+      "name": "javascript",
+      "scopeName": "source.js",
+      "grammar": "sora/grammars/JavaScript.tmLanguage.json",
+      "languageConfiguration": "sora/config/javascript.json"
+    },
+    {
+      "name": "typescript",
+      "scopeName": "source.ts",
+      "grammar": "sora/grammars/TypeScript.tmLanguage.json",
+      "languageConfiguration": "sora/config/typescript.json"
+    },
+    {
+      "name": "typescriptreact",
+      "scopeName": "source.tsx",
+      "grammar": "sora/grammars/TypeScriptReact.tmLanguage.json",
+      "languageConfiguration": "sora/config/typescript.json"
+    },
+    {
+      "name": "json",
+      "scopeName": "source.json",
+      "grammar": "sora/grammars/JSON.tmLanguage.json",
+      "languageConfiguration": "sora/config/json.json"
+    },
+    {
+      "name": "jsonc",
+      "scopeName": "source.json.comments",
+      "grammar": "sora/grammars/JSONC.tmLanguage.json",
+      "languageConfiguration": "sora/config/json.json"
+    },
+    {
+      "name": "css",
+      "scopeName": "source.css",
+      "grammar": "sora/grammars/css.tmLanguage.json",
+      "languageConfiguration": "sora/config/css.json"
+    },
+    {
+      "name": "shell",
+      "scopeName": "source.shell",
+      "grammar": "sora/grammars/shell-unix-bash.tmLanguage.json",
+      "languageConfiguration": "sora/config/shell.json"
+    },
+    {
+      "name": "yaml",
+      "scopeName": "source.yaml",
+      "grammar": "sora/grammars/yaml.tmLanguage.json",
+      "languageConfiguration": "sora/config/yaml.json"
+    },
+    {
+      "name": "c",
+      "scopeName": "source.c",
+      "grammar": "sora/grammars/c.tmLanguage.json",
+      "languageConfiguration": "sora/config/c.json"
+    },
+    {
+      "name": "cpp",
+      "scopeName": "source.cpp",
+      "grammar": "sora/grammars/cpp.tmLanguage.json",
+      "languageConfiguration": "sora/config/cpp.json"
+    },
+    {
+      "name": "cppmacro",
+      "scopeName": "source.cpp.embedded.macro",
+      "grammar": "sora/grammars/cpp.embedded.macro.tmLanguage.json"
+    },
+    {
+      "name": "xml",
+      "scopeName": "text.xml",
+      "grammar": "sora/grammars/xml.tmLanguage.json",
+      "languageConfiguration": "sora/config/xml.json"
+    },
+    {
+      "name": "html",
+      "scopeName": "text.html.basic",
+      "grammar": "sora/grammars/html.tmLanguage.json",
+      "languageConfiguration": "sora/config/html.json",
+      "embeddedLanguages": {
+        "source.js": "javascript",
+        "source.css": "css"
+      }
+    },
+    {
+      "name": "html-derivative",
+      "scopeName": "text.html.derivative",
+      "grammar": "sora/grammars/html-derivative.tmLanguage.json",
+      "embeddedLanguages": {
+        "source.js": "javascript",
+        "source.css": "css"
+      }
+    },
+    {
+      "name": "markdown",
+      "scopeName": "text.html.markdown",
+      "grammar": "sora/grammars/markdown.tmLanguage.json",
+      "languageConfiguration": "sora/config/markdown.json",
+      "embeddedLanguages": {
+        "meta.embedded.block.html": "html",
+        "source.js": "javascript",
+        "meta.embedded.block.java": "java",
+        "meta.embedded.block.xml": "xml",
+        "meta.embedded.block.python": "python",
+        "meta.embedded.block.json": "json",
+        "meta.embedded.block.css": "css",
+        "meta.embedded.block.cpp": "cpp",
+        "meta.embedded.block.shell": "shell",
+        "meta.embedded.block.yaml": "yaml",
+        "meta.embedded.block.typescript": "typescript"
+      }
+    }
+  ]
+}

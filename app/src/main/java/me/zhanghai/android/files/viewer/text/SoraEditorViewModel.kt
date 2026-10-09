@@ -6,9 +6,9 @@
 package me.zhanghai.android.files.viewer.text
 
 import android.content.Context
-import android.os.Parcelable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.rosemoe.sora.text.Content
 import java8.nio.file.Path
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -34,8 +34,9 @@ import me.zhanghai.android.files.util.toError
 import me.zhanghai.android.files.util.toLoading
 import java.io.IOException
 import java.nio.charset.StandardCharsets
+import java.nio.charset.Charset
 
-class TextEditorViewModel(file: Path) : ViewModel() {
+class SoraEditorViewModel(file: Path) : ViewModel() {
     private val _file = MutableStateFlow(file)
     val file = _file.asStateFlow()
 
@@ -93,7 +94,10 @@ class TextEditorViewModel(file: Path) : ViewModel() {
 
     val encoding = MutableStateFlow(StandardCharsets.UTF_8)
 
-    private val _textState = MutableStateFlow<DataState<String>>(DataState.Loading())
+    private val document = SoraEditorDocument()
+    private var decodedEncoding: Charset? = null
+
+    private val _textState = MutableStateFlow<DataState<Content>>(DataState.Loading())
     val textState = _textState.asStateFlow()
 
     init {
@@ -103,13 +107,20 @@ class TextEditorViewModel(file: Path) : ViewModel() {
                     when (bytesState) {
                         is DataState.Loading -> _textState.value = _textState.value.toLoading()
                         is DataState.Success -> {
-                            _textState.value = _textState.value.toLoading()
+                            // Reloads already emit Loading. Saving in the same encoding must keep
+                            // the editor and IME visible while the new saved snapshot is decoded.
+                            if (encoding != decodedEncoding) {
+                                _textState.value = _textState.value.toLoading()
+                            }
                             try {
                                 val text = withContext(Dispatchers.Default) {
                                     String(bytesState.data, encoding)
                                 }
                                 currentCoroutineContext().ensureActive()
-                                _textState.value = DataState.Success(text)
+                                document.load(text, isTextChanged.value)
+                                decodedEncoding = encoding
+                                _textState.value = DataState.Success(document.content)
+                                onTextChanged()
                             } catch (e: CancellationException) {
                                 e.printStackTrace()
                             } catch (e: Exception) {
@@ -125,6 +136,10 @@ class TextEditorViewModel(file: Path) : ViewModel() {
 
     val isTextChanged = MutableStateFlow(false)
 
+    fun onTextChanged() {
+        isTextChanged.value = document.isChanged
+    }
+
     private val _writeFileState =
         MutableStateFlow<ActionState<Pair<Path, String>, Unit>>(ActionState.Ready())
     val writeFileState = _writeFileState.asStateFlow()
@@ -134,13 +149,16 @@ class TextEditorViewModel(file: Path) : ViewModel() {
             check(_writeFileState.value.isReady)
             val argument = path to text
             _writeFileState.value = ActionState.Running(argument)
+            val encoding = encoding.value
             val bytes = withContext(Dispatchers.Default) {
-                text.toByteArray(encoding.value)
+                text.toByteArray(encoding)
             }
             FileJobService.write(path, bytes, context) { successful ->
                 if (successful) {
                     loadJob?.cancel()?.also { loadJob = null }
                     reloadJob?.cancel()?.also { reloadJob = null }
+                    document.markSaved(text)
+                    onTextChanged()
                     _bytesState.value = DataState.Success(bytes)
                 }
                 _writeFileState.value = if (successful) {
@@ -161,17 +179,23 @@ class TextEditorViewModel(file: Path) : ViewModel() {
         }
     }
 
-    private var editTextSavedState: Parcelable? = null
+    var editorViewState: EditorViewState? = null
 
-    fun setEditTextSavedState(editTextSavedState: Parcelable?) {
-        this.editTextSavedState = editTextSavedState
-    }
+    var languageId = "auto"
+    var isReadOnly = false
+    var searchVisible = false
+    var searchQuery = ""
+    var replacementText = ""
+    var searchMatchCase = false
+    var searchWholeWord = false
+    var searchRegex = false
 
-    fun removeEditTextSavedState(): Parcelable? {
-        val savedState = editTextSavedState
-        editTextSavedState = null
-        return savedState
-    }
+    data class EditorViewState(
+        val content: Content,
+        val scrollX: Int,
+        val scrollY: Int,
+        val textSizePx: Float
+    )
 
     companion object {
         private const val MAX_FILE_SIZE = 1024 * 1024.toLong()

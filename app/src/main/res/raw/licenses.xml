@@ -15,6 +15,48 @@
     </notice>
 
     <notice>
+        <name>Sora Editor</name>
+        <url>https://github.com/Rosemoe/sora-editor</url>
+        <copyright>Copyright 2020-2024 Rosemoe</copyright>
+        <license>GNU Lesser General Public License 2.1</license>
+    </notice>
+
+    <notice>
+        <name>TM4E</name>
+        <url>https://github.com/Rosemoe/sora-editor/tree/0.24.6/language-textmate/src/main/java/org/eclipse/tm4e</url>
+        <copyright>Copyright 2015-2017 Angelo ZERR, Microsoft Corporation and Eclipse TM4E contributors</copyright>
+        <license>Eclipse Public License 2.0</license>
+    </notice>
+
+    <notice>
+        <name>Joni</name>
+        <url>https://github.com/jruby/joni</url>
+        <copyright>Copyright 2017 JRuby Team</copyright>
+        <license>MIT License</license>
+    </notice>
+
+    <notice>
+        <name>JCodings</name>
+        <url>https://github.com/jruby/jcodings</url>
+        <copyright>JCodings and JRuby contributors</copyright>
+        <license>MIT License</license>
+    </notice>
+
+    <notice>
+        <name>SnakeYAML Engine</name>
+        <url>https://bitbucket.org/snakeyaml/snakeyaml-engine</url>
+        <copyright>Copyright 2018 SnakeYAML</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
+        <name>Gson</name>
+        <url>https://github.com/google/gson</url>
+        <copyright>Copyright 2008 Google Inc.</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
         <name>AndroidSVG</name>
         <url>https://github.com/BigBadaboom/androidsvg</url>
         <copyright>Copyright 2013 Paul LeBeau, Cave Rock Software Ltd.</copyright>

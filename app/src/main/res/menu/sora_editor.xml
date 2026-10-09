@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  ~ Copyright (c) 2026 Hai Zhang <dreaming.in.code.zh@gmail.com>
+  ~ All Rights Reserved.
+  -->
+
+<menu
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <item
+        android:id="@+id/action_save"
+        android:icon="@drawable/save_icon_control_normal_24dp"
+        android:title="@string/save"
+        app:showAsAction="always"
+        tools:ignore="AlwaysShowAction" />
+
+    <item
+        android:id="@+id/action_undo"
+        android:icon="@drawable/undo_icon_control_normal_24dp"
+        android:title="@string/text_editor_undo"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/action_redo"
+        android:icon="@drawable/redo_icon_control_normal_24dp"
+        android:title="@string/text_editor_redo"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/action_search_replace"
+        android:icon="@drawable/search_icon_control_normal_24dp"
+        android:title="@string/text_editor_search_replace"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/action_go_to_line"
+        android:title="@string/text_editor_go_to_line"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_edit"
+        android:title="@string/text_editor_edit"
+        app:showAsAction="never">
+        <menu>
+            <item
+                android:id="@+id/action_select_all"
+                android:title="@string/select_all" />
+            <item
+                android:id="@+id/action_indent"
+                android:title="@string/text_editor_indent" />
+            <item
+                android:id="@+id/action_unindent"
+                android:title="@string/text_editor_unindent" />
+            <item
+                android:id="@+id/action_duplicate_line"
+                android:title="@string/text_editor_duplicate_line" />
+        </menu>
+    </item>
+
+    <item
+        android:id="@+id/action_editor_settings"
+        android:title="@string/text_editor_settings"
+        app:showAsAction="never">
+        <menu>
+            <item
+                android:id="@+id/action_font_size"
+                android:title="@string/text_editor_font_size" />
+            <item
+                android:id="@+id/action_tab_width"
+                android:title="@string/text_editor_tab_width" />
+            <item
+                android:id="@+id/action_word_wrap"
+                android:checkable="true"
+                android:title="@string/text_editor_word_wrap" />
+            <item
+                android:id="@+id/action_line_numbers"
+                android:checkable="true"
+                android:checked="true"
+                android:title="@string/text_editor_line_numbers" />
+            <item
+                android:id="@+id/action_read_only"
+                android:checkable="true"
+                android:title="@string/text_editor_read_only" />
+            <item
+                android:id="@+id/action_whitespace"
+                android:checkable="true"
+                android:title="@string/text_editor_whitespace" />
+            <item
+                android:id="@+id/action_auto_completion"
+                android:checkable="true"
+                android:checked="true"
+                android:title="@string/text_editor_auto_completion" />
+            <item
+                android:id="@+id/action_sticky_scroll"
+                android:checkable="true"
+                android:checked="true"
+                android:title="@string/text_editor_sticky_scroll" />
+        </menu>
+    </item>
+
+    <item
+        android:id="@+id/action_language"
+        android:title="@string/text_editor_language"
+        app:showAsAction="never">
+        <menu>
+            <group android:checkableBehavior="single">
+                <item
+                    android:id="@+id/action_language_auto"
+                    android:checked="true"
+                    android:title="@string/text_editor_language_auto" />
+                <item
+                    android:id="@+id/action_language_plain"
+                    android:title="@string/text_editor_language_plain" />
+                <item
+                    android:id="@+id/action_language_c"
+                    android:title="@string/text_editor_language_c" />
+                <item
+                    android:id="@+id/action_language_cpp"
+                    android:title="@string/text_editor_language_cpp" />
+                <item
+                    android:id="@+id/action_language_java"
+                    android:title="@string/text_editor_language_java" />
+                <item
+                    android:id="@+id/action_language_kotlin"
+                    android:title="@string/text_editor_language_kotlin" />
+                <item
+                    android:id="@+id/action_language_javascript"
+                    android:title="@string/text_editor_language_javascript" />
+                <item
+                    android:id="@+id/action_language_typescript"
+                    android:title="@string/text_editor_language_typescript" />
+                <item
+                    android:id="@+id/action_language_json"
+                    android:title="@string/text_editor_language_json" />
+                <item
+                    android:id="@+id/action_language_xml"
+                    android:title="@string/text_editor_language_xml" />
+                <item
+                    android:id="@+id/action_language_html"
+                    android:title="@string/text_editor_language_html" />
+                <item
+                    android:id="@+id/action_language_css"
+                    android:title="@string/text_editor_language_css" />
+                <item
+                    android:id="@+id/action_language_markdown"
+                    android:title="@string/text_editor_language_markdown" />
+                <item
+                    android:id="@+id/action_language_python"
+                    android:title="@string/text_editor_language_python" />
+                <item
+                    android:id="@+id/action_language_shell"
+                    android:title="@string/text_editor_language_shell" />
+                <item
+                    android:id="@+id/action_language_yaml"
+                    android:title="@string/text_editor_language_yaml" />
+            </group>
+        </menu>
+    </item>
+
+    <item
+        android:id="@+id/action_reload"
+        android:title="@string/reload"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_encoding"
+        android:title="@string/text_editor_encoding"
+        app:showAsAction="never">
+        <menu />
+    </item>
+</menu>

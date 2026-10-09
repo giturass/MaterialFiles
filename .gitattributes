@@ -1,0 +1,8 @@
+# Keep pinned upstream language assets byte-for-byte identical to sources.json.
+app/src/main/assets/sora/** -text
+app/src/main/res/raw/license_epl_2.txt -text
+
+# These upstream files intentionally retain their original whitespace/line endings.
+app/src/main/assets/sora/config/kotlin.json whitespace=-blank-at-eol
+app/src/main/assets/sora/licenses/sora-editor-LICENSE.txt whitespace=cr-at-eol
+app/src/main/res/raw/license_epl_2.txt whitespace=-blank-at-eol
