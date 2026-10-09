@@ -49,9 +49,14 @@ import me.zhanghai.android.files.filelist.FileListActivity
 import me.zhanghai.android.files.filelist.OpenFileAsDialogActivity
 import me.zhanghai.android.files.filelist.OpenFileAsDialogFragment
 import me.zhanghai.android.files.provider.archive.archiveFile
+import me.zhanghai.android.files.provider.archive.SevenZExtractionSession
+import me.zhanghai.android.files.provider.archive.archiver.ArchiveCompressionPreset
+import me.zhanghai.android.files.provider.archive.archiver.ArchiveOutput
 import me.zhanghai.android.files.provider.archive.archiver.ArchiveWriter
+import me.zhanghai.android.files.provider.archive.archiver.archiveFileNameWithoutVolume
 import me.zhanghai.android.files.provider.archive.createArchiveRootPath
 import me.zhanghai.android.files.provider.archive.isArchivePath
+import me.zhanghai.android.files.provider.archive.newSevenZExtractionSession
 import me.zhanghai.android.files.provider.common.ByteString
 import me.zhanghai.android.files.provider.common.ByteStringBuilder
 import me.zhanghai.android.files.provider.common.InvalidFileNameException
@@ -196,12 +201,12 @@ private fun FileJob.getFileName(path: Path): String =
 
 private fun FileJob.getTargetFileName(source: Path): Path {
     if (source.isArchivePath) {
-        val archiveFile = source.archiveFile.asByteStringListPath()
+        val archiveFile = source.archiveFile
         val archiveRoot = archiveFile.createArchiveRootPath()
         if (source == archiveRoot) {
-            return archiveFile.fileSystem.getPath(
-                archiveFile.fileNameByteString!!.asFileName().baseName
-            )
+            val archiveName = archiveFile.archiveFileNameWithoutVolume()
+            val baseName = archiveName.asFileName().baseName.ifEmpty { archiveName }
+            return archiveFile.fileSystem.getPath(baseName)
         }
     }
     return source.fileName
@@ -655,8 +660,17 @@ class ArchiveFileJob(
     private val filter: Int,
     private val password: String?,
     private val encryptFileNames: Boolean,
-    internal val runInBackground: Boolean
+    internal val runInBackground: Boolean,
+    private val compressionPreset: ArchiveCompressionPreset = ArchiveCompressionPreset.STANDARD,
+    private val splitSize: Long = 0,
+    private val deleteSources: Boolean = false
 ) : FileJob() {
+    private val archivedSources = if (deleteSources) {
+        linkedMapOf<Path, ArchiveSourceSnapshot>()
+    } else {
+        null
+    }
+
     @Throws(IOException::class)
     override fun run() {
         try {
@@ -672,63 +686,78 @@ class ArchiveFileJob(
 
     @Throws(IOException::class)
     private fun createArchive() {
+        if (format == Archive.FORMAT_RAW && (sources.size != 1 || !sources.single()
+                .readAttributes(BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
+                .isRegularFile)) {
+            throw IOException("Single-file compression requires exactly one regular file")
+        }
+        if (sources.any { archiveFile.startsWith(it) }) {
+            throw IOException("Cannot create an archive inside its source")
+        }
         val scanInfo = scan(sources, R.plurals.file_job_archive_scan_notification_title_format)
         throwIfInterrupted()
-        val channel = archiveFile.newByteChannel(
-            StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE
-        )
-        var successful = false
         var temporary: File? = null
         try {
-            channel.use {
-                if (format == Archive.FORMAT_7ZIP && !password.isNullOrEmpty()
-                    && !archiveFile.isLinuxPath) {
-                    // Encrypted 7z rewrites its signature after compression. FTP STOR can
-                    // truncate on that rewrite, and document/WebDAV providers may not seek.
-                    // Stage the final encrypted archive privately, then upload sequentially.
-                    val stagingFile = File.createTempFile("archive-", ".7z", service.cacheDir)
+            ArchiveOutput(archiveFile, splitSize).use { output ->
+                if (splitSize > 0 || !archiveFile.isLinuxPath) {
+                    // Complete all header rewrites before uploading to providers or splitting
+                    // volumes. FTP STOR can truncate on a rewrite; other providers cannot seek.
+                    val stagingFile = File.createTempFile("archive-", ".tmp", service.cacheDir)
                     temporary = stagingFile
                     Paths.get(stagingFile.path).newByteChannel(StandardOpenOption.WRITE).use {
                         writeArchive(it, scanInfo)
                     }
                     throwIfInterrupted()
                     stagingFile.inputStream().use { input ->
-                        input.copyTo(channel.newOutputStream(), PROGRESS_INTERVAL_MILLIS) {
+                        input.copyTo(output.channel.newOutputStream(), PROGRESS_INTERVAL_MILLIS) {
                             throwIfInterrupted()
                         }
                     }
                 } else {
-                    writeArchive(channel, scanInfo)
+                    writeArchive(output.channel, scanInfo)
                 }
+                throwIfInterrupted()
+                output.commit()
             }
-            throwIfInterrupted()
-            successful = true
         } finally {
             temporary?.let {
                 if (!it.delete() && it.exists()) {
                     IOException("Unable to remove archive staging file: $it").printStackTrace()
                 }
             }
-            if (!successful) {
-                try {
-                    archiveFile.deleteIfExists()
-                } catch (e: IOException) {
-                    e.printStackTrace()
-                } catch (e: UnsupportedOperationException) {
-                    e.printStackTrace()
-                }
+        }
+        if (deleteSources) {
+            // Publication and every output close must succeed before any source is removed.
+            // A deletion failure leaves the completed archive available to the user.
+            val transferInfo = TransferInfo(scanInfo, null)
+            val actionAllInfo = ActionAllInfo()
+            for (source in archivedSources!!.values.sortedByDescending { it.path.nameCount }) {
+                throwIfInterrupted()
+                delete(source.path, transferInfo, actionAllInfo, source::delete)
             }
         }
     }
 
     @Throws(IOException::class)
     private fun writeArchive(channel: SeekableByteChannel, scanInfo: ScanInfo) {
-        ArchiveWriter(channel, format, filter, password, encryptFileNames).use { writer ->
+        ArchiveWriter(
+            channel, format, filter, password, encryptFileNames, compressionPreset
+        ).use { writer ->
             val transferInfo = TransferInfo(scanInfo, archiveFile)
-            for (source in sources) {
-                val target = getTargetFileName(source)
-                archiveRecursively(source, writer, target, transferInfo)
-                throwIfInterrupted()
+            if (format == Archive.FORMAT_7ZIP) {
+                val entries = mutableListOf<Pair<Path, Path>>()
+                for (source in sources) {
+                    walkArchiveSource(source, getTargetFileName(source)) { file, entryName ->
+                        entries += file to entryName
+                    }
+                }
+                writeSevenZEntries(writer, entries, transferInfo)
+            } else {
+                for (source in sources) {
+                    walkArchiveSource(source, getTargetFileName(source)) { file, entryName ->
+                        archive(file, writer, entryName, archiveFile, transferInfo)
+                    }
+                }
             }
             // Reading the last source byte does not mean the output is ready yet.
             postNotification(
@@ -741,11 +770,10 @@ class ArchiveFileJob(
     }
 
     @Throws(IOException::class)
-    private fun archiveRecursively(
+    private fun walkArchiveSource(
         source: Path,
-        writer: ArchiveWriter,
         target: Path,
-        transferInfo: TransferInfo
+        action: (Path, Path) -> Unit
     ) {
         Files.walkFileTree(source, object : SimpleFileVisitor<Path>() {
             @Throws(IOException::class)
@@ -754,7 +782,8 @@ class ArchiveFileJob(
                 attributes: BasicFileAttributes
             ): FileVisitResult {
                 val directoryInTarget = target.resolveForeign(source.relativize(directory))
-                archive(directory, writer, directoryInTarget, archiveFile, transferInfo)
+                archivedSources?.put(directory, ArchiveSourceSnapshot(directory, attributes))
+                action(directory, directoryInTarget)
                 throwIfInterrupted()
                 return FileVisitResult.CONTINUE
             }
@@ -762,7 +791,8 @@ class ArchiveFileJob(
             @Throws(IOException::class)
             override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
                 val fileInTarget = target.resolveForeign(source.relativize(file))
-                archive(file, writer, fileInTarget, archiveFile, transferInfo)
+                archivedSources?.put(file, ArchiveSourceSnapshot(file, attributes))
+                action(file, fileInTarget)
                 throwIfInterrupted()
                 return FileVisitResult.CONTINUE
             }
@@ -773,6 +803,37 @@ class ArchiveFileJob(
                 return super.visitFileFailed(file, exception)
             }
         })
+    }
+
+    private fun writeSevenZEntries(
+        writer: ArchiveWriter,
+        entries: List<Pair<Path, Path>>,
+        transferInfo: TransferInfo
+    ) {
+        var currentFile = entries.firstOrNull()?.first ?: archiveFile
+        try {
+            writer.writeEntries(
+                entries, PROGRESS_INTERVAL_MILLIS,
+                { size ->
+                    throwIfInterrupted()
+                    transferInfo.addToTransferredSize(size)
+                    postArchiveNotification(transferInfo, currentFile)
+                },
+                { file ->
+                    throwIfInterrupted()
+                    currentFile = file
+                    postArchiveNotification(transferInfo, file)
+                },
+                { file ->
+                    transferInfo.incrementTransferredFileCount()
+                    postArchiveNotification(transferInfo, file)
+                }
+            )
+        } catch (e: InterruptedIOException) {
+            throw e
+        } catch (e: IOException) {
+            showArchiveError(currentFile, archiveFile, e)
+        }
     }
 }
 
@@ -795,24 +856,27 @@ private fun FileJob.archive(
     } catch (e: InterruptedIOException) {
         throw e
     } catch (e: IOException) {
-        e.printStackTrace()
-        val result = showErrorDialog(
-            getString(R.string.file_job_archive_error_title_format, getFileName(file)),
-            getString(
-                R.string.file_job_archive_error_message_format, getFileName(archiveFile),
-                e.toString()
-            ),
-            getReadOnlyFileStore(archiveFile, e),
-            false,
-            null,
-            getString(android.R.string.cancel),
-            null
-        )
-        when (result.action) {
-            FileJobErrorAction.NEGATIVE, FileJobErrorAction.CANCELED ->
-                throw InterruptedIOException()
-            else -> throw AssertionError(result.action)
-        }
+        showArchiveError(file, archiveFile, e)
+    }
+}
+
+private fun FileJob.showArchiveError(file: Path, archiveFile: Path, exception: IOException): Nothing {
+    exception.printStackTrace()
+    val result = showErrorDialog(
+        getString(R.string.file_job_archive_error_title_format, getFileName(file)),
+        getString(
+            R.string.file_job_archive_error_message_format, getFileName(archiveFile),
+            exception.toString()
+        ),
+        getReadOnlyFileStore(archiveFile, exception),
+        false,
+        null,
+        getString(android.R.string.cancel),
+        null
+    )
+    when (result.action) {
+        FileJobErrorAction.NEGATIVE, FileJobErrorAction.CANCELED -> throw InterruptedIOException()
+        else -> throw AssertionError(result.action)
     }
 }
 
@@ -823,9 +887,14 @@ private fun FileJob.postArchiveNotification(transferInfo: TransferInfo, currentF
     )
 }
 
-class CopyFileJob(private val sources: List<Path>, private val targetDirectory: Path) : FileJob() {
+class CopyFileJob(
+    private val sources: List<Path>,
+    private val targetDirectory: Path,
+    private val flattenArchiveRoots: Boolean = false
+) : FileJob() {
     @Throws(IOException::class)
     override fun run() {
+        val sources = resolveSources()
         val isExtract = sources.all { it.isArchivePath }
         val scanInfo = scan(
             sources, if (isExtract) {
@@ -836,14 +905,101 @@ class CopyFileJob(private val sources: List<Path>, private val targetDirectory: 
         )
         val transferInfo = TransferInfo(scanInfo, targetDirectory)
         val actionAllInfo = ActionAllInfo()
+        val archiveSources = sources.filter { it.isArchivePath }.groupBy { it.archiveFile }
+        val extractedArchives = mutableSetOf<Path>()
         for (source in sources) {
-            val target = if (source.parent == targetDirectory) {
-                getTargetPathForDuplicate(source)
-            } else {
-                targetDirectory.resolveForeign(getTargetFileName(source))
+            if (source.isArchivePath) {
+                if (extractedArchives.add(source.archiveFile)) {
+                    copyArchiveSources(
+                        archiveSources.getValue(source.archiveFile), transferInfo, actionAllInfo
+                    )
+                }
+                continue
             }
-            copyRecursively(source, target, isExtract, transferInfo, actionAllInfo)
+            copyRecursively(source, getTarget(source), isExtract, transferInfo, actionAllInfo)
             throwIfInterrupted()
+        }
+    }
+
+    private fun resolveSources(): List<Path> {
+        if (!flattenArchiveRoots) {
+            return sources
+        }
+        while (true) {
+            throwIfInterrupted()
+            try {
+                return sources.flatMap { source ->
+                    if (source.isArchivePath && source.isAbsolute && source.nameCount == 0) {
+                        source.newDirectoryStream().use { it.toList() }
+                    } else {
+                        listOf(source)
+                    }
+                }
+            } catch (e: UserActionRequiredException) {
+                if (!showUserAction(e)) {
+                    throw InterruptedIOException().apply { initCause(e) }
+                }
+            }
+        }
+    }
+
+    private fun getTarget(source: Path): Path {
+        if (source.parent == targetDirectory) {
+            return getTargetPathForDuplicate(source)
+        }
+        val target = targetDirectory.resolveForeign(getTargetFileName(source))
+        return if (source.isArchivePath && source.parent == null && target == source.archiveFile) {
+            // An extensionless archive cannot be replaced by its own extraction directory.
+            getTargetPathForDuplicate(target)
+        } else {
+            target
+        }
+    }
+
+    private fun copyArchiveSources(
+        sources: List<Path>,
+        transferInfo: TransferInfo,
+        actionAllInfo: ActionAllInfo
+    ) {
+        // Resolve directory conflicts first, retaining only files in accepted subtrees. File
+        // conflicts remain in copy(), so rename/replace/skip and destination cleanup are shared
+        // with ordinary copies to local, document and network providers.
+        val targets = linkedMapOf<Path, Path>()
+        for (source in sources) {
+            copyRecursively(source, getTarget(source), true, transferInfo, actionAllInfo) { file, target ->
+                targets[file] = target
+            }
+        }
+        val session = newExtractionSession(sources.first(), targets.keys.toList())
+        session.use {
+            val files = if (session != null) {
+                // Symbolic links and special files use the regular provider path. Only data
+                // streams participate in the native extraction, in their original archive order.
+                targets.keys.filterNot { session.contains(it) } + session.files
+            } else {
+                targets.keys.toList()
+            }
+            for (file in files) {
+                val copied = copy(file, targets.getValue(file), true, transferInfo, actionAllInfo)
+                if (!copied && session?.contains(file) == true) {
+                    session.skip(file)
+                }
+                throwIfInterrupted()
+            }
+            session?.finish()
+        }
+    }
+
+    private fun newExtractionSession(source: Path, files: List<Path>): SevenZExtractionSession? {
+        while (true) {
+            throwIfInterrupted()
+            try {
+                return source.newSevenZExtractionSession(files)
+            } catch (e: UserActionRequiredException) {
+                if (!showUserAction(e)) {
+                    throw InterruptedIOException().apply { initCause(e) }
+                }
+            }
         }
     }
 
@@ -853,26 +1009,35 @@ class CopyFileJob(private val sources: List<Path>, private val targetDirectory: 
         target: Path,
         isExtract: Boolean,
         transferInfo: TransferInfo,
-        actionAllInfo: ActionAllInfo
+        actionAllInfo: ActionAllInfo,
+        fileAction: ((Path, Path) -> Unit)? = null
     ) {
+        val directoryTargets = mutableMapOf<Path, Path>()
+        fun getPathTarget(path: Path): Path =
+            if (path == source) target
+            else directoryTargets.getValue(path.parent).resolveForeign(path.fileName)
         Files.walkFileTree(source, object : SimpleFileVisitor<Path>() {
             @Throws(IOException::class)
             override fun preVisitDirectory(
                 directory: Path,
                 attributes: BasicFileAttributes
             ): FileVisitResult {
-                val directoryInTarget = target.resolveForeign(source.relativize(directory))
+                val directoryInTarget = getPathTarget(directory)
                 val copied = copy(
                     directory, directoryInTarget, isExtract, transferInfo, actionAllInfo
-                )
+                ) { directoryTargets[directory] = it }
                 throwIfInterrupted()
                 return if (copied) FileVisitResult.CONTINUE else FileVisitResult.SKIP_SUBTREE
             }
 
             @Throws(IOException::class)
             override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
-                val fileInTarget = target.resolveForeign(source.relativize(file))
-                copy(file, fileInTarget, isExtract, transferInfo, actionAllInfo)
+                val fileInTarget = getPathTarget(file)
+                if (fileAction != null) {
+                    fileAction(file, fileInTarget)
+                } else {
+                    copy(file, fileInTarget, isExtract, transferInfo, actionAllInfo)
+                }
                 throwIfInterrupted()
                 return FileVisitResult.CONTINUE
             }
@@ -881,6 +1046,11 @@ class CopyFileJob(private val sources: List<Path>, private val targetDirectory: 
             override fun visitFileFailed(file: Path, exception: IOException): FileVisitResult {
                 // TODO: Prompt retry, skip, skip-all or abort.
                 return super.visitFileFailed(file, exception)
+            }
+
+            override fun postVisitDirectory(directory: Path, exception: IOException?): FileVisitResult {
+                directoryTargets.remove(directory)
+                return super.postVisitDirectory(directory, exception)
             }
         })
     }
@@ -973,11 +1143,12 @@ private fun FileJob.copy(
     target: Path,
     isExtract: Boolean,
     transferInfo: TransferInfo,
-    actionAllInfo: ActionAllInfo
+    actionAllInfo: ActionAllInfo,
+    onTargetResolved: ((Path) -> Unit)? = null
 ): Boolean =
     copyOrMove(
         source, target, if (isExtract) CopyMoveType.EXTRACT else CopyMoveType.COPY, true, false,
-        transferInfo, actionAllInfo
+        transferInfo, actionAllInfo, onTargetResolved
     )
 
 class CreateFileJob(private val path: Path, private val createDirectory: Boolean) : FileJob() {
@@ -1044,51 +1215,60 @@ class DeleteFileJob(private val paths: List<Path>) : FileJob() {
             throwIfInterrupted()
         }
     }
-
-    @Throws(IOException::class)
-    private fun deleteRecursively(
-        path: Path,
-        transferInfo: TransferInfo,
-        actionAllInfo: ActionAllInfo
-    ) {
-        Files.walkFileTree(path, object : SimpleFileVisitor<Path>() {
-            @Throws(IOException::class)
-            override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
-                delete(file, transferInfo, actionAllInfo)
-                throwIfInterrupted()
-                return FileVisitResult.CONTINUE
-            }
-
-            @Throws(IOException::class)
-            override fun visitFileFailed(file: Path, exception: IOException): FileVisitResult {
-                // TODO: Prompt retry, skip, skip-all or abort.
-                return super.visitFileFailed(file, exception)
-            }
-
-            @Throws(IOException::class)
-            override fun postVisitDirectory(
-                directory: Path,
-                exception: IOException?
-            ): FileVisitResult {
-                // TODO: Prompt retry, skip, skip-all or abort.
-                if (exception != null) {
-                    throw exception
-                }
-                delete(directory, transferInfo, actionAllInfo)
-                throwIfInterrupted()
-                return FileVisitResult.CONTINUE
-            }
-        })
-    }
 }
 
 @Throws(IOException::class)
-private fun FileJob.delete(path: Path, transferInfo: TransferInfo?, actionAllInfo: ActionAllInfo) {
+private fun FileJob.deleteRecursively(
+    path: Path,
+    transferInfo: TransferInfo,
+    actionAllInfo: ActionAllInfo
+) {
+    Files.walkFileTree(path, object : SimpleFileVisitor<Path>() {
+        @Throws(IOException::class)
+        override fun visitFile(file: Path, attributes: BasicFileAttributes): FileVisitResult {
+            delete(file, transferInfo, actionAllInfo)
+            throwIfInterrupted()
+            return FileVisitResult.CONTINUE
+        }
+
+        @Throws(IOException::class)
+        override fun visitFileFailed(file: Path, exception: IOException): FileVisitResult {
+            // TODO: Prompt retry, skip, skip-all or abort.
+            return super.visitFileFailed(file, exception)
+        }
+
+        @Throws(IOException::class)
+        override fun postVisitDirectory(
+            directory: Path,
+            exception: IOException?
+        ): FileVisitResult {
+            // TODO: Prompt retry, skip, skip-all or abort.
+            if (exception != null) {
+                throw exception
+            }
+            delete(directory, transferInfo, actionAllInfo)
+            throwIfInterrupted()
+            return FileVisitResult.CONTINUE
+        }
+    })
+}
+
+@Throws(IOException::class)
+private fun FileJob.delete(
+    path: Path,
+    transferInfo: TransferInfo?,
+    actionAllInfo: ActionAllInfo,
+    deleteAction: (() -> Unit)? = null
+) {
     var retry: Boolean
     do {
         retry = false
         try {
-            path.delete()
+            if (deleteAction != null) {
+                deleteAction()
+            } else {
+                path.delete()
+            }
             if (transferInfo != null) {
                 transferInfo.incrementTransferredFileCount()
                 postDeleteNotification(transferInfo, path)
@@ -1281,7 +1461,8 @@ private fun FileJob.copyOrMove(
     useCopy: Boolean,
     copyAttributes: Boolean,
     transferInfo: TransferInfo,
-    actionAllInfo: ActionAllInfo
+    actionAllInfo: ActionAllInfo,
+    onTargetResolved: ((Path) -> Unit)? = null
 ): Boolean {
     val targetParent = target.parent
     if (targetParent.startsWith(source)) {
@@ -1404,6 +1585,7 @@ private fun FileJob.copyOrMove(
             if (isMerge && actionAllInfo.merge) {
                 transferInfo.addTransferredFile(target)
                 postCopyMoveNotification(transferInfo, source, type)
+                onTargetResolved?.invoke(target)
                 return true
             } else if (!isMerge && actionAllInfo.replace) {
                 replaceExisting = true
@@ -1428,6 +1610,7 @@ private fun FileJob.copyOrMove(
                     if (isMerge) {
                         transferInfo.addTransferredFile(target)
                         postCopyMoveNotification(transferInfo, source, type)
+                        onTargetResolved?.invoke(target)
                         true
                     } else {
                         replaceExisting = true
@@ -1525,6 +1708,7 @@ private fun FileJob.copyOrMove(
             }
         }
     } while (retry)
+    onTargetResolved?.invoke(target)
     return true
 }
 

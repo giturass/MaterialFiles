@@ -11,6 +11,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.InterruptedIOException
 import java.nio.ByteBuffer
+import java.nio.channels.ClosedByInterruptException
 import java.nio.charset.Charset
 import java.time.Instant
 import java8.nio.channels.SeekableByteChannel
@@ -36,6 +37,7 @@ class ReadArchive : Closeable {
             Archive.setCharset(archive, StandardCharsets.UTF_8.name().toByteArray())
             Archive.readSupportFilterAll(archive)
             Archive.readSupportFormatAll(archive)
+            Archive.readSupportFormatRaw(archive)
             Archive.readSetCallbackData(archive, null)
             val buffer = ByteBuffer.allocate(DEFAULT_BUFFER_SIZE)
             Archive.readSetReadCallback<Any?>(archive) { _, _ ->
@@ -78,6 +80,7 @@ class ReadArchive : Closeable {
             Archive.setCharset(archive, StandardCharsets.UTF_8.name().toByteArray())
             Archive.readSupportFilterAll(archive)
             Archive.readSupportFormatAll(archive)
+            Archive.readSupportFormatRaw(archive)
             Archive.readSetCallbackData(archive, null)
             val buffer = ByteBuffer.allocateDirect(DEFAULT_BUFFER_SIZE)
             Archive.readSetReadCallback<Any?>(archive) { _, _ ->
@@ -134,21 +137,35 @@ class ReadArchive : Closeable {
 
     private fun IOException.toArchiveException(message: String): ArchiveException =
         when (this) {
-            is InterruptedIOException -> ArchiveException(OsConstants.EINTR, message, this)
+            is InterruptedIOException, is ClosedByInterruptException ->
+                ArchiveException(OsConstants.EINTR, message, this)
             else -> ArchiveException(Archive.ERRNO_FATAL, message, this)
         }
 
+    @JvmOverloads
     @Throws(ArchiveException::class)
-    fun readEntry(charset: Charset): Entry? {
+    fun readEntry(charset: Charset, rawEntryName: String? = null): Entry? {
         val entry = Archive.readNextHeader(archive)
         if (entry == 0L) {
             return null
         }
-        val name =
+        val isRaw = Archive.format(archive) == Archive.FORMAT_RAW
+        if (isRaw && (0 until Archive.filterCount(archive)).none {
+                Archive.filterCode(archive, it) != Archive.FILTER_NONE
+            }) {
+            // Raw is a fallback for single-file gzip/bzip2/xz streams, not for arbitrary data.
+            throw ArchiveException(Archive.ERRNO_FATAL, "Unrecognized archive format")
+        }
+        val storedName =
             getEntryString(ArchiveEntry.pathnameUtf8(entry), ArchiveEntry.pathname(entry), charset)
                 ?: throw ArchiveException(
                     Archive.ERRNO_FATAL, "pathname == null && pathnameUtf8 == null"
                 )
+        val name = if (isRaw && storedName == "data" && !rawEntryName.isNullOrEmpty()) {
+            rawEntryName
+        } else {
+            storedName
+        }
         val isEncrypted = ArchiveEntry.isEncrypted(entry)
         val stat = ArchiveEntry.stat(entry)
         val lastModifiedTime = if (ArchiveEntry.mtimeIsSet(entry)) {
@@ -232,22 +249,29 @@ class ReadArchive : Closeable {
 
         @Throws(IOException::class)
         override fun read(): Int {
-            read(oneByteBuffer)
-            return if (oneByteBuffer.hasRemaining()) oneByteBuffer.get().toUByte().toInt() else -1
+            oneByteBuffer.clear()
+            return if (read(oneByteBuffer) != -1) {
+                oneByteBuffer.get(0).toUByte().toInt()
+            } else {
+                -1
+            }
         }
 
         @Throws(IOException::class)
         override fun read(b: ByteArray, off: Int, len: Int): Int {
             val buffer = ByteBuffer.wrap(b, off, len)
-            read(buffer)
-            return if (buffer.hasRemaining()) buffer.remaining() else -1
+            if (!buffer.hasRemaining()) {
+                return 0
+            }
+            return read(buffer)
         }
 
         @Throws(IOException::class)
-        private fun read(buffer: ByteBuffer) {
-            buffer.clear()
+        private fun read(buffer: ByteBuffer): Int {
+            val position = buffer.position()
             Archive.readData(archive, buffer)
-            buffer.flip()
+            val bytesRead = buffer.position() - position
+            return if (bytesRead > 0) bytesRead else -1
         }
     }
 }

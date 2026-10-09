@@ -5,7 +5,6 @@
 
 package me.zhanghai.android.files.provider.archive.archiver
 
-import android.os.Build
 import androidx.preference.PreferenceManager
 import java8.nio.channels.SeekableByteChannel
 import java8.nio.charset.StandardCharsets
@@ -17,13 +16,10 @@ import me.zhanghai.android.files.provider.common.DelegateNonForceableSeekableByt
 import me.zhanghai.android.files.provider.common.ForceableChannel
 import me.zhanghai.android.files.provider.common.PosixFileMode
 import me.zhanghai.android.files.provider.common.PosixFileType
-import me.zhanghai.android.files.provider.common.newByteChannel
-import me.zhanghai.android.files.provider.common.newInputStream
 import me.zhanghai.android.files.provider.root.isRunningAsRoot
 import me.zhanghai.android.files.provider.root.rootContext
 import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.util.valueCompat
-import me.zhanghai.android.libarchive.ArchiveException
 import java.io.Closeable
 import java.io.IOException
 import java.io.InputStream
@@ -91,26 +87,21 @@ object ArchiveReader {
     }
 
     @Throws(IOException::class)
-    private fun readEntries(file: Path, passwords: List<String>): List<ReadArchive.Entry> = try {
-        readLibarchiveEntries(file, passwords)
-    } catch (e: ArchiveException) {
-        // Some 7z AES layouts are rejected by libarchive before it marks them as encrypted.
-        // Verify the signature and let Commons validate them; damaged files still fail there.
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
-            throw e
-        }
-        val archive = SevenZArchiveReader.openOrNull(file, passwords) ?: throw e
-        archive.use { it.readEntries() }
+    private fun readEntries(file: Path, passwords: List<String>): List<ReadArchive.Entry> {
+        // Route by signature before libarchive, including plain 7z and renamed archives.
+        SevenZArchiveReader.openOrNull(file, passwords)?.use { return it.readEntries() }
+        return readLibarchiveEntries(file, passwords)
     }
 
     @Throws(IOException::class)
     private fun readLibarchiveEntries(file: Path, passwords: List<String>): List<ReadArchive.Entry> {
         val charset = archiveFileNameCharset
+        val rawEntryName = getRawEntryName(file)
         val (archive, closeable) = openArchive(file, passwords)
         return closeable.use {
             buildList {
                 while (true) {
-                    this += archive.readEntry(charset) ?: break
+                    this += archive.readEntry(charset, rawEntryName) ?: break
                 }
             }
         }
@@ -118,27 +109,26 @@ object ArchiveReader {
 
     @Throws(IOException::class)
     fun newInputStream(file: Path, passwords: List<String>, entry: ReadArchive.Entry): InputStream? {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && entry.isEncrypted) {
-            val archive = SevenZArchiveReader.openOrNull(file, passwords)
-            if (archive != null) {
-                var successful = false
-                try {
-                    val inputStream = archive.newInputStream(entry.name) ?: return null
-                    successful = true
-                    return CloseableInputStream(inputStream, archive)
-                } finally {
-                    if (!successful) {
-                        archive.close()
-                    }
+        val sevenZArchive = SevenZArchiveReader.openOrNull(file, passwords)
+        if (sevenZArchive != null) {
+            var successful = false
+            try {
+                val inputStream = sevenZArchive.newInputStream(entry.name) ?: return null
+                successful = true
+                return CloseableInputStream(inputStream, sevenZArchive)
+            } finally {
+                if (!successful) {
+                    sevenZArchive.close()
                 }
             }
         }
         val charset = archiveFileNameCharset
+        val rawEntryName = getRawEntryName(file)
         val (archive, closeable) = openArchive(file, passwords)
         var successful = false
         return try {
             while (true) {
-                val currentEntry = archive.readEntry(charset) ?: break
+                val currentEntry = archive.readEntry(charset, rawEntryName) ?: break
                 if (currentEntry.name != entry.name) {
                     continue
                 }
@@ -157,13 +147,20 @@ object ArchiveReader {
         }
     }
 
+    private fun getRawEntryName(file: Path): String? {
+        val name = file.archiveFileNameWithoutVolume()
+        val suffix = listOf(".gz", ".gzip", ".bz2", ".bzip2", ".xz", ".lzma", ".lz", ".zst")
+            .firstOrNull { name.endsWith(it, ignoreCase = true) } ?: return null
+        return name.dropLast(suffix.length).takeIf { it.isNotEmpty() }
+    }
+
     @Throws(IOException::class)
     private fun openArchive(
         file: Path,
         passwords: List<String>
     ): Pair<ReadArchive, ArchiveCloseable> {
         val channel = try {
-            CacheSizeSeekableByteChannel(file.newByteChannel())
+            CacheSizeSeekableByteChannel(file.newArchiveByteChannel())
         } catch (e: Exception) {
             e.printStackTrace()
             null
@@ -180,7 +177,7 @@ object ArchiveReader {
                 }
             }
         }
-        val inputStream = file.newInputStream()
+        val inputStream = file.newArchiveInputStream()
         var successful = false
         try {
             val archive = ReadArchive(inputStream, passwords)

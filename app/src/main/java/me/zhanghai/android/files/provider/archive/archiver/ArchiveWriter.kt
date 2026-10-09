@@ -5,7 +5,6 @@
 
 package me.zhanghai.android.files.provider.archive.archiver
 
-import android.os.Build
 import java8.nio.channels.SeekableByteChannel
 import java8.nio.file.LinkOption
 import java8.nio.file.Path
@@ -14,68 +13,81 @@ import me.zhanghai.android.files.provider.common.PosixFileAttributes
 import me.zhanghai.android.files.provider.common.PosixFileMode
 import me.zhanghai.android.files.provider.common.PosixFileType
 import me.zhanghai.android.files.provider.common.copyTo
-import me.zhanghai.android.files.provider.common.getLastModifiedTime
 import me.zhanghai.android.files.provider.common.newInputStream
 import me.zhanghai.android.files.provider.common.readAttributes
 import me.zhanghai.android.files.provider.common.readSymbolicLinkByteString
-import me.zhanghai.android.files.provider.common.size
-import me.zhanghai.android.files.provider.common.toInt
 import me.zhanghai.android.libarchive.Archive
-import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry
 import java.io.Closeable
 import java.io.IOException
-import java.io.OutputStream
-import java.util.Date
 
 class ArchiveWriter @Throws(IOException::class) constructor(
     channel: SeekableByteChannel,
     format: Int,
     filter: Int,
     password: String?,
-    encryptFileNames: Boolean = false
+    encryptFileNames: Boolean = false,
+    compressionPreset: ArchiveCompressionPreset = ArchiveCompressionPreset.STANDARD
 ) : Closeable {
     init {
         require(!encryptFileNames || format == Archive.FORMAT_7ZIP && !password.isNullOrEmpty())
         require(format != Archive.FORMAT_7ZIP || filter == Archive.FILTER_NONE)
-        require(format != Archive.FORMAT_7ZIP || password.isNullOrEmpty()
-            || Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
     }
 
-    private val sevenZArchive = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
-        && format == Archive.FORMAT_7ZIP && !password.isNullOrEmpty()) {
-        val passwordChars = password.toCharArray()
-        try {
-            EncryptedSevenZOutputFile(
-                CommonsSeekableByteChannel(channel), passwordChars, encryptFileNames
-            )
-        } finally {
-            passwordChars.fill('\u0000')
-        }
+    private val sevenZArchive = if (format == Archive.FORMAT_7ZIP) {
+        SevenZArchiveWriter(
+            channel, password?.takeUnless { it.isEmpty() }, encryptFileNames, compressionPreset
+        )
     } else {
         null
     }
     private val archive = if (sevenZArchive == null) {
-        WriteArchive(channel, format, filter, password)
+        WriteArchive(channel, format, filter, password, compressionPreset)
     } else {
         null
     }
 
+    /** All 7z inputs must be supplied together so a solid block is encoded only once. */
+    @Throws(IOException::class)
+    fun writeEntries(
+        entries: List<Pair<Path, Path>>,
+        intervalMillis: Long,
+        listener: ((Long) -> Unit)?,
+        onEntry: ((Path) -> Unit)? = null,
+        onEntryComplete: ((Path) -> Unit)? = null
+    ) {
+        val sevenZArchive = sevenZArchive
+        if (sevenZArchive != null) {
+            sevenZArchive.writeEntries(entries, intervalMillis, listener, onEntry, onEntryComplete)
+            return
+        }
+        for ((file, entryName) in entries) {
+            onEntry?.invoke(file)
+            write(file, entryName, intervalMillis, listener)
+            onEntryComplete?.invoke(file)
+        }
+    }
+
     @Throws(IOException::class)
     fun write(file: Path, entryName: Path, intervalMillis: Long, listener: ((Long) -> Unit)?) {
+        val sevenZArchive = sevenZArchive
+        if (sevenZArchive != null) {
+            sevenZArchive.writeEntries(listOf(file to entryName), intervalMillis, listener, null, null)
+            return
+        }
         val name = entryName.toString()
-        val lastModifiedTime = file.getLastModifiedTime(LinkOption.NOFOLLOW_LINKS)
         val lastAccessTime = null
         val creationTime = null
         val attributes = file.readAttributes(
             BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS
         )
+        val lastModifiedTime = attributes.lastModifiedTime()
         val type = when {
             attributes is PosixFileAttributes -> attributes.type()
             attributes.isDirectory -> PosixFileType.DIRECTORY
             attributes.isSymbolicLink -> PosixFileType.SYMBOLIC_LINK
             else -> PosixFileType.REGULAR_FILE
         }
-        val size = file.size(LinkOption.NOFOLLOW_LINKS)
+        val size = attributes.size()
         val posixAttributes = attributes as? PosixFileAttributes
         val owner = posixAttributes?.owner()
         val group = posixAttributes?.group()
@@ -89,50 +101,6 @@ class ArchiveWriter @Throws(IOException::class) constructor(
         } else {
             null
         }
-        val sevenZArchive = sevenZArchive
-        if (sevenZArchive != null) {
-            if (type != PosixFileType.REGULAR_FILE && type != PosixFileType.DIRECTORY
-                && type != PosixFileType.SYMBOLIC_LINK) {
-                throw IOException("7z does not support file type $type: $file")
-            }
-            val symbolicLinkBytes = symbolicLinkTarget?.toByteArray()
-            val entry = SevenZArchiveEntry().apply {
-                this.name = name
-                isDirectory = type == PosixFileType.DIRECTORY
-                setLastModifiedDate(Date(lastModifiedTime.toMillis()))
-                this.size = symbolicLinkBytes?.size?.toLong() ?: if (isDirectory) 0 else size
-                hasWindowsAttributes = true
-                // 7-Zip stores Unix file types and permissions in the high attribute bits.
-                windowsAttributes = ((type.mode or mode.toInt()) shl 16) or 0x8000 or
-                    if (isDirectory) 0x10 else 0x20
-            }
-            try {
-                sevenZArchive.putArchiveEntry(entry)
-                if (type == PosixFileType.REGULAR_FILE) {
-                    file.newInputStream(LinkOption.NOFOLLOW_LINKS).use { inputStream ->
-                        inputStream.copyTo(object : OutputStream() {
-                            override fun write(value: Int) {
-                                write(byteArrayOf(value.toByte()), 0, 1)
-                            }
-
-                            override fun write(bytes: ByteArray, offset: Int, length: Int) {
-                                sevenZArchive.write(bytes, offset, length)
-                            }
-                        }, intervalMillis, listener)
-                    }
-                } else {
-                    if (symbolicLinkBytes != null) {
-                        sevenZArchive.write(symbolicLinkBytes, 0, symbolicLinkBytes.size)
-                    }
-                    listener?.invoke(attributes.size())
-                }
-                sevenZArchive.closeArchiveEntry()
-            } catch (e: Exception) {
-                sevenZArchive.abort()
-                throw e
-            }
-            return
-        }
         val archive = archive!!
         archive.Entry(
             name, lastModifiedTime, lastAccessTime, creationTime, type, size, owner, group, mode,
@@ -140,7 +108,21 @@ class ArchiveWriter @Throws(IOException::class) constructor(
         ).use { archive.writeEntry(it) }
         if (type == PosixFileType.REGULAR_FILE) {
             file.newInputStream(LinkOption.NOFOLLOW_LINKS).use { inputStream ->
-                inputStream.copyTo(archive.newDataOutputStream(), intervalMillis, listener)
+                var copiedSize = 0L
+                inputStream.copyTo(archive.newDataOutputStream(), intervalMillis) {
+                    copiedSize += it
+                    listener?.invoke(it)
+                }
+                val currentAttributes = file.readAttributes(
+                    BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS
+                )
+                if (copiedSize != size || currentAttributes.size() != size
+                    || currentAttributes.lastModifiedTime() != lastModifiedTime
+                    || currentAttributes.isDirectory || currentAttributes.isSymbolicLink
+                    || attributes.fileKey() != null
+                    && attributes.fileKey() != currentAttributes.fileKey()) {
+                    throw IOException("The source changed while creating the archive: $file")
+                }
             }
         } else {
             listener?.invoke(attributes.size())

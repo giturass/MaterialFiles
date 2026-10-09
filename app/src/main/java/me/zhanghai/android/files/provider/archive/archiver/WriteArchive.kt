@@ -25,7 +25,8 @@ class WriteArchive @Throws(ArchiveException::class) constructor(
     channel: SeekableByteChannel,
     format: Int,
     filter: Int,
-    password: String?
+    password: String?,
+    compressionPreset: ArchiveCompressionPreset = ArchiveCompressionPreset.STANDARD
 ) : Closeable {
     private val archive = Archive.writeNew()
 
@@ -36,13 +37,38 @@ class WriteArchive @Throws(ArchiveException::class) constructor(
             Archive.writeSetBytesInLastBlock(archive, 1)
             Archive.writeSetFormat(archive, format)
             Archive.writeAddFilter(archive, filter)
-            if (password != null) {
+            val level = compressionPreset.level.toString().toByteArray()
+            if (format == Archive.FORMAT_ZIP) {
+                Archive.writeSetFormatOption(
+                    archive, "zip".toByteArray(), "compression-level".toByteArray(), level
+                )
+            }
+            when (filter) {
+                Archive.FILTER_GZIP, Archive.FILTER_BZIP2 -> Archive.writeSetFilterOption(
+                    archive, null, "compression-level".toByteArray(), level
+                )
+                Archive.FILTER_XZ -> {
+                    // XZ level 9 uses a 64 MiB dictionary and substantially more encoder RAM.
+                    val xzLevel = when (compressionPreset) {
+                        ArchiveCompressionPreset.SPEED -> "1"
+                        ArchiveCompressionPreset.STANDARD -> "5"
+                        ArchiveCompressionPreset.QUALITY -> "7"
+                    }
+                    Archive.writeSetFilterOption(
+                        archive, "xz".toByteArray(), "compression-level".toByteArray(),
+                        xzLevel.toByteArray()
+                    )
+                    Archive.writeSetFilterOption(
+                        archive, "xz".toByteArray(), "threads".toByteArray(), "1".toByteArray()
+                    )
+                }
+            }
+            if (!password.isNullOrEmpty()) {
                 require(format == Archive.FORMAT_ZIP)
                 Archive.writeSetPassphrase(archive, password.toByteArray())
-                // Nautilus uses AES-256 encryption as well, as it uses gnome-autoar where
-                // autoar_compressor_step_initialize_object() sets encryption to aes256.
                 Archive.writeSetFormatOption(
-                    archive, null, "encryption".toByteArray(), "aes256".toByteArray()
+                    archive, "zip".toByteArray(), "encryption".toByteArray(),
+                    "aes256".toByteArray()
                 )
             }
             Archive.writeOpen(
@@ -139,14 +165,22 @@ class WriteArchive @Throws(ArchiveException::class) constructor(
         override fun write(b: Int) {
             oneByteBuffer.clear()
             oneByteBuffer.put(b.toByte())
+            oneByteBuffer.flip()
             Archive.writeData(archive, oneByteBuffer)
+            if (oneByteBuffer.hasRemaining()) {
+                throw IOException("The archive writer made no progress")
+            }
         }
 
         @Throws(IOException::class)
         override fun write(b: ByteArray, off: Int, len: Int) {
             val buffer = ByteBuffer.wrap(b, off, len)
             while (buffer.hasRemaining()) {
+                val position = buffer.position()
                 Archive.writeData(archive, buffer)
+                if (buffer.position() <= position) {
+                    throw IOException("The source grew while creating the archive")
+                }
             }
         }
     }

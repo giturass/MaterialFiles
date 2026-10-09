@@ -80,6 +80,7 @@ import me.zhanghai.android.files.navigation.BookmarkDirectory
 import me.zhanghai.android.files.navigation.NavigationFragment
 import me.zhanghai.android.files.navigation.NavigationRootMapLiveData
 import me.zhanghai.android.files.provider.archive.createArchiveRootPath
+import me.zhanghai.android.files.provider.archive.archiver.ArchiveCompressionPreset
 import me.zhanghai.android.files.provider.archive.isArchivePath
 import me.zhanghai.android.files.provider.linux.isLinuxPath
 import me.zhanghai.android.files.settings.Settings
@@ -844,6 +845,10 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             val areAllFilesArchiveFiles = files.all { it.isArchiveFile }
             menu.findItem(R.id.action_extract).isVisible = areAllFilesArchiveFiles
             val isCurrentPathReadOnly = viewModel.currentPath.fileSystem.isReadOnly
+            menu.findItem(R.id.action_extract_here).isVisible =
+                areAllFilesArchiveFiles && !isCurrentPathReadOnly
+            menu.findItem(R.id.action_extract_to_directory).isVisible =
+                areAllFilesArchiveFiles && !isCurrentPathReadOnly
             menu.findItem(R.id.action_archive).isVisible = !isCurrentPathReadOnly
         }
         if (!overlayActionMode.isActive) {
@@ -888,6 +893,14 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             }
             R.id.action_extract -> {
                 extractFiles(viewModel.selectedFiles)
+                true
+            }
+            R.id.action_extract_here -> {
+                extractFiles(viewModel.selectedFiles, false)
+                true
+            }
+            R.id.action_extract_to_directory -> {
+                extractFiles(viewModel.selectedFiles, true)
                 true
             }
             R.id.action_archive -> {
@@ -948,6 +961,14 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         viewModel.selectFiles(files, false)
     }
 
+    private fun extractFiles(files: FileItemSet, intoSeparateDirectories: Boolean) {
+        FileJobService.extract(
+            makePathListForJob(files).map { it.createArchiveRootPath() }, viewModel.currentPath,
+            intoSeparateDirectories, requireContext()
+        )
+        viewModel.selectFiles(files, false)
+    }
+
     private fun showCreateArchiveDialog(files: FileItemSet) {
         CreateArchiveDialogFragment.show(files, this)
     }
@@ -959,12 +980,15 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         filter: Int,
         password: String?,
         encryptFileNames: Boolean,
-        runInBackground: Boolean
+        runInBackground: Boolean,
+        compressionPreset: ArchiveCompressionPreset,
+        splitSize: Long,
+        deleteSources: Boolean
     ) {
         val archiveFile = viewModel.currentPath.resolve(name)
         FileJobService.archive(
             makePathListForJob(files), archiveFile, format, filter, password, encryptFileNames,
-            runInBackground, requireContext()
+            runInBackground, compressionPreset, splitSize, deleteSources, requireContext()
         )
         viewModel.selectFiles(files, false)
     }
@@ -1299,6 +1323,10 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
     override fun extractFile(file: FileItem) {
         copyFile(file.createDummyArchiveRoot())
+    }
+
+    override fun extractFile(file: FileItem, intoSeparateDirectory: Boolean) {
+        extractFiles(fileItemSetOf(file), intoSeparateDirectory)
     }
 
     override fun showCreateArchiveDialog(file: FileItem) {

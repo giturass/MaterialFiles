@@ -41,6 +41,18 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/action_extract_here"
+        android:orderInCategory="100"
+        android:title="@string/file_item_action_extract_here"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_extract_to_directory"
+        android:orderInCategory="100"
+        android:title="@string/file_item_action_extract_to_directory"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_archive"
         android:orderInCategory="100"
         android:title="@string/file_list_select_action_archive"

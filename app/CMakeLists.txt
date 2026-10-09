@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.6)
 
-project(MaterialFiles C)
+project(MaterialFiles C CXX)
+
+include(src/main/jni/sevenzip.cmake)
 
 add_library(hiddenapi SHARED
         src/main/jni/hiddenapi.c)

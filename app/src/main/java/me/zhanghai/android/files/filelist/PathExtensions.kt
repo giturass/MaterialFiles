@@ -7,6 +7,7 @@ package me.zhanghai.android.files.filelist
 
 import java8.nio.file.Path
 import me.zhanghai.android.files.file.MimeType
+import me.zhanghai.android.files.file.guessFromPath
 import me.zhanghai.android.files.file.isSupportedArchive
 import me.zhanghai.android.files.provider.archive.archiveFile
 import me.zhanghai.android.files.provider.archive.isArchivePath
@@ -19,7 +20,9 @@ val Path.name: String
 
 fun Path.toUserFriendlyString(): String = if (isLinuxPath) toFile().path else toUri().toString()
 
-fun Path.isArchiveFile(mimeType: MimeType): Boolean = !isArchivePath && mimeType.isSupportedArchive
+fun Path.isArchiveFile(mimeType: MimeType): Boolean = !isArchivePath &&
+    (mimeType.isSupportedArchive || (fileName?.toString()?.endsWith(".001") == true &&
+        MimeType.guessFromPath(fileName.toString()).isSupportedArchive))
 
 val Path.isLocalPath: Boolean
     get() =

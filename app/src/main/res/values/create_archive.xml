@@ -5,12 +5,40 @@
     <item name="tarGzRadio" type="id" />
     <item name="tarXzRadio" type="id" />
     <item name="sevenZRadio" type="id" />
+    <item name="tarRadio" type="id" />
+    <item name="tarBz2Radio" type="id" />
+    <item name="gzipRadio" type="id" />
+    <item name="bzip2Radio" type="id" />
+    <item name="xzRadio" type="id" />
 
     <string name="file_create_archive_name">压缩文件名</string>
     <string name="file_create_archive_name_preview_format">将创建：%1$s</string>
     <string name="file_create_archive_format">压缩格式</string>
     <string name="file_create_archive_type_tar_gz">.tar.gz</string>
+    <string name="file_create_archive_type_tar">.tar</string>
+    <string name="file_create_archive_type_tar_bz2">.tar.bz2</string>
+    <string name="file_create_archive_type_gz">.gz</string>
+    <string name="file_create_archive_type_bz2">.bz2</string>
+    <string name="file_create_archive_type_xz">.xz</string>
     <string name="file_create_archive_no_encryption">此格式不支持密码保护</string>
+    <string name="file_create_archive_single_file_hint">此格式只压缩单个文件，不支持密码保护</string>
+    <string name="file_create_archive_single_file_required">此格式只能压缩一个常规文件</string>
+    <string name="file_create_archive_password_aes256">填写密码后使用 AES-256 加密</string>
+    <string name="file_create_archive_compression">压缩偏好</string>
+    <string name="file_create_archive_compression_speed">速度优先</string>
+    <string name="file_create_archive_compression_standard">标准</string>
+    <string name="file_create_archive_compression_quality">质量优先</string>
+    <string name="file_create_archive_split">分片大小</string>
+    <string name="file_create_archive_split_none">不分片</string>
+    <string name="file_create_archive_split_5mb">5 MB</string>
+    <string name="file_create_archive_split_10mb">10 MB</string>
+    <string name="file_create_archive_split_50mb">50 MB</string>
+    <string name="file_create_archive_split_custom">自定义</string>
+    <string name="file_create_archive_split_size">自定义分片大小</string>
+    <string name="file_create_archive_split_hint">分片保存在同一文件夹，提取时打开 .001 文件</string>
+    <string name="file_create_archive_split_size_invalid">请输入大于 0 的整数（MB）</string>
+    <string name="file_create_archive_split_size_too_large">分片大小过大</string>
+    <string name="file_create_archive_delete_sources">压缩成功后删除源文件</string>
     <string name="file_create_archive_encrypt_file_names">加密文件名</string>
     <string name="file_create_archive_encrypt_file_names_password_required">加密文件名需要设置密码</string>
     <string name="file_create_archive_background">后台</string>

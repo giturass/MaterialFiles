@@ -27,7 +27,6 @@ class LicensesDialogFragment : AppCompatDialogFragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        LicenseResolver.registerLicense(ZeroClauseBsdLicense())
         LicenseResolver.registerLicense(EclipsePublicLicense20())
         notices = if (savedInstanceState != null) {
             savedInstanceState.getState<State>().notices

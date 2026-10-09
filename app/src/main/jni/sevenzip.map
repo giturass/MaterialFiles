@@ -1,0 +1,6 @@
+{
+    global:
+        JNI_OnLoad;
+        Java_me_zhanghai_android_files_provider_archive_archiver_NativeSevenZip_*;
+    local: *;
+};

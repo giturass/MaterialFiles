@@ -26,3 +26,8 @@ fun Path.archiveRefresh() {
 
 fun Path.createArchiveRootPath(): Path =
     ArchiveFileSystemProvider.getOrNewFileSystem(this).rootDirectory
+
+internal fun Path.newSevenZExtractionSession(files: List<Path>): SevenZExtractionSession? {
+    this as? ArchivePath ?: throw ProviderMismatchException(toString())
+    return fileSystem.newSevenZExtractionSession(files)
+}

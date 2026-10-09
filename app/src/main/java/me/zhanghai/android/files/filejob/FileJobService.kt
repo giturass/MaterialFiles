@@ -13,6 +13,7 @@ import androidx.annotation.MainThread
 import java8.nio.file.Path
 import me.zhanghai.android.files.app.AppLocaleHelper
 import me.zhanghai.android.files.file.MimeType
+import me.zhanghai.android.files.provider.archive.archiver.ArchiveCompressionPreset
 import me.zhanghai.android.files.provider.common.PosixFileModeBit
 import me.zhanghai.android.files.provider.common.PosixGroup
 import me.zhanghai.android.files.provider.common.PosixUser
@@ -125,12 +126,15 @@ class FileJobService : Service() {
             password: String?,
             encryptFileNames: Boolean,
             runInBackground: Boolean,
+            compressionPreset: ArchiveCompressionPreset,
+            splitSize: Long,
+            deleteSources: Boolean,
             context: Context
         ) {
             startJob(
                 ArchiveFileJob(
                     sources, archiveFile, format, filter, password, encryptFileNames,
-                    runInBackground
+                    runInBackground, compressionPreset, splitSize, deleteSources
                 ),
                 context
             )
@@ -138,6 +142,20 @@ class FileJobService : Service() {
 
         fun copy(sources: List<Path>, targetDirectory: Path, context: Context) {
             startJob(CopyFileJob(sources, targetDirectory), context)
+        }
+
+        fun extract(
+            archives: List<Path>,
+            targetDirectory: Path,
+            intoSeparateDirectories: Boolean,
+            context: Context
+        ) {
+            startJob(
+                CopyFileJob(
+                    archives, targetDirectory, flattenArchiveRoots = !intoSeparateDirectories
+                ),
+                context
+            )
         }
 
         fun create(path: Path, createDirectory: Boolean, context: Context) {

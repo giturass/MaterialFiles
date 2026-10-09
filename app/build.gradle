@@ -43,7 +43,7 @@ android {
         resValue 'string', 'file_provider_authority', applicationId + '.file_provider'
         externalNativeBuild {
             cmake {
-                arguments '-DANDROID_STL=none'
+                arguments '-DANDROID_STL=c++_static'
             }
         }
     }
@@ -124,8 +124,7 @@ dependencies {
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
 
-    // Commons Compress uses java.nio.file.attribute.FileTime on Android 24/25 too.
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
     // kotlinx-coroutines-android depends on kotlin-stdlib-jdk8
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
@@ -213,9 +212,7 @@ dependencies {
     implementation 'me.zhanghai.android.retrofile:library:1.2.0'
     implementation 'me.zhanghai.android.systemuihelper:library:1.0.0'
     implementation 'org.apache.ftpserver:ftpserver-core:1.2.1'
-    // libarchive cannot read or write encrypted 7z streams.
-    implementation 'org.apache.commons:commons-compress:1.28.0'
-    implementation 'org.tukaani:xz:1.10'
+    // 7z uses the official native 7-Zip engine built by CMake; other formats use libarchive.
     // This is a dependency of org.apache.ftpserver:ftpserver-core but org.apache.mina:mina-core
     // 2.1.4+ became incompatible before API 24 due to dependency on StandardSocketOptions
     // (DIRMINA-1123) and NetworkChannel.supportedOptions() (DIRMINA-1130).

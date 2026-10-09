@@ -288,10 +288,10 @@
     </notice>
 
     <notice>
-        <name>Apache Commons Compress</name>
-        <url>https://commons.apache.org/proper/commons-compress/</url>
-        <copyright>Copyright The Apache Software Foundation</copyright>
-        <license>Apache Software License 2.0</license>
+        <name>7-Zip 26.04</name>
+        <url>https://www.7-zip.org/</url>
+        <copyright>Copyright 1999–2026 Igor Pavlov. Includes public-domain LZMA SDK code. The application builds the 7z handler and its codecs from the accompanying source.</copyright>
+        <license>GNU Lesser General Public License 2.1</license>
     </notice>
 
     <notice>
@@ -315,10 +315,4 @@
         <license>Apache Software License 2.0</license>
     </notice>
 
-    <notice>
-        <name>XZ for Java</name>
-        <url>https://tukaani.org/xz/java.html</url>
-        <copyright>The XZ for Java authors and contributors</copyright>
-        <license>BSD Zero-Clause License</license>
-    </notice>
 </notices>

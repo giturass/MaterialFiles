@@ -13,6 +13,10 @@ import me.zhanghai.android.files.util.asPathName
 
 fun MimeType.Companion.guessFromPath(path: String): MimeType {
     val fileName = path.asPathName().fileName ?: return DIRECTORY
+    if (fileName.endsWith(".001")) {
+        val archiveType = guessFromExtension(fileName.dropLast(4).asFileName().singleExtension)
+        if (archiveType.isSupportedArchive) return archiveType
+    }
     return guessFromExtension(fileName.asFileName().singleExtension)
 }
 

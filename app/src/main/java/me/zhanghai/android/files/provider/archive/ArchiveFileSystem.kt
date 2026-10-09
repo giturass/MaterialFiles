@@ -20,10 +20,12 @@ import java8.nio.file.attribute.UserPrincipalLookupService
 import java8.nio.file.spi.FileSystemProvider
 import me.zhanghai.android.files.provider.archive.archiver.ArchiveReader
 import me.zhanghai.android.files.provider.archive.archiver.ReadArchive
+import me.zhanghai.android.files.provider.archive.archiver.SevenZArchiveReader
 import me.zhanghai.android.files.provider.common.ByteString
 import me.zhanghai.android.files.provider.common.ByteStringBuilder
 import me.zhanghai.android.files.provider.common.ByteStringListPathCreator
 import me.zhanghai.android.files.provider.common.IsDirectoryException
+import me.zhanghai.android.files.provider.common.PosixFileType
 import me.zhanghai.android.files.provider.common.toByteString
 import me.zhanghai.android.libarchive.ArchiveException
 import java.io.IOException
@@ -59,6 +61,10 @@ internal class ArchiveFileSystem(
 
     private var tree: Map<Path, List<Path>>? = null
 
+    // Each file job gets its own native handle and streams. Browsing or another extraction
+    // on a different thread must never consume this job's batch or inherit its cancellation.
+    private val extractionSession = ThreadLocal<SevenZExtractionSession>()
+
     @Throws(IOException::class)
     fun getEntry(path: Path): ReadArchive.Entry =
         synchronized(lock) {
@@ -73,20 +79,73 @@ internal class ArchiveFileSystem(
         }
 
     @Throws(IOException::class)
-    fun newInputStream(file: Path): InputStream =
-        synchronized(lock) {
+    fun newInputStream(file: Path): InputStream {
+        val (entry, passwords) = synchronized(lock) {
             ensureEntriesLocked(file)
             val entry = getEntryLocked(file)
             if (entry.isDirectory) {
                 throw IsDirectoryException(file.toString())
             }
-            val inputStream = try {
-                ArchiveReader.newInputStream(archiveFile, passwords, entry)
-            } catch (e: ArchiveException) {
-                throw e.toFileSystemOrInterruptedIOException(file)
-            } ?: throw NoSuchFileException(file.toString())
-            ArchiveExceptionInputStream(inputStream, file)
+            entry to passwords
         }
+        val inputStream = try {
+            val session = extractionSession.get()
+            if (session != null && session.contains(file)) {
+                session.newInputStream(file)
+            } else {
+                ArchiveReader.newInputStream(archiveFile, passwords, entry)
+            }
+        } catch (e: ArchiveException) {
+            throw e.toFileSystemOrInterruptedIOException(file)
+        } ?: throw NoSuchFileException(file.toString())
+        return ArchiveExceptionInputStream(inputStream, file)
+    }
+
+    @Throws(IOException::class)
+    fun newSevenZExtractionSession(files: List<Path>): SevenZExtractionSession? {
+        val file = files.firstOrNull() ?: return null
+        check(extractionSession.get() == null) { "An extraction session is already active" }
+        val selectedEntries = synchronized(lock) {
+            ensureEntriesLocked(file)
+            files.map { it to getEntryLocked(it) }
+                .filter { it.second.type == PosixFileType.REGULAR_FILE }
+        }
+        if (selectedEntries.isEmpty()) {
+            return null
+        }
+        fun openArchive(): SevenZArchiveReader? {
+            val passwords = synchronized(lock) {
+                if (!isOpen) {
+                    throw ClosedFileSystemException()
+                }
+                passwords
+            }
+            return SevenZArchiveReader.openOrNull(archiveFile, passwords)
+        }
+        try {
+            val archive = openArchive() ?: return null
+            var successful = false
+            try {
+                val filesByName = selectedEntries.associate { it.second.name to it.first }
+                val orderedEntries = archive.orderedEntries(selectedEntries.map { it.second })
+                    .map { filesByName.getValue(it.name) to it }
+                val session = SevenZExtractionSession(
+                    orderedEntries, archive,
+                    { openArchive() ?: throw IOException("Archive format changed: $archiveFile") },
+                    { extractionSession.remove() }
+                )
+                extractionSession.set(session)
+                successful = true
+                return session
+            } finally {
+                if (!successful) {
+                    archive.close()
+                }
+            }
+        } catch (e: ArchiveException) {
+            throw e.toFileSystemOrInterruptedIOException(file)
+        }
+    }
 
     @Throws(IOException::class)
     fun getDirectoryChildren(directory: Path): List<Path> =
