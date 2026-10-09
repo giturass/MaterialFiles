@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Preserve the resource names used by the saved archive-format preference. -->
+    <item name="zipRadio" type="id" />
+    <item name="tarGzRadio" type="id" />
+    <item name="tarXzRadio" type="id" />
+    <item name="sevenZRadio" type="id" />
+
+    <string name="file_create_archive_name">压缩文件名</string>
+    <string name="file_create_archive_name_preview_format">将创建：%1$s</string>
+    <string name="file_create_archive_format">压缩格式</string>
+    <string name="file_create_archive_type_tar_gz">.tar.gz</string>
+    <string name="file_create_archive_no_encryption">此格式不支持密码保护</string>
+    <string name="file_create_archive_encrypt_file_names">加密文件名</string>
+    <string name="file_create_archive_encrypt_file_names_password_required">加密文件名需要设置密码</string>
+    <string name="file_create_archive_background">后台</string>
+    <string name="file_create_archive_background_hint">选择“后台”后，可在通知栏查看压缩进度</string>
+    <string name="file_create_archive_notifications_required">请先开启“文件操作”通知，以便在通知栏查看后台压缩进度。开启后返回此处，点击“后台”开始压缩。</string>
+    <string name="file_create_archive_enable_notifications">开启通知</string>
+</resources>

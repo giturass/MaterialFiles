@@ -6,25 +6,20 @@
 package me.zhanghai.android.files.navigation
 
 import android.content.Context
-import android.content.Intent
 import android.os.Build
 import android.os.Environment
 import android.os.storage.StorageVolume
 import androidx.annotation.DrawableRes
 import androidx.annotation.Size
-import androidx.annotation.StringRes
 import java8.nio.file.Path
 import java8.nio.file.Paths
 import me.zhanghai.android.files.R
-import me.zhanghai.android.files.about.AboutActivity
 import me.zhanghai.android.files.compat.getDescriptionCompat
 import me.zhanghai.android.files.compat.isPrimaryCompat
 import me.zhanghai.android.files.compat.pathCompat
 import me.zhanghai.android.files.file.JavaFile
 import me.zhanghai.android.files.file.asFileSize
-import me.zhanghai.android.files.ftpserver.FtpServerActivity
 import me.zhanghai.android.files.settings.Settings
-import me.zhanghai.android.files.settings.SettingsActivity
 import me.zhanghai.android.files.settings.StandardDirectoryListActivity
 import me.zhanghai.android.files.storage.AddStorageDialogActivity
 import me.zhanghai.android.files.storage.FileSystemRoot
@@ -39,6 +34,7 @@ import me.zhanghai.android.files.util.valueCompat
 val navigationItems: List<NavigationItem?>
     get() =
         mutableListOf<NavigationItem?>().apply {
+            add(NavigationSectionItem(R.string.navigation_section_storage))
             addAll(storageItems)
             if (Environment::class.supportsExternalStorageManager()) {
                 // Starting with R, we can get read/write access to non-primary storage volumes with
@@ -48,18 +44,22 @@ val navigationItems: List<NavigationItem?>
                 addAll(storageVolumeItems)
             }
             add(AddStorageItem())
-            val standardDirectoryItems = standardDirectoryItems
-            if (standardDirectoryItems.isNotEmpty()) {
-                add(null)
-                addAll(standardDirectoryItems)
-            }
             val bookmarkDirectoryItems = bookmarkDirectoryItems
-            if (bookmarkDirectoryItems.isNotEmpty()) {
-                add(null)
-                addAll(bookmarkDirectoryItems)
-            }
-            add(null)
-            addAll(menuItems)
+            add(
+                NavigationSectionItem(
+                    R.string.navigation_section_bookmarks,
+                    R.string.navigation_empty_bookmarks.takeIf { bookmarkDirectoryItems.isEmpty() }
+                )
+            )
+            addAll(bookmarkDirectoryItems)
+            val standardDirectoryItems = standardDirectoryItems
+            add(
+                NavigationSectionItem(
+                    R.string.navigation_section_shortcuts,
+                    R.string.navigation_empty_shortcuts.takeIf { standardDirectoryItems.isEmpty() }
+                )
+            )
+            addAll(standardDirectoryItems)
         }
 
 private val storageItems: List<NavigationItem>
@@ -350,43 +350,5 @@ private class BookmarkDirectoryItem(
                 .putArgs(EditBookmarkDirectoryDialogFragment.Args(bookmarkDirectory))
         )
         return true
-    }
-}
-
-private val menuItems: List<NavigationItem>
-    @Size(3)
-    get() = listOf(
-        IntentMenuItem(
-            R.drawable.shared_directory_icon_white_24dp, R.string.navigation_ftp_server,
-            FtpServerActivity::class.createIntent()
-        ),
-        IntentMenuItem(
-            R.drawable.settings_icon_white_24dp, R.string.navigation_settings,
-            SettingsActivity::class.createIntent()
-        ),
-        IntentMenuItem(
-            R.drawable.about_icon_white_24dp, R.string.navigation_about,
-            AboutActivity::class.createIntent()
-        )
-    )
-
-private abstract class MenuItem(
-    @DrawableRes override val iconRes: Int,
-    @StringRes val titleRes: Int
-) : NavigationItem() {
-    override fun getTitle(context: Context): String = context.getString(titleRes)
-}
-
-private class IntentMenuItem(
-    @DrawableRes iconRes: Int,
-    @StringRes titleRes: Int,
-    private val intent: Intent
-) : MenuItem(iconRes, titleRes) {
-    override val id: Long
-        get() = intent.component.hashCode().toLong()
-
-    override fun onClick(listener: Listener) {
-        listener.launchIntent(intent)
-        listener.closeNavigationDrawer()
     }
 }

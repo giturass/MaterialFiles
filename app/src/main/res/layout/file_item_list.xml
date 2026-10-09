@@ -11,6 +11,8 @@
     android:id="@+id/itemLayout"
     android:layout_width="match_parent"
     android:layout_height="@dimen/two_line_list_item_height"
+    android:clipChildren="false"
+    android:clipToPadding="false"
     android:foreground="?selectableItemBackground"
     android:gravity="center_vertical"
     android:orientation="horizontal">
@@ -21,9 +23,18 @@
         android:layout_height="@dimen/touch_target_size"
         android:layout_marginStart="@dimen/screen_edge_margin_minus_4dp"
         android:layout_marginEnd="@dimen/content_start_from_screen_edge_margin_minus_44dp"
+        android:clipChildren="false"
         android:clipToPadding="false"
         android:duplicateParentState="true"
         android:padding="@dimen/touch_target_large_icon_padding">
+
+        <me.zhanghai.android.files.ui.DirectoryIconBackgroundView
+            android:id="@+id/directoryBackgroundView"
+            android:layout_width="@dimen/directory_icon_background_size"
+            android:layout_height="@dimen/directory_icon_background_size"
+            android:layout_gravity="center"
+            android:duplicateParentState="true"
+            android:importantForAccessibility="no" />
 
         <me.zhanghai.android.files.ui.DisabledAlphaImageView
             android:id="@+id/iconImage"
@@ -37,8 +48,10 @@
             android:id="@+id/thumbnailImage"
             android:layout_width="@dimen/large_icon_size"
             android:layout_height="@dimen/large_icon_size"
+            android:layout_gravity="center"
             android:duplicateParentState="true"
-            android:scaleType="centerCrop" />
+            android:scaleType="centerCrop"
+            app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.MaterialFiles.FileThumbnail" />
 
         <me.zhanghai.android.files.ui.DisabledAlphaImageView
             android:id="@+id/appIconBadgeImage"
@@ -49,7 +62,8 @@
             android:layout_marginEnd="-0.5dp"
             android:layout_marginTop="-0.5dp"
             android:layout_marginBottom="-0.5dp"
-            android:duplicateParentState="true" />
+            android:duplicateParentState="true"
+            app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.MaterialFiles.FileThumbnail" />
 
         <me.zhanghai.android.files.ui.DisabledAlphaImageView
             android:id="@+id/badgeImage"

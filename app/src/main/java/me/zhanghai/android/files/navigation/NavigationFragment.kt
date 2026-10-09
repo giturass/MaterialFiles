@@ -15,6 +15,9 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.recyclerview.widget.LinearLayoutManager
 import java8.nio.file.Path
 import me.zhanghai.android.files.databinding.NavigationFragmentBinding
+import me.zhanghai.android.files.ftpserver.FtpServerActivity
+import me.zhanghai.android.files.settings.SettingsActivity
+import me.zhanghai.android.files.util.createIntent
 import me.zhanghai.android.files.util.startActivitySafe
 
 class NavigationFragment : Fragment(), NavigationItem.Listener {
@@ -43,6 +46,15 @@ class NavigationFragment : Fragment(), NavigationItem.Listener {
         binding.recyclerView.layoutManager = LinearLayoutManager(context)
         adapter = NavigationListAdapter(this, context)
         binding.recyclerView.adapter = adapter
+
+        binding.serverButton.setOnClickListener {
+            launchIntent(FtpServerActivity::class.createIntent())
+            closeNavigationDrawer()
+        }
+        binding.settingsButton.setOnClickListener {
+            launchIntent(SettingsActivity::class.createIntent())
+            closeNavigationDrawer()
+        }
 
         val viewLifecycleOwner = viewLifecycleOwner
         NavigationItemListLiveData.observe(viewLifecycleOwner) { onNavigationItemsChanged(it) }

@@ -244,4 +244,39 @@
         <copyright>Copyright 2003 The Apache Software Foundation</copyright>
         <license>Apache Software License 2.0</license>
     </notice>
+
+    <notice>
+        <name>Apache Commons Compress</name>
+        <url>https://commons.apache.org/proper/commons-compress/</url>
+        <copyright>Copyright The Apache Software Foundation</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
+        <name>Apache Commons IO</name>
+        <url>https://commons.apache.org/proper/commons-io/</url>
+        <copyright>Copyright The Apache Software Foundation</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
+        <name>Apache Commons Lang</name>
+        <url>https://commons.apache.org/proper/commons-lang/</url>
+        <copyright>Copyright The Apache Software Foundation</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
+        <name>Apache Commons Codec</name>
+        <url>https://commons.apache.org/proper/commons-codec/</url>
+        <copyright>Copyright The Apache Software Foundation</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
+        <name>XZ for Java</name>
+        <url>https://tukaani.org/xz/java.html</url>
+        <copyright>The XZ for Java authors and contributors</copyright>
+        <license>BSD Zero-Clause License</license>
+    </notice>
 </notices>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="terminal_not_found">未找到支持的终端，请安装 Termux、MDTerm 或 Android Terminal Emulator。</string>
+    <string name="terminal_open_failed">无法打开终端</string>
+    <string name="terminal_termux_setup_message">请允许本应用在 Termux / MDTerm 中打开终端。同时在终端的 ~/.termux/termux.properties 中启用 allow-external-apps=true，并授予终端访问目标文件夹的权限。</string>
+    <string name="terminal_permission_denied_message">在 Termux / MDTerm 中运行命令的权限被拒绝。请打开系统设置，在本应用的“其他权限”中允许“在 Termux 环境中运行命令”。</string>
+    <string name="terminal_termux_error_message_format">%1$s\n\n请在 Termux / MDTerm 的 ~/.termux/termux.properties 中启用 allow-external-apps=true，并确认终端已完成初始化且有权访问目标文件夹。</string>
+    <string name="terminal_termux_failed_hint">Termux / MDTerm 无法打开此文件夹，请检查外部命令和存储权限。</string>
+    <string name="terminal_setup_help">查看设置说明</string>
+</resources>

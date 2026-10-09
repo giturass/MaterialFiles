@@ -5,6 +5,7 @@
 
 package me.zhanghai.android.files.app
 
+import android.content.Context
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
@@ -13,6 +14,10 @@ import me.zhanghai.android.files.theme.night.NightModeHelper
 
 abstract class AppActivity : AppCompatActivity() {
     private var isDelegateCreated = false
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLocaleHelper.wrap(newBase))
+    }
 
     override fun getDelegate(): AppCompatDelegate {
         val delegate = super.getDelegate()

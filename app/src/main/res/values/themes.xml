@@ -38,7 +38,7 @@
 
         <item name="colorAppBarSurface">?colorSurface</item>
     </style>
-    <style name="Theme.MaterialFiles" parent="Base.Theme.MaterialFiles" />
+    <style name="Theme.MaterialFiles" parent="Theme.MaterialFiles.Material3" />
 
     <style name="Platform.V23.Theme.MaterialFiles.Translucent" parent="Theme.MaterialFiles">
         <item name="android:navigationBarColor">@android:color/transparent</item>
@@ -54,7 +54,7 @@
         <item name="android:windowIsTranslucent">true</item>
         <item name="windowNoTitle">true</item>
     </style>
-    <style name="Theme.MaterialFiles.Translucent" parent="Base.Theme.MaterialFiles.Translucent" />
+    <style name="Theme.MaterialFiles.Translucent" parent="Theme.MaterialFiles.Material3.Translucent" />
 
     <style name="Platform.V23.Theme.MaterialFiles.Immersive" parent="Theme.MaterialComponents.NoActionBar">
         <item name="android:navigationBarColor">?colorPrimaryDark</item>
@@ -89,5 +89,5 @@
 
         <item name="colorAppBarSurface">@color/dark_50_percent</item>
     </style>
-    <style name="Theme.MaterialFiles.Immersive" parent="Base.Theme.MaterialFiles.Immersive" />
+    <style name="Theme.MaterialFiles.Immersive" parent="Theme.MaterialFiles.Material3.Immersive" />
 </resources>

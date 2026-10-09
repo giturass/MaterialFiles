@@ -24,16 +24,19 @@
             android:layout_height="wrap_content"
             app:layout_scrollFlags="@integer/file_list_toolbar_scroll_flags">
 
-            <me.zhanghai.android.files.ui.CrossfadeSubtitleToolbar
+            <androidx.appcompat.widget.Toolbar
                 android:id="@+id/toolbar"
                 android:layout_width="match_parent"
                 android:layout_height="?actionBarSize"
+                android:gravity="center_vertical"
                 android:paddingStart="@dimen/file_list_toolbar_padding_start"
                 android:paddingEnd="@dimen/file_list_toolbar_padding_end_with_overflow"
                 app:navigationIcon="@drawable/menu_icon_control_normal_24dp"
                 app:navigationContentDescription="@string/open_navigation_drawer"
+                app:buttonGravity="center_vertical"
                 app:popupTheme="?actionBarPopupTheme"
-                app:subtitleTextAppearance="@style/TextAppearance.AppCompat.Widget.ActionBar.Subtitle.Small" />
+                app:titleMarginTop="0dp"
+                app:titleMarginBottom="0dp" />
 
             <me.zhanghai.android.files.ui.OverlayToolbar
                 android:id="@+id/overlayToolbar"
@@ -47,11 +50,12 @@
                 app:popupTheme="?actionBarPopupTheme" />
         </FrameLayout>
 
+        <!-- The item adds 12dp, matching the 24dp icon centered in the 56dp navigation button. -->
         <me.zhanghai.android.files.filelist.BreadcrumbLayout
             android:id="@+id/breadcrumbLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingStart="@dimen/content_start_margin_minus_12dp"
+            android:paddingStart="@dimen/screen_edge_margin_minus_4dp"
             android:paddingEnd="@dimen/screen_edge_margin_minus_12dp" />
     </me.zhanghai.android.files.ui.CoordinatorAppBarLayout>
 </merge>

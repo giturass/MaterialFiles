@@ -17,6 +17,7 @@ import android.view.ViewGroup
 import androidx.annotation.Px
 import androidx.annotation.StyleRes
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.view.ViewCompat
 import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePaddingRelative
 import androidx.recyclerview.widget.RecyclerView
@@ -29,6 +30,7 @@ import me.zhanghai.android.files.compat.setTextAppearanceCompat
 import me.zhanghai.android.files.compat.use
 import me.zhanghai.android.files.databinding.NavigationDividerItemBinding
 import me.zhanghai.android.files.databinding.NavigationItemBinding
+import me.zhanghai.android.files.databinding.NavigationSectionItemBinding
 import me.zhanghai.android.files.ui.AutoMirrorDrawable
 import me.zhanghai.android.files.ui.SimpleAdapter
 import me.zhanghai.android.files.util.getColorStateListByAttr
@@ -155,7 +157,11 @@ class NavigationListAdapter(
         getItem(position)?.id ?: list.subList(0, position).count { it == null }.toLong()
 
     override fun getItemViewType(position: Int): Int {
-        val viewType = if (getItem(position) != null) ViewType.ITEM else ViewType.DIVIDER
+        val viewType = when (getItem(position)) {
+            null -> ViewType.DIVIDER
+            is NavigationSectionItem -> ViewType.SECTION
+            else -> ViewType.ITEM
+        }
         return viewType.ordinal
     }
 
@@ -210,6 +216,18 @@ class NavigationListAdapter(
                         viewAttributes.dividerVerticalPadding
                     )
                 }
+            ViewType.SECTION ->
+                SectionHolder(
+                    NavigationSectionItemBinding.inflate(
+                        parent.context.layoutInflater, parent, false
+                    )
+                ).apply {
+                    binding.root.updatePaddingRelative(
+                        start = viewAttributes.itemHorizontalPadding,
+                        end = viewAttributes.itemHorizontalPadding
+                    )
+                    ViewCompat.setAccessibilityHeading(binding.titleText, true)
+                }
         }
     }
 
@@ -237,6 +255,15 @@ class NavigationListAdapter(
                 binding.subtitleText.text = item.getSubtitle(binding.subtitleText.context)
             }
             ViewType.DIVIDER -> {}
+            ViewType.SECTION -> {
+                if (payloads.isNotEmpty()) {
+                    return
+                }
+                val item = getItem(position) as NavigationSectionItem
+                val binding = (holder as SectionHolder).binding
+                binding.titleText.text = item.getTitle(binding.titleText.context)
+                binding.emptyText.text = item.getSubtitle(binding.emptyText.context)
+            }
         }
     }
 
@@ -264,7 +291,8 @@ class NavigationListAdapter(
 
     private enum class ViewType {
         ITEM,
-        DIVIDER
+        DIVIDER,
+        SECTION
     }
 
     private class ItemHolder(val binding: NavigationItemBinding) : RecyclerView.ViewHolder(
@@ -273,5 +301,9 @@ class NavigationListAdapter(
 
     private class DividerHolder(
         val binding: NavigationDividerItemBinding
+    ) : RecyclerView.ViewHolder(binding.root)
+
+    private class SectionHolder(
+        val binding: NavigationSectionItemBinding
     ) : RecyclerView.ViewHolder(binding.root)
 }

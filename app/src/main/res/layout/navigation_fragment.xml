@@ -5,11 +5,53 @@
   ~ All Rights Reserved.
   -->
 
-<me.zhanghai.android.files.navigation.NavigationRecyclerView
+<me.zhanghai.android.files.navigation.NavigationLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/recyclerView"
     android:layout_width="wrap_content"
     android:layout_height="match_parent"
-    android:clipToPadding="false"
-    android:scrollbarStyle="outsideOverlay"
-    android:scrollbars="vertical" />
+    android:background="?colorSurface">
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:clipToPadding="false"
+        android:scrollbarStyle="outsideOverlay"
+        android:scrollbars="vertical" />
+
+    <com.google.android.material.divider.MaterialDivider
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp"
+        android:orientation="horizontal">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/serverButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/navigation_ftp_server"
+            style="@style/Widget.MaterialFiles.Navigation.ActionButton" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/settingsButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:text="@string/navigation_settings"
+            style="@style/Widget.MaterialFiles.Navigation.ActionButton" />
+    </LinearLayout>
+</me.zhanghai.android.files.navigation.NavigationLayout>

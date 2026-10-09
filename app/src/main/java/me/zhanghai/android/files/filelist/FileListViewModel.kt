@@ -100,14 +100,6 @@ class FileListViewModel : ViewModel() {
     val canNavigateUpBreadcrumb: Boolean
         get() = breadcrumbLiveData.valueCompat.selectedIndex > 0
 
-    private val _viewTypeLiveData = FileViewTypeLiveData(currentPathLiveData)
-    val viewTypeLiveData: LiveData<FileViewType> = _viewTypeLiveData
-    var viewType: FileViewType
-        get() = _viewTypeLiveData.valueCompat
-        set(value) {
-            _viewTypeLiveData.putValue(value)
-        }
-
     private val _sortOptionsLiveData = FileSortOptionsLiveData(currentPathLiveData)
     val sortOptionsLiveData: LiveData<FileSortOptions> = _sortOptionsLiveData
     val sortOptions: FileSortOptions

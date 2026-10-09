@@ -6,7 +6,6 @@
 package me.zhanghai.android.files.coil
 
 import android.content.Context
-import android.content.pm.ApplicationInfo
 import android.media.MediaMetadataRetriever
 import android.os.ParcelFileDescriptor
 import androidx.core.graphics.drawable.toDrawable
@@ -21,7 +20,6 @@ import coil.request.Options
 import coil.size.Dimension
 import java8.nio.file.Path
 import java8.nio.file.attribute.BasicFileAttributes
-import me.zhanghai.android.files.R
 import me.zhanghai.android.files.compat.use
 import me.zhanghai.android.files.file.MimeType
 import me.zhanghai.android.files.file.asMimeType
@@ -30,7 +28,6 @@ import me.zhanghai.android.files.file.isImage
 import me.zhanghai.android.files.file.isMedia
 import me.zhanghai.android.files.file.isPdf
 import me.zhanghai.android.files.file.isVideo
-import me.zhanghai.android.files.file.lastModifiedInstant
 import me.zhanghai.android.files.filelist.isRemotePath
 import me.zhanghai.android.files.provider.common.AndroidFileTypeDetector
 import me.zhanghai.android.files.provider.common.newInputStream
@@ -41,8 +38,6 @@ import me.zhanghai.android.files.provider.document.resolver.DocumentResolver
 import me.zhanghai.android.files.provider.ftp.isFtpPath
 import me.zhanghai.android.files.provider.linux.isLinuxPath
 import me.zhanghai.android.files.settings.Settings
-import me.zhanghai.android.files.util.getDimensionPixelSize
-import me.zhanghai.android.files.util.getPackageArchiveInfoCompat
 import me.zhanghai.android.files.util.isGetPackageArchiveInfoCompatible
 import me.zhanghai.android.files.util.isMediaMetadataRetrieverCompatible
 import me.zhanghai.android.files.util.runWithCancellationSignal
@@ -50,14 +45,12 @@ import me.zhanghai.android.files.util.setDataSource
 import me.zhanghai.android.files.util.valueCompat
 import okio.buffer
 import okio.source
-import java.io.Closeable
-import java.io.IOException
 import me.zhanghai.android.files.util.setDataSource as appSetDataSource
 
 class PathAttributesKeyer : Keyer<Pair<Path, BasicFileAttributes>> {
     override fun key(data: Pair<Path, BasicFileAttributes>, options: Options): String {
         val (path, attributes) = data
-        return "$path:${attributes.lastModifiedInstant.toEpochMilli()}"
+        return pathAttributesImageCacheKey(path, attributes)
     }
 }
 
@@ -65,12 +58,13 @@ class PathAttributesFetcher(
     private val data: Pair<Path, BasicFileAttributes>,
     private val options: Options,
     private val imageLoader: ImageLoader,
-    private val appIconFetcherFactory: AppIconFetcher.Factory<Path>,
+    private val apkIconFetcherFactory: ApkIconFetcher.Factory,
     private val videoFrameFetcherFactory: VideoFrameFetcher.Factory<Path>,
     private val pdfPageFetcherFactory: PdfPageFetcher.Factory<Path>
 ) : Fetcher {
     override suspend fun fetch(): FetchResult? {
         val (path, attributes) = data
+        val mimeType = AndroidFileTypeDetector.getMimeType(path, attributes).asMimeType()
         val (width, height) = options.size
         // @see android.provider.MediaStore.ThumbnailConstants.MINI_SIZE
         val isThumbnail = width is Dimension.Pixels && width.px <= 512
@@ -78,7 +72,9 @@ class PathAttributesFetcher(
         if (isThumbnail) {
             width as Dimension.Pixels
             height as Dimension.Pixels
-            if (path.isDocumentPath && attributes.documentSupportsThumbnail) {
+            // APKs use their original icon layers; a provider thumbnail may already contain
+            // the device's rounded-rectangle mask and cannot be reshaped correctly afterwards.
+            if (!mimeType.isApk && path.isDocumentPath && attributes.documentSupportsThumbnail) {
                 val thumbnail = runWithCancellationSignal { signal ->
                     try {
                         DocumentResolver.getThumbnail(
@@ -104,11 +100,10 @@ class PathAttributesFetcher(
                 }
             }
         }
-        val mimeType = AndroidFileTypeDetector.getMimeType(data.first, data.second).asMimeType()
         when {
             mimeType.isApk && path.isGetPackageArchiveInfoCompatible -> {
                 try {
-                    return appIconFetcherFactory.create(path, options, imageLoader).fetch()
+                    return apkIconFetcherFactory.create(path, options, imageLoader).fetch()
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
@@ -156,22 +151,8 @@ class PathAttributesFetcher(
         return null
     }
 
-    class Factory(private val context: Context) : Fetcher.Factory<Pair<Path, BasicFileAttributes>> {
-        private val appIconFetcherFactory = object : AppIconFetcher.Factory<Path>(
-            // This is used by FileListAdapter.
-            context.getDimensionPixelSize(R.dimen.large_icon_size), context
-        ) {
-            override fun getApplicationInfo(data: Path): Pair<ApplicationInfo, Closeable?> {
-                val (packageInfo, closeable) =
-                    context.packageManager.getPackageArchiveInfoCompat(data, 0)
-                val applicationInfo = packageInfo?.applicationInfo
-                if (applicationInfo == null) {
-                    closeable?.close()
-                    throw IOException("ApplicationInfo is null")
-                }
-                return applicationInfo to closeable
-            }
-        }
+    class Factory(context: Context) : Fetcher.Factory<Pair<Path, BasicFileAttributes>> {
+        private val apkIconFetcherFactory = ApkIconFetcher.Factory(context)
 
         private val videoFrameFetcherFactory = object : VideoFrameFetcher.Factory<Path>() {
             override fun MediaMetadataRetriever.setDataSource(data: Path) {
@@ -196,7 +177,7 @@ class PathAttributesFetcher(
             imageLoader: ImageLoader
         ): Fetcher =
             PathAttributesFetcher(
-                data, options, imageLoader, appIconFetcherFactory, videoFrameFetcherFactory,
+                data, options, imageLoader, apkIconFetcherFactory, videoFrameFetcherFactory,
                 pdfPageFetcherFactory
             )
     }

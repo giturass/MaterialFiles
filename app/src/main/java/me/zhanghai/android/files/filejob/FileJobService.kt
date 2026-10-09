@@ -11,6 +11,7 @@ import android.content.Intent
 import android.os.IBinder
 import androidx.annotation.MainThread
 import java8.nio.file.Path
+import me.zhanghai.android.files.app.AppLocaleHelper
 import me.zhanghai.android.files.file.MimeType
 import me.zhanghai.android.files.provider.common.PosixFileModeBit
 import me.zhanghai.android.files.provider.common.PosixGroup
@@ -31,6 +32,10 @@ class FileJobService : Service() {
     private val executorService = Executors.newCachedThreadPool()
 
     private val runningJobs = mutableMapOf<FileJob, Future<*>>()
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLocaleHelper.wrap(newBase))
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -118,9 +123,17 @@ class FileJobService : Service() {
             format: Int,
             filter: Int,
             password: String?,
+            encryptFileNames: Boolean,
+            runInBackground: Boolean,
             context: Context
         ) {
-            startJob(ArchiveFileJob(sources, archiveFile, format, filter, password), context)
+            startJob(
+                ArchiveFileJob(
+                    sources, archiveFile, format, filter, password, encryptFileNames,
+                    runInBackground
+                ),
+                context
+            )
         }
 
         fun copy(sources: List<Path>, targetDirectory: Path, context: Context) {

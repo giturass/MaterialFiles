@@ -14,6 +14,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.app.AppCompatDelegateCompat
 import me.zhanghai.android.files.app.application
 import me.zhanghai.android.files.settings.Settings
+import me.zhanghai.android.files.theme.custom.CustomThemeHelper
 import me.zhanghai.android.files.util.SimpleActivityLifecycleCallbacks
 import me.zhanghai.android.files.util.valueCompat
 
@@ -42,13 +43,18 @@ object NightModeHelper {
     }
 
     fun sync() {
+        // A theme change already recreates the activity with its new night mode. Avoid scheduling
+        // a second recreation when entering or leaving the black theme.
+        val themeChangedActivities = CustomThemeHelper.sync()
+        val nightMode = nightMode
         for (activity in activities) {
-            val nightMode = nightMode
-            if (activity is OnNightModeChangedListener) {
-                if (getUiModeNight(activity.delegate.localNightMode, activity)
+            if (activity.isFinishing || activity in themeChangedActivities) {
+                continue
+            }
+            if (activity is OnNightModeChangedListener
+                && getUiModeNight(activity.delegate.localNightMode, activity)
                     != getUiModeNight(nightMode, activity)) {
-                    activity.onNightModeChangedFromHelper(nightMode)
-                }
+                activity.onNightModeChangedFromHelper(nightMode)
             } else {
                 activity.delegate.localNightMode = nightMode
             }

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  ~ Copyright (c) 2026 Hai Zhang <dreaming.in.code.zh@gmail.com>
+  ~ All Rights Reserved.
+  -->
+
+<resources>
+
+    <dimen name="directory_icon_background_size">48dp</dimen>
+    <dimen name="directory_icon_background_elevation">3dp</dimen>
+
+    <color name="directory_icon_background">#E3F2FD</color>
+    <color name="directory_icon_shadow">#64B5F6</color>
+</resources>

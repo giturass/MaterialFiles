@@ -5,6 +5,7 @@
 
 package me.zhanghai.android.files.provider.archive.archiver
 
+import android.os.Build
 import androidx.preference.PreferenceManager
 import java8.nio.channels.SeekableByteChannel
 import java8.nio.charset.StandardCharsets
@@ -22,6 +23,7 @@ import me.zhanghai.android.files.provider.root.isRunningAsRoot
 import me.zhanghai.android.files.provider.root.rootContext
 import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.util.valueCompat
+import me.zhanghai.android.libarchive.ArchiveException
 import java.io.Closeable
 import java.io.IOException
 import java.io.InputStream
@@ -89,7 +91,20 @@ object ArchiveReader {
     }
 
     @Throws(IOException::class)
-    private fun readEntries(file: Path, passwords: List<String>): List<ReadArchive.Entry> {
+    private fun readEntries(file: Path, passwords: List<String>): List<ReadArchive.Entry> = try {
+        readLibarchiveEntries(file, passwords)
+    } catch (e: ArchiveException) {
+        // Some 7z AES layouts are rejected by libarchive before it marks them as encrypted.
+        // Verify the signature and let Commons validate them; damaged files still fail there.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+            throw e
+        }
+        val archive = SevenZArchiveReader.openOrNull(file, passwords) ?: throw e
+        archive.use { it.readEntries() }
+    }
+
+    @Throws(IOException::class)
+    private fun readLibarchiveEntries(file: Path, passwords: List<String>): List<ReadArchive.Entry> {
         val charset = archiveFileNameCharset
         val (archive, closeable) = openArchive(file, passwords)
         return closeable.use {
@@ -103,6 +118,21 @@ object ArchiveReader {
 
     @Throws(IOException::class)
     fun newInputStream(file: Path, passwords: List<String>, entry: ReadArchive.Entry): InputStream? {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && entry.isEncrypted) {
+            val archive = SevenZArchiveReader.openOrNull(file, passwords)
+            if (archive != null) {
+                var successful = false
+                try {
+                    val inputStream = archive.newInputStream(entry.name) ?: return null
+                    successful = true
+                    return CloseableInputStream(inputStream, archive)
+                } finally {
+                    if (!successful) {
+                        archive.close()
+                    }
+                }
+            }
+        }
         val charset = archiveFileNameCharset
         val (archive, closeable) = openArchive(file, passwords)
         var successful = false
@@ -226,9 +256,11 @@ object ArchiveReader {
     ) : DelegateInputStream(inputStream) {
         @Throws(IOException::class)
         override fun close() {
-            super.close()
-
-            closeable.close()
+            try {
+                super.close()
+            } finally {
+                closeable.close()
+            }
         }
     }
 }

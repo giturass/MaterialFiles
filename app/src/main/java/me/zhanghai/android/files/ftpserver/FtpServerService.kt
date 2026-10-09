@@ -13,6 +13,7 @@ import androidx.annotation.WorkerThread
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import me.zhanghai.android.files.app.AppLocaleHelper
 import me.zhanghai.android.files.compat.mainExecutorCompat
 import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.util.WakeWifiLock
@@ -34,6 +35,10 @@ class FtpServerService : Service() {
     private val executorService = Executors.newSingleThreadExecutor()
 
     private var server: FtpServer? = null
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLocaleHelper.wrap(newBase))
+    }
 
     override fun onCreate() {
         super.onCreate()

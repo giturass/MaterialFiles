@@ -34,7 +34,7 @@
         <item name="itemVerticalPadding" tools:ignore="PrivateResource">@dimen/design_navigation_item_vertical_padding</item>
         <item name="itemShapeAppearanceOverlay">@style/ShapeAppearanceOverlay.MaterialFiles.NavigationView.Item</item>
         <item name="itemShapeInsetStart">0dp</item>
-        <item name="itemShapeInsetEnd">8dp</item>
+        <item name="itemShapeInsetEnd">0dp</item>
         <item name="itemShapeInsetTop">0dp</item>
         <item name="itemShapeInsetBottom">0dp</item>
         <item name="itemIconTint">@color/navigation_item_subtitle_text_color</item>
@@ -45,9 +45,7 @@
         <item name="dividerVerticalPadding">@dimen/design_navigation_separator_vertical_padding</item>
     </style>
     <style name="ShapeAppearanceOverlay.MaterialFiles.NavigationView.Item" parent="">
-        <item name="cornerSize">50%</item>
-        <item name="cornerSizeTopLeft">0dp</item>
-        <item name="cornerSizeBottomLeft">0dp</item>
+        <item name="cornerSize">0dp</item>
     </style>
 
     <style name="Widget.MaterialFiles.CardView" parent="Widget.MaterialComponents.CardView">

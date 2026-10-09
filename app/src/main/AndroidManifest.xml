@@ -35,6 +35,15 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission android:name="com.android.launcher.permission.INSTALL_SHORTCUT" />
+    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
+
+    <queries>
+        <package android:name="com.termux" />
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="*/*" />
+        </intent>
+    </queries>
 
     <!-- Shizuku requires API 24. -->
     <uses-sdk tools:overrideLibrary="rikka.shizuku.aidl,rikka.shizuku.api,rikka.shizuku.shared" />
@@ -45,6 +54,7 @@
       ~ TODO: Remove this attribute once Samsung respects the default value for it.
       -->
     <application
+        android:name="me.zhanghai.android.files.app.AppApplication"
         android:allowBackup="true"
         android:banner="@drawable/banner"
         android:enableOnBackInvokedCallback="true"
@@ -285,6 +295,17 @@
             android:theme="@style/Theme.MaterialFiles" />
 
         <activity
+            android:name="me.zhanghai.android.files.terminal.OpenTermuxActivity"
+            android:autoRemoveFromRecents="true"
+            android:exported="false"
+            android:label="@string/file_list_action_open_in_terminal"
+            android:theme="@style/Theme.MaterialFiles.Translucent" />
+
+        <receiver
+            android:name="me.zhanghai.android.files.terminal.TermuxResultReceiver"
+            android:exported="false" />
+
+        <activity
             android:name="me.zhanghai.android.files.fileaction.ArchivePasswordDialogActivity"
             android:autoRemoveFromRecents="true"
             android:theme="@style/Theme.MaterialFiles.Translucent" />
@@ -379,15 +400,6 @@
             </intent-filter>
             <meta-data
                 android:name="android.service.quicksettings.TOGGLEABLE_TILE"
-                android:value="true" />
-        </service>
-
-        <service
-            android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
-            android:enabled="false"
-            android:exported="false">
-            <meta-data
-                android:name="autoStoreLocales"
                 android:value="true" />
         </service>
 

@@ -45,25 +45,24 @@ import androidx.drawerlayout.widget.DrawerLayout
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.commit
 import androidx.lifecycle.LifecycleOwner
-import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.SimpleItemAnimator
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-import com.leinardi.android.speeddial.SpeedDialView
 import java8.nio.file.Path
 import java8.nio.file.Paths
-import kotlin.math.roundToInt
 import kotlinx.parcelize.Parcelize
 import me.zhanghai.android.files.R
 import me.zhanghai.android.files.app.application
 import me.zhanghai.android.files.app.clipboardManager
 import me.zhanghai.android.files.compat.checkSelfPermissionCompat
 import me.zhanghai.android.files.compat.setGroupDividerEnabledCompat
+import me.zhanghai.android.files.databinding.FileJobArchiveProgressItemBinding
 import me.zhanghai.android.files.databinding.FileListFragmentAppBarIncludeBinding
 import me.zhanghai.android.files.databinding.FileListFragmentBinding
 import me.zhanghai.android.files.databinding.FileListFragmentBottomBarIncludeBinding
 import me.zhanghai.android.files.databinding.FileListFragmentContentIncludeBinding
 import me.zhanghai.android.files.databinding.FileListFragmentIncludeBinding
-import me.zhanghai.android.files.databinding.FileListFragmentSpeedDialIncludeBinding
 import me.zhanghai.android.files.file.FileItem
 import me.zhanghai.android.files.file.MimeType
 import me.zhanghai.android.files.file.asMimeTypeOrNull
@@ -71,6 +70,7 @@ import me.zhanghai.android.files.file.extension
 import me.zhanghai.android.files.file.fileProviderUri
 import me.zhanghai.android.files.file.isApk
 import me.zhanghai.android.files.file.isImage
+import me.zhanghai.android.files.filejob.ArchiveJobProgressLiveData
 import me.zhanghai.android.files.filejob.FileJobService
 import me.zhanghai.android.files.filelist.FileSortOptions.By
 import me.zhanghai.android.files.filelist.FileSortOptions.Order
@@ -93,7 +93,6 @@ import me.zhanghai.android.files.ui.PersistentBarLayout
 import me.zhanghai.android.files.ui.PersistentBarLayoutToolbarActionMode
 import me.zhanghai.android.files.ui.PersistentDrawerLayout
 import me.zhanghai.android.files.ui.ScrollingViewOnApplyWindowInsetsListener
-import me.zhanghai.android.files.ui.SpeedDialViewOnBackPressedCallback
 import me.zhanghai.android.files.ui.ThemedFastScroller
 import me.zhanghai.android.files.ui.ToolbarActionMode
 import me.zhanghai.android.files.util.DebouncedRunnable
@@ -117,7 +116,6 @@ import me.zhanghai.android.files.util.createViewIntent
 import me.zhanghai.android.files.util.extraPath
 import me.zhanghai.android.files.util.extraPathList
 import me.zhanghai.android.files.util.fadeToVisibilityUnsafe
-import me.zhanghai.android.files.util.getDimensionDp
 import me.zhanghai.android.files.util.getQuantityString
 import me.zhanghai.android.files.util.hasSw600Dp
 import me.zhanghai.android.files.util.isOrientationLandscape
@@ -131,6 +129,7 @@ import me.zhanghai.android.files.util.valueCompat
 import me.zhanghai.android.files.util.viewModels
 import me.zhanghai.android.files.util.withChooser
 import me.zhanghai.android.files.viewer.image.ImageViewerActivity
+import java.text.NumberFormat
 
 class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.Listener,
     ConfirmReplaceFileDialogFragment.Listener, OpenApkDialogFragment.Listener,
@@ -177,7 +176,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
     private lateinit var bottomActionMode: ToolbarActionMode
 
-    private lateinit var layoutManager: GridLayoutManager
+    private lateinit var layoutManager: LinearLayoutManager
 
     private lateinit var adapter: FileListAdapter
 
@@ -240,26 +239,17 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             )
         }
         binding.swipeRefreshLayout.setOnRefreshListener { this.refresh() }
-        layoutManager = GridLayoutManager(activity, 1)
+        layoutManager = LinearLayoutManager(activity)
         binding.recyclerView.layoutManager = layoutManager
         adapter = FileListAdapter(this)
         binding.recyclerView.adapter = adapter
+        // A growing archive updates its attributes repeatedly. Keep insert/remove/move
+        // animations, but do not cross-fade the same file every time its size changes.
+        (binding.recyclerView.itemAnimator as? SimpleItemAnimator)?.supportsChangeAnimations = false
         val fastScroller = ThemedFastScroller.create(binding.recyclerView)
         binding.recyclerView.setOnApplyWindowInsetsListener(
             ScrollingViewOnApplyWindowInsetsListener(binding.recyclerView, fastScroller)
         )
-        binding.speedDialView.inflate(R.menu.file_list_speed_dial)
-        binding.speedDialView.setOnActionSelectedListener {
-            when (it.id) {
-                R.id.action_create_file -> showCreateFileDialog()
-                R.id.action_create_directory -> showCreateDirectoryDialog()
-            }
-            // Returning false causes the speed dial to close without animation.
-            //return false
-            binding.speedDialView.close()
-            true
-        }
-
         val viewLifecycleOwner = viewLifecycleOwner
         addOnBackPressedCallback(
             object : OnBackPressedCallback(false) {
@@ -274,7 +264,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 }
         )
         addOnBackPressedCallback(overlayActionMode.onBackPressedCallback)
-        addOnBackPressedCallback(SpeedDialViewOnBackPressedCallback(binding.speedDialView))
         binding.drawerLayout?.let {
             addOnBackPressedCallback(DrawerLayoutOnBackPressedCallback(it))
         }
@@ -347,10 +336,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         viewModel.breadcrumbLiveData.observe(viewLifecycleOwner) {
             binding.breadcrumbLayout.setData(it)
         }
-        viewModel.viewTypeLiveData.observe(viewLifecycleOwner) { onViewTypeChanged(it) }
-        // Live data only calls observeForever() on its sources when it is active, so we have to
-        // make view type live data active first (so that it can load its initial value) before we
-        // register another observer that needs to get the view type.
         if (binding.persistentDrawerLayout != null) {
             Settings.FILE_LIST_PERSISTENT_DRAWER_OPEN.observe(viewLifecycleOwner) {
                 onPersistentDrawerOpenChanged(it)
@@ -365,8 +350,51 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         viewModel.pasteStateLiveData.observe(viewLifecycleOwner) { onPasteStateChanged(it) }
         Settings.FILE_NAME_ELLIPSIZE.observe(viewLifecycleOwner) { onFileNameEllipsizeChanged(it) }
         viewModel.fileListLiveData.observe(viewLifecycleOwner) { onFileListChanged(it) }
+        observeArchiveProgress(viewLifecycleOwner)
         Settings.FILE_LIST_SHOW_HIDDEN_FILES.observe(viewLifecycleOwner) {
             onShowHiddenFilesChanged(it)
+        }
+    }
+
+    private fun observeArchiveProgress(owner: LifecycleOwner) {
+        val progressBindings = mutableMapOf<Int, FileJobArchiveProgressItemBinding>()
+        val percentFormat = NumberFormat.getPercentInstance()
+        ArchiveJobProgressLiveData.observe(owner) { jobs ->
+            val jobIds = jobs.mapTo(mutableSetOf()) { it.id }
+            val iterator = progressBindings.iterator()
+            while (iterator.hasNext()) {
+                val (id, progressBinding) = iterator.next()
+                if (id !in jobIds) {
+                    binding.archiveProgressLayout.removeView(progressBinding.root)
+                    iterator.remove()
+                }
+            }
+            for (job in jobs) {
+                val progressBinding = progressBindings.getOrPut(job.id) {
+                    FileJobArchiveProgressItemBinding.inflate(
+                        layoutInflater, binding.archiveProgressLayout, false
+                    ).also {
+                        binding.archiveProgressLayout.addView(it.root)
+                        it.cancelButton.setOnClickListener { view ->
+                            view.isEnabled = false
+                            FileJobService.cancelJob(job.id)
+                        }
+                    }
+                }
+                progressBinding.titleText.text = job.title
+                progressBinding.detailText.text = job.text
+                progressBinding.progress.apply {
+                    isIndeterminate = job.indeterminate
+                    max = job.max.coerceAtLeast(1)
+                    progress = job.progress.coerceIn(0, max)
+                }
+                progressBinding.percentText.text = if (!job.indeterminate && job.max > 0) {
+                    percentFormat.format(job.progress.toDouble() / job.max)
+                } else {
+                    null
+                }
+            }
+            binding.archiveProgressScrollView.isVisible = jobs.isNotEmpty()
         }
     }
 
@@ -454,14 +482,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 }
                 true
             }
-            R.id.action_view_list -> {
-                viewModel.viewType = FileViewType.LIST
-                true
-            }
-            R.id.action_view_grid -> {
-                viewModel.viewType = FileViewType.GRID
-                true
-            }
             R.id.action_sort_by_name -> {
                 viewModel.setSortBy(By.NAME)
                 true
@@ -500,12 +520,12 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 newTask()
                 true
             }
-            R.id.action_navigate_up -> {
-                navigateUp()
+            R.id.action_create_file -> {
+                showCreateFileDialog()
                 true
             }
-            R.id.action_navigate_to -> {
-                showNavigateToPathDialog()
+            R.id.action_create_directory -> {
+                showCreateDirectoryDialog()
                 true
             }
             R.id.action_refresh -> {
@@ -574,7 +594,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 it.closeDrawer(GravityCompat.START)
             }
         }
-        updateSpanCount()
     }
 
     private fun onCurrentPathChanged(path: Path) {
@@ -589,11 +608,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     private fun onFileListChanged(stateful: Stateful<List<FileItem>>) {
         val files = stateful.value
         val isSearching = viewModel.searchState.isSearching
-        when {
-            stateful is Failure -> binding.toolbar.setSubtitle(R.string.error)
-            stateful is Loading && !isSearching -> binding.toolbar.setSubtitle(R.string.loading)
-            else -> binding.toolbar.subtitle = getSubtitle(files!!)
-        }
         val hasFiles = !files.isNullOrEmpty()
         binding.swipeRefreshLayout.isRefreshing = stateful is Loading && (hasFiles || isSearching)
         binding.progress.fadeToVisibilityUnsafe(stateful is Loading && !(hasFiles || isSearching))
@@ -620,54 +634,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         }
     }
 
-    private fun getSubtitle(files: List<FileItem>): String {
-        val directoryCount = files.count { it.attributes.isDirectory }
-        val fileCount = files.size - directoryCount
-        val directoryCountText = if (directoryCount > 0) {
-            getQuantityString(
-                R.plurals.file_list_subtitle_directory_count_format, directoryCount, directoryCount
-            )
-        } else {
-            null
-        }
-        val fileCountText = if (fileCount > 0) {
-            getQuantityString(
-                R.plurals.file_list_subtitle_file_count_format, fileCount, fileCount
-            )
-        } else {
-            null
-        }
-        return when {
-            !directoryCountText.isNullOrEmpty() && !fileCountText.isNullOrEmpty() ->
-                (directoryCountText + getString(R.string.file_list_subtitle_separator)
-                    + fileCountText)
-            !directoryCountText.isNullOrEmpty() -> directoryCountText
-            !fileCountText.isNullOrEmpty() -> fileCountText
-            else -> getString(R.string.empty)
-        }
-    }
-
-    private fun onViewTypeChanged(viewType: FileViewType) {
-        updateSpanCount()
-        adapter.viewType = viewType
-        updateViewSortMenuItems()
-    }
-
-    private fun updateSpanCount() {
-        layoutManager.spanCount = when (viewModel.viewType) {
-            FileViewType.LIST -> 1
-            FileViewType.GRID -> {
-                var widthDp = resources.configuration.screenWidthDp
-                val persistentDrawerLayout = binding.persistentDrawerLayout
-                if (persistentDrawerLayout != null &&
-                    persistentDrawerLayout.isDrawerOpen(GravityCompat.START)) {
-                    widthDp -= getDimensionDp(R.dimen.navigation_max_width).roundToInt()
-                }
-                (widthDp / 180).coerceAtLeast(2)
-            }
-        }
-    }
-
     private fun onSortOptionsChanged(sortOptions: FileSortOptions) {
         adapter.sortOptions = sortOptions
         updateViewSortMenuItems()
@@ -686,12 +652,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         if (searchViewExpanded) {
             return
         }
-        val viewType = viewModel.viewType
-        val checkedViewTypeItem = when (viewType) {
-            FileViewType.LIST -> menuBinding.viewListItem
-            FileViewType.GRID -> menuBinding.viewGridItem
-        }
-        checkedViewTypeItem.isChecked = true
         val sortOptions = viewModel.sortOptions
         val checkedSortByItem = when (sortOptions.by) {
             By.NAME -> menuBinding.sortByNameItem
@@ -703,15 +663,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         menuBinding.sortOrderAscendingItem.isChecked = sortOptions.order == Order.ASCENDING
         menuBinding.sortDirectoriesFirstItem.isChecked = sortOptions.isDirectoriesFirst
         menuBinding.viewSortPathSpecificItem.isChecked = viewModel.isViewSortPathSpecific
-    }
-
-    private fun navigateUp() {
-        collapseSearchView()
-        viewModel.navigateUp()
-    }
-
-    private fun showNavigateToPathDialog() {
-        NavigateToPathDialogFragment.show(currentPath, this)
     }
 
     private fun newTask() {
@@ -1006,11 +957,14 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         name: String,
         format: Int,
         filter: Int,
-        password: String?
+        password: String?,
+        encryptFileNames: Boolean,
+        runInBackground: Boolean
     ) {
         val archiveFile = viewModel.currentPath.resolve(name)
         FileJobService.archive(
-            makePathListForJob(files), archiveFile, format, filter, password, requireContext()
+            makePathListForJob(files), archiveFile, format, filter, password, encryptFileNames,
+            runInBackground, requireContext()
         )
         viewModel.selectFiles(files, false)
     }
@@ -1663,6 +1617,8 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         val overlayToolbar: Toolbar,
         val breadcrumbLayout: BreadcrumbLayout,
         val contentLayout: ViewGroup,
+        val archiveProgressScrollView: ViewGroup,
+        val archiveProgressLayout: ViewGroup,
         val progress: ProgressBar,
         val errorText: TextView,
         val emptyView: View,
@@ -1670,8 +1626,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         val recyclerView: RecyclerView,
         val bottomBarLayout: ViewGroup,
         val bottomToolbar: Toolbar,
-        val bottomCreateFileNameEdit: EditText,
-        val speedDialView: SpeedDialView
+        val bottomCreateFileNameEdit: EditText
     ) {
         companion object {
             fun inflate(
@@ -1685,16 +1640,16 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 val appBarBinding = FileListFragmentAppBarIncludeBinding.bind(bindingRoot)
                 val contentBinding = FileListFragmentContentIncludeBinding.bind(bindingRoot)
                 val bottomBarBinding = FileListFragmentBottomBarIncludeBinding.bind(bindingRoot)
-                val speedDialBinding = FileListFragmentSpeedDialIncludeBinding.bind(bindingRoot)
                 return Binding(
                     bindingRoot, includeBinding.drawerLayout, includeBinding.persistentDrawerLayout,
                     includeBinding.persistentBarLayout, appBarBinding.appBarLayout,
                     appBarBinding.toolbar, appBarBinding.overlayToolbar,
                     appBarBinding.breadcrumbLayout, contentBinding.contentLayout,
+                    contentBinding.archiveProgressScrollView, contentBinding.archiveProgressLayout,
                     contentBinding.progress, contentBinding.errorText, contentBinding.emptyView,
                     contentBinding.swipeRefreshLayout, contentBinding.recyclerView,
                     bottomBarBinding.bottomBarLayout, bottomBarBinding.bottomToolbar,
-                    bottomBarBinding.bottomCreateFileNameEdit, speedDialBinding.speedDialView
+                    bottomBarBinding.bottomCreateFileNameEdit
                 )
             }
         }
@@ -1704,8 +1659,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         val menu: Menu,
         val searchItem: MenuItem,
         val viewSortItem: MenuItem,
-        val viewListItem: MenuItem,
-        val viewGridItem: MenuItem,
         val sortByNameItem: MenuItem,
         val sortByTypeItem: MenuItem,
         val sortBySizeItem: MenuItem,
@@ -1721,7 +1674,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 inflater.inflate(R.menu.file_list, menu)
                 return MenuBinding(
                     menu, menu.findItem(R.id.action_search), menu.findItem(R.id.action_view_sort),
-                    menu.findItem(R.id.action_view_list), menu.findItem(R.id.action_view_grid),
                     menu.findItem(R.id.action_sort_by_name),
                     menu.findItem(R.id.action_sort_by_type),
                     menu.findItem(R.id.action_sort_by_size),

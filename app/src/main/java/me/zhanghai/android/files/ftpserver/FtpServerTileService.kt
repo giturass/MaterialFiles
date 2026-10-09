@@ -5,16 +5,22 @@
 
 package me.zhanghai.android.files.ftpserver
 
+import android.content.Context
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import androidx.annotation.RequiresApi
 import androidx.lifecycle.Observer
+import me.zhanghai.android.files.app.AppLocaleHelper
 import me.zhanghai.android.files.compat.doWithStartForegroundServiceAllowed
 
 @RequiresApi(Build.VERSION_CODES.N)
 class FtpServerTileService : TileService() {
     private val observer = Observer<FtpServerService.State> { onFtpServerStateChanged(it) }
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLocaleHelper.wrap(newBase))
+    }
 
     override fun onStartListening() {
         super.onStartListening()

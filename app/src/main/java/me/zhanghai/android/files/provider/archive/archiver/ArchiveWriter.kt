@@ -5,6 +5,7 @@
 
 package me.zhanghai.android.files.provider.archive.archiver
 
+import android.os.Build
 import java8.nio.channels.SeekableByteChannel
 import java8.nio.file.LinkOption
 import java8.nio.file.Path
@@ -18,16 +19,46 @@ import me.zhanghai.android.files.provider.common.newInputStream
 import me.zhanghai.android.files.provider.common.readAttributes
 import me.zhanghai.android.files.provider.common.readSymbolicLinkByteString
 import me.zhanghai.android.files.provider.common.size
+import me.zhanghai.android.files.provider.common.toInt
+import me.zhanghai.android.libarchive.Archive
+import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry
 import java.io.Closeable
 import java.io.IOException
+import java.io.OutputStream
+import java.util.Date
 
 class ArchiveWriter @Throws(IOException::class) constructor(
     channel: SeekableByteChannel,
     format: Int,
     filter: Int,
-    password: String?
+    password: String?,
+    encryptFileNames: Boolean = false
 ) : Closeable {
-    private val archive = WriteArchive(channel, format, filter, password)
+    init {
+        require(!encryptFileNames || format == Archive.FORMAT_7ZIP && !password.isNullOrEmpty())
+        require(format != Archive.FORMAT_7ZIP || filter == Archive.FILTER_NONE)
+        require(format != Archive.FORMAT_7ZIP || password.isNullOrEmpty()
+            || Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
+    }
+
+    private val sevenZArchive = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
+        && format == Archive.FORMAT_7ZIP && !password.isNullOrEmpty()) {
+        val passwordChars = password.toCharArray()
+        try {
+            EncryptedSevenZOutputFile(
+                CommonsSeekableByteChannel(channel), passwordChars, encryptFileNames
+            )
+        } finally {
+            passwordChars.fill('\u0000')
+        }
+    } else {
+        null
+    }
+    private val archive = if (sevenZArchive == null) {
+        WriteArchive(channel, format, filter, password)
+    } else {
+        null
+    }
 
     @Throws(IOException::class)
     fun write(file: Path, entryName: Path, intervalMillis: Long, listener: ((Long) -> Unit)?) {
@@ -58,6 +89,51 @@ class ArchiveWriter @Throws(IOException::class) constructor(
         } else {
             null
         }
+        val sevenZArchive = sevenZArchive
+        if (sevenZArchive != null) {
+            if (type != PosixFileType.REGULAR_FILE && type != PosixFileType.DIRECTORY
+                && type != PosixFileType.SYMBOLIC_LINK) {
+                throw IOException("7z does not support file type $type: $file")
+            }
+            val symbolicLinkBytes = symbolicLinkTarget?.toByteArray()
+            val entry = SevenZArchiveEntry().apply {
+                this.name = name
+                isDirectory = type == PosixFileType.DIRECTORY
+                setLastModifiedDate(Date(lastModifiedTime.toMillis()))
+                this.size = symbolicLinkBytes?.size?.toLong() ?: if (isDirectory) 0 else size
+                hasWindowsAttributes = true
+                // 7-Zip stores Unix file types and permissions in the high attribute bits.
+                windowsAttributes = ((type.mode or mode.toInt()) shl 16) or 0x8000 or
+                    if (isDirectory) 0x10 else 0x20
+            }
+            try {
+                sevenZArchive.putArchiveEntry(entry)
+                if (type == PosixFileType.REGULAR_FILE) {
+                    file.newInputStream(LinkOption.NOFOLLOW_LINKS).use { inputStream ->
+                        inputStream.copyTo(object : OutputStream() {
+                            override fun write(value: Int) {
+                                write(byteArrayOf(value.toByte()), 0, 1)
+                            }
+
+                            override fun write(bytes: ByteArray, offset: Int, length: Int) {
+                                sevenZArchive.write(bytes, offset, length)
+                            }
+                        }, intervalMillis, listener)
+                    }
+                } else {
+                    if (symbolicLinkBytes != null) {
+                        sevenZArchive.write(symbolicLinkBytes, 0, symbolicLinkBytes.size)
+                    }
+                    listener?.invoke(attributes.size())
+                }
+                sevenZArchive.closeArchiveEntry()
+            } catch (e: Exception) {
+                sevenZArchive.abort()
+                throw e
+            }
+            return
+        }
+        val archive = archive!!
         archive.Entry(
             name, lastModifiedTime, lastAccessTime, creationTime, type, size, owner, group, mode,
             symbolicLinkTarget
@@ -73,6 +149,6 @@ class ArchiveWriter @Throws(IOException::class) constructor(
 
     @Throws(IOException::class)
     override fun close() {
-        archive.close()
+        sevenZArchive?.close() ?: archive!!.close()
     }
 }

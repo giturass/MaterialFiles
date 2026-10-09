@@ -14,10 +14,12 @@ import android.widget.Toast
 import androidx.annotation.AnyRes
 import androidx.annotation.PluralsRes
 import androidx.annotation.StringRes
+import androidx.core.app.NotificationCompat
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.IOException
 import java.io.InterruptedIOException
+import java8.nio.channels.SeekableByteChannel
 import java8.nio.file.CopyOption
 import java8.nio.file.DirectoryIteratorException
 import java8.nio.file.FileAlreadyExistsException
@@ -43,6 +45,7 @@ import me.zhanghai.android.files.file.MimeType
 import me.zhanghai.android.files.file.asFileSize
 import me.zhanghai.android.files.file.fileProviderUri
 import me.zhanghai.android.files.file.loadFileItem
+import me.zhanghai.android.files.filelist.FileListActivity
 import me.zhanghai.android.files.filelist.OpenFileAsDialogActivity
 import me.zhanghai.android.files.filelist.OpenFileAsDialogFragment
 import me.zhanghai.android.files.provider.archive.archiveFile
@@ -86,6 +89,7 @@ import me.zhanghai.android.files.provider.common.setSeLinuxContext
 import me.zhanghai.android.files.provider.common.toByteString
 import me.zhanghai.android.files.provider.common.toModeString
 import me.zhanghai.android.files.provider.linux.isLinuxPath
+import me.zhanghai.android.libarchive.Archive
 import me.zhanghai.android.files.util.asFileName
 import me.zhanghai.android.files.util.createInstallPackageIntent
 import me.zhanghai.android.files.util.createIntent
@@ -127,14 +131,32 @@ private fun FileJob.postNotification(
     indeterminate: Boolean,
     showCancel: Boolean
 ) {
+    if (this is ArchiveFileJob && !runInBackground) {
+        ArchiveJobProgressLiveData.update(
+            ArchiveJobProgress(id, title, text, max, progress, indeterminate)
+        )
+    }
     val notification = fileJobNotificationTemplate.createBuilder(service).apply {
         setContentTitle(title)
         setContentText(text)
         setSubText(subText)
         setContentInfo(info)
         setProgress(max, progress, indeterminate)
-        // TODO
-        //setContentIntent()
+        val job = this@postNotification
+        if (job is ArchiveFileJob) {
+            if (job.runInBackground) {
+                // This notification is the only progress UI for a background archive.
+                setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            }
+            val intent = FileListActivity.createViewIntent(job.archiveFile.parent ?: job.archiveFile)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            setContentIntent(
+                PendingIntent.getActivity(
+                    service, id, intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+            )
+        }
         if (showCancel) {
             val intent = FileJobReceiver.createIntent(id)
             val pendingIntent = PendingIntent.getBroadcast(
@@ -351,7 +373,7 @@ private fun FileJob.postTransferSizeNotification(
     val fileCount = transferInfo.fileCount
     val target = transferInfo.target!!
     val size = transferInfo.size
-    val transferredSize = transferInfo.transferredSize
+    val transferredSize = transferInfo.transferredSize.coerceIn(0, size.coerceAtLeast(0))
     if (fileCount == 1) {
         title = getString(titleOneRes, getFileName(currentSource), getFileName(target))
         val sizeString = size.asFileSize().formatHumanReadable(service)
@@ -371,7 +393,11 @@ private fun FileJob.postTransferSizeNotification(
     }
     val max: Int
     val progress: Int
-    if (size <= Int.MAX_VALUE) {
+    if (size <= 0) {
+        // Empty files and providers with no byte count still have useful entry progress.
+        max = fileCount.coerceAtLeast(1)
+        progress = transferInfo.transferredFileCount.coerceIn(0, max)
+    } else if (size <= Int.MAX_VALUE) {
         max = size.toInt()
         progress = transferredSize.toInt()
     } else {
@@ -610,31 +636,65 @@ private class ActionAllInfo(
 
 class ArchiveFileJob(
     private val sources: List<Path>,
-    private val archiveFile: Path,
+    internal val archiveFile: Path,
     private val format: Int,
     private val filter: Int,
-    private val password: String?
+    private val password: String?,
+    private val encryptFileNames: Boolean,
+    internal val runInBackground: Boolean
 ) : FileJob() {
     @Throws(IOException::class)
     override fun run() {
+        try {
+            // Scanning remote or large directories may take a while before the first entry.
+            postScanNotification(ScanInfo(), R.plurals.file_job_archive_scan_notification_title_format)
+            createArchive()
+        } finally {
+            if (!runInBackground) {
+                ArchiveJobProgressLiveData.remove(id)
+            }
+        }
+    }
+
+    @Throws(IOException::class)
+    private fun createArchive() {
         val scanInfo = scan(sources, R.plurals.file_job_archive_scan_notification_title_format)
+        throwIfInterrupted()
         val channel = archiveFile.newByteChannel(
             StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE
         )
         var successful = false
+        var temporary: File? = null
         try {
             channel.use {
-                ArchiveWriter(channel, format, filter, password).use { writer ->
-                    val transferInfo = TransferInfo(scanInfo, archiveFile)
-                    for (source in sources) {
-                        val target = getTargetFileName(source)
-                        archiveRecursively(source, writer, target, transferInfo)
-                        throwIfInterrupted()
+                if (format == Archive.FORMAT_7ZIP && !password.isNullOrEmpty()
+                    && !archiveFile.isLinuxPath) {
+                    // Encrypted 7z rewrites its signature after compression. FTP STOR can
+                    // truncate on that rewrite, and document/WebDAV providers may not seek.
+                    // Stage the final encrypted archive privately, then upload sequentially.
+                    val stagingFile = File.createTempFile("archive-", ".7z", service.cacheDir)
+                    temporary = stagingFile
+                    Paths.get(stagingFile.path).newByteChannel(StandardOpenOption.WRITE).use {
+                        writeArchive(it, scanInfo)
                     }
+                    throwIfInterrupted()
+                    stagingFile.inputStream().use { input ->
+                        input.copyTo(channel.newOutputStream(), PROGRESS_INTERVAL_MILLIS) {
+                            throwIfInterrupted()
+                        }
+                    }
+                } else {
+                    writeArchive(channel, scanInfo)
                 }
             }
+            throwIfInterrupted()
             successful = true
         } finally {
+            temporary?.let {
+                if (!it.delete() && it.exists()) {
+                    IOException("Unable to remove archive staging file: $it").printStackTrace()
+                }
+            }
             if (!successful) {
                 try {
                     archiveFile.deleteIfExists()
@@ -644,6 +704,25 @@ class ArchiveFileJob(
                     e.printStackTrace()
                 }
             }
+        }
+    }
+
+    @Throws(IOException::class)
+    private fun writeArchive(channel: SeekableByteChannel, scanInfo: ScanInfo) {
+        ArchiveWriter(channel, format, filter, password, encryptFileNames).use { writer ->
+            val transferInfo = TransferInfo(scanInfo, archiveFile)
+            for (source in sources) {
+                val target = getTargetFileName(source)
+                archiveRecursively(source, writer, target, transferInfo)
+                throwIfInterrupted()
+            }
+            // Reading the last source byte does not mean the output is ready yet.
+            postNotification(
+                getString(
+                    R.string.file_job_archive_finishing_title_format, getFileName(archiveFile)
+                ),
+                null, null, null, 0, 0, true, true
+            )
         }
     }
 
