@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.res.Resources;
 import android.os.Build;
+import android.os.Looper;
 
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
@@ -31,6 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
 
 import java8.nio.channels.SeekableByteChannel;
@@ -54,9 +56,9 @@ import java8.nio.file.spi.FileSystemProvider;
 
 /**
  * Runs the APK's reader, archive filesystem, exception wrapper and password Intent on Android.
- * Only the physical file provider and resource strings are supplied by this harness. The archive
- * directory cache is populated with the real reader's metadata, avoiding application startup and
- * native libarchive in app_process. No Activity is launched or password dialog rendered.
+ * Only the physical file provider, resource strings and UI dispatch are supplied by this harness.
+ * The archive directory cache is populated with the real reader's metadata, avoiding application
+ * startup and native libarchive in app_process. No Activity, dialog or Toast is rendered.
  */
 public final class ArchivePasswordFlowTest {
     private static final String PACKAGE = "me.zhanghai.android.files.";
@@ -69,7 +71,10 @@ public final class ArchivePasswordFlowTest {
         Thread.setDefaultUncaughtExceptionHandler((thread, failure) -> fail(failure));
         try {
             require(Build.VERSION.SDK_INT >= 23, "The application requires Android API 23 or newer");
-            Application application = new TestApplication();
+            // Password cancellation queues a Toast from the waiting job's thread. Keep the UI
+            // queue unprocessed so these checks never display notifications on the device.
+            if (Looper.getMainLooper() == null) Looper.prepareMainLooper();
+            TestApplication application = new TestApplication();
             setField(Class.forName(PACKAGE + "app.AppProviderKt"), null,
                     "application", application);
             File fixtures = new File(arguments[0]);
@@ -82,6 +87,10 @@ public final class ArchivePasswordFlowTest {
             }
             check("encrypted-header root password action names its archive",
                     () -> verifyRootAction(fixtures, application));
+            for (boolean root : new boolean[]{true, false}) {
+                check((root ? "root" : "entry") + ": cancelling the password aborts the waiting job",
+                        () -> verifyPasswordCancellation(fixtures, root, application));
+            }
             for (String kind : new String[]{"headers", "contents", "copy"}) {
                 check(kind + ": all selected streams share one batch in archive order",
                         () -> verifyBatch(fixtures, kind));
@@ -186,6 +195,8 @@ public final class ArchivePasswordFlowTest {
                     PACKAGE + "fileaction.ArchivePasswordDialogFragment$Args");
             Object args = intent.getParcelableExtra(argsClass.getName());
             require(args != null, "Password Intent has no dialog arguments");
+            require(Boolean.valueOf(wrong).equals(call(args, "isPasswordIncorrect")),
+                    "Password dialog cannot distinguish a missing password from an incorrect one");
             Path dialogPath = (Path) call(args, "getPath");
             // These are the actual operations performed by onCreateDialog() and onOk(). Before
             // the fix getArchiveFile() throws ProviderMismatchException for the physical path.
@@ -259,6 +270,76 @@ public final class ArchivePasswordFlowTest {
                 companion, physical, passwords);
         require(reader != null, "Fixture is not recognized as 7z");
         return reader;
+    }
+
+    private static void verifyPasswordCancellation(File fixtures, boolean rootAction,
+            TestApplication application) throws Throwable {
+        FixtureFileSystem physical = new FixtureFileSystem(new File(fixtures, "official-headers.7z"));
+        Class<?> paths = Class.forName(PACKAGE + "provider.archive.PathArchiveExtensionsKt");
+        Path root = (Path) invoke(paths.getMethod("createArchiveRootPath", Path.class),
+                null, physical.path);
+        try (FileSystem archive = root.getFileSystem()) {
+            Path path = rootAction ? root : root.resolve("large.bin");
+            Class<?> passwordError = Class.forName(
+                    PACKAGE + "provider.archive.ArchivePasswordRequiredException");
+            Object rejected = passwordError.getConstructor(Path.class, String.class)
+                    .newInstance(path, "Passphrase required for this entry");
+            Class<?> continuationClass = Class.forName("kotlin.coroutines.Continuation");
+            Class<?> functionClass = Class.forName("kotlin.jvm.functions.Function2");
+            Class<?> contextClass = Class.forName("kotlin.coroutines.CoroutineContext");
+            Object emptyContext = Class.forName("kotlin.coroutines.EmptyCoroutineContext")
+                    .getField("INSTANCE").get(null);
+            Method suspended = Class.forName("kotlin.coroutines.intrinsics.IntrinsicsKt")
+                    .getMethod("getCOROUTINE_SUSPENDED");
+            suspended.setAccessible(true);
+            Object suspendedResult = invoke(suspended, null);
+            Method runBlocking = Class.forName("kotlinx.coroutines.BuildersKt")
+                    .getMethod("runBlocking", contextClass, functionClass);
+            runBlocking.setAccessible(true);
+            AtomicReference<Throwable> result = new AtomicReference<>();
+            int uiTasksBefore = application.uiTasks.size();
+            Object block = Proxy.newProxyInstance(functionClass.getClassLoader(),
+                    new Class<?>[]{functionClass}, (proxy, method, arguments) -> {
+                        if (!method.getName().equals("invoke")) {
+                            throw new UnsupportedOperationException(method.toString());
+                        }
+                        Object action = invoke(passwordError.getMethod("getUserAction",
+                                continuationClass, Context.class), rejected, arguments[1], application);
+                        Intent intent = (Intent) call(action, "getIntent");
+                        Object args = intent.getParcelableExtra(
+                                PACKAGE + "fileaction.ArchivePasswordDialogFragment$Args");
+                        require(path.equals(call(args, "getPath")),
+                                "Cancellation prompt lost the requested archive path");
+                        // This is the same negative response delivered by the password dialog's
+                        // back/cancel/finish callbacks. Use the actual coroutine runtime, as the
+                        // file job does, so returning false instead of aborting fails this check.
+                        invoke(Class.forName("kotlin.jvm.functions.Function1")
+                                .getMethod("invoke", Object.class), call(args, "getListener"),
+                                Boolean.FALSE);
+                        return suspendedResult;
+                    });
+            Thread waiter = new Thread(() -> {
+                try {
+                    invoke(runBlocking, null, emptyContext, block);
+                } catch (Throwable failure) {
+                    result.set(failure);
+                }
+            }, "cancel-archive-password-job");
+            waiter.setDaemon(true);
+            waiter.start();
+            waiter.join(10000);
+            require(!waiter.isAlive(), "Password cancellation left the file job waiting");
+            require(result.get() instanceof InterruptedIOException,
+                    "Password cancellation did not abort the file job: " + result.get());
+            require(result.get().getCause() == rejected,
+                    "Password cancellation lost the original password error");
+            if (Build.VERSION.SDK_INT >= 28) {
+                require(application.uiTasks.size() == uiTasksBefore + 1,
+                        "Password cancellation did not queue exactly one user notification");
+            }
+        } finally {
+            physical.close();
+        }
     }
 
     private static void verifyBatch(File fixtures, String kind) throws Throwable {
@@ -673,6 +754,7 @@ public final class ArchivePasswordFlowTest {
     }
 
     private static final class TestApplication extends Application {
+        final List<Runnable> uiTasks = new ArrayList<>();
         private final Resources resources = new Resources(Resources.getSystem().getAssets(),
                 Resources.getSystem().getDisplayMetrics(), Resources.getSystem().getConfiguration()) {
             @Override public String getString(int id) { return "Archive password"; }
@@ -683,6 +765,8 @@ public final class ArchivePasswordFlowTest {
 
         @Override public String getPackageName() { return "me.zhanghai.android.files"; }
         @Override public Resources getResources() { return resources; }
+        @Override public Looper getMainLooper() { return Looper.getMainLooper(); }
+        @Override public Executor getMainExecutor() { return uiTasks::add; }
     }
 
     /** A physical provider shared by the APK's native reader and extraction-failure tests. */

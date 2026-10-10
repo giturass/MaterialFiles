@@ -65,12 +65,16 @@ class ArchivePasswordDialogFragment : AppCompatDialogFragment() {
             .setMessage(getMessage(args.path.archiveFile.fileName, context))
             .apply {
                 binding = ArchivePasswordDialogBinding.inflate(context.layoutInflater)
-                binding.passwordEdit.hideTextInputLayoutErrorOnTextChange(binding.passwordLayout)
-                binding.passwordEdit.setOnEditorConfirmActionListener { onOk() }
                 if (savedInstanceState != null) {
                     val state = savedInstanceState.getState<State>()
                     binding.root.restoreHierarchyState(state.hierarchyState)
+                } else if (args.isPasswordIncorrect) {
+                    binding.passwordLayout.error =
+                        getString(R.string.file_action_archive_password_error_incorrect)
                 }
+                // Restoring the input text must not clear a restored password error.
+                binding.passwordEdit.hideTextInputLayoutErrorOnTextChange(binding.passwordLayout)
+                binding.passwordEdit.setOnEditorConfirmActionListener { onOk() }
                 setView(AllowSoftInputHackAlertDialogCustomView(context))
             }
             .setPositiveButton(android.R.string.ok, null)
@@ -125,8 +129,8 @@ class ArchivePasswordDialogFragment : AppCompatDialogFragment() {
         if (isListenerNotified) {
             return
         }
-        args.listener(successful)
         isListenerNotified = true
+        args.listener(successful)
     }
 
     companion object {
@@ -142,6 +146,7 @@ class ArchivePasswordDialogFragment : AppCompatDialogFragment() {
     @Parcelize
     class Args(
         val path: @WriteWith<ParcelableParceler> Path,
+        val isPasswordIncorrect: Boolean,
         val listener: @WriteWith<ListenerParceler>()
         (Boolean) -> Unit
     ) : ParcelableArgs {

@@ -494,18 +494,18 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
             Archive.FORMAT_7ZIP, Archive.FILTER_NONE),
         TAR(R.id.tarRadio, R.string.file_create_archive_type_tar, "tar",
             Archive.FORMAT_TAR, Archive.FILTER_NONE),
-        TAR_GZ(R.id.tarGzRadio, R.string.file_create_archive_type_tar_gz, "tar.gz",
-            Archive.FORMAT_TAR, Archive.FILTER_GZIP),
-        TAR_BZ2(R.id.tarBz2Radio, R.string.file_create_archive_type_tar_bz2, "tar.bz2",
-            Archive.FORMAT_TAR, Archive.FILTER_BZIP2),
-        TAR_XZ(R.id.tarXzRadio, R.string.file_create_archive_type_tar_xz, "tar.xz",
-            Archive.FORMAT_TAR, Archive.FILTER_XZ),
         GZ(R.id.gzipRadio, R.string.file_create_archive_type_gz, "gz",
             Archive.FORMAT_RAW, Archive.FILTER_GZIP),
+        XZ(R.id.xzRadio, R.string.file_create_archive_type_xz, "xz",
+            Archive.FORMAT_RAW, Archive.FILTER_XZ),
         BZ2(R.id.bzip2Radio, R.string.file_create_archive_type_bz2, "bz2",
             Archive.FORMAT_RAW, Archive.FILTER_BZIP2),
-        XZ(R.id.xzRadio, R.string.file_create_archive_type_xz, "xz",
-            Archive.FORMAT_RAW, Archive.FILTER_XZ);
+        TAR_GZ(R.id.tarGzRadio, R.string.file_create_archive_type_tar_gz, "tar.gz",
+            Archive.FORMAT_TAR, Archive.FILTER_GZIP),
+        TAR_XZ(R.id.tarXzRadio, R.string.file_create_archive_type_tar_xz, "tar.xz",
+            Archive.FORMAT_TAR, Archive.FILTER_XZ),
+        TAR_BZ2(R.id.tarBz2Radio, R.string.file_create_archive_type_tar_bz2, "tar.bz2",
+            Archive.FORMAT_TAR, Archive.FILTER_BZIP2);
 
         val supportsPassword: Boolean
             get() = this == ZIP || this == SEVEN_Z
