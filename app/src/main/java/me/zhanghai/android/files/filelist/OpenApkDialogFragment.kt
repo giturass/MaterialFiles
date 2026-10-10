@@ -7,12 +7,14 @@ package me.zhanghai.android.files.filelist
 
 import android.app.Dialog
 import android.os.Bundle
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatDialogFragment
 import androidx.fragment.app.Fragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.parcelize.Parcelize
 import me.zhanghai.android.files.R
 import me.zhanghai.android.files.file.FileItem
+import me.zhanghai.android.files.ui.setButtonBarEqualWidth
 import me.zhanghai.android.files.util.ParcelableArgs
 import me.zhanghai.android.files.util.args
 import me.zhanghai.android.files.util.putArgs
@@ -28,10 +30,17 @@ class OpenApkDialogFragment : AppCompatDialogFragment() {
         return MaterialAlertDialogBuilder(requireContext(), theme)
             .setMessage(R.string.file_open_apk_message)
             .setPositiveButton(R.string.install) { _, _ -> listener.installApk(args.file) }
-            // While semantically incorrect, this places the two most expected actions side by side.
             .setNegativeButton(R.string.view) { _, _ -> listener.viewApk(args.file) }
             .setNeutralButton(android.R.string.cancel, null)
             .create()
+    }
+
+    override fun onStart() {
+        super.onStart()
+
+        (requireDialog() as AlertDialog).setButtonBarEqualWidth(
+            AlertDialog.BUTTON_NEUTRAL, AlertDialog.BUTTON_NEGATIVE, AlertDialog.BUTTON_POSITIVE
+        )
     }
 
     companion object {

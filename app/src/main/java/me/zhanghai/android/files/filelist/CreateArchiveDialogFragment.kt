@@ -6,49 +6,36 @@
 package me.zhanghai.android.files.filelist
 
 import android.app.Dialog
-import android.content.ActivityNotFoundException
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
 import android.os.Bundle
-import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
-import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.EditText
-import android.widget.LinearLayout
 import androidx.annotation.IdRes
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatDialogFragment
-import androidx.core.app.NotificationManagerCompat
 import androidx.core.view.isGone
 import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.Fragment
 import com.google.android.material.checkbox.MaterialCheckBox
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import kotlinx.parcelize.Parcelize
 import me.zhanghai.android.files.R
 import me.zhanghai.android.files.databinding.CreateArchiveDialogBinding
-import me.zhanghai.android.files.filejob.fileJobNotificationTemplate
 import me.zhanghai.android.files.provider.archive.archiver.ArchiveCompressionPreset
 import me.zhanghai.android.files.settings.Settings
+import me.zhanghai.android.files.ui.setButtonBarEqualWidth
 import me.zhanghai.android.files.util.ParcelableArgs
 import me.zhanghai.android.files.util.args
-import me.zhanghai.android.files.util.dpToDimensionPixelSize
 import me.zhanghai.android.files.util.putArgs
 import me.zhanghai.android.files.util.setOnEditorConfirmActionListener
 import me.zhanghai.android.files.util.setTextWithSelection
 import me.zhanghai.android.files.util.show
-import me.zhanghai.android.files.util.startActivitySafe
 import me.zhanghai.android.files.util.takeIfNotEmpty
 import me.zhanghai.android.files.util.valueCompat
 import me.zhanghai.android.libarchive.Archive
-import android.provider.Settings as SystemSettings
 
 class CreateArchiveDialogFragment : FileNameDialogFragment() {
     private val args by args<Args>()
@@ -73,7 +60,7 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        isCancelable = false
+        isCancelable = true
     }
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
@@ -168,9 +155,6 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
             WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN or
                 WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         )
-        dialog.setButton(
-            AlertDialog.BUTTON_NEUTRAL, getString(R.string.file_create_archive_background)
-        ) { _, _ -> }
         return dialog
     }
 
@@ -178,57 +162,10 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
         super.onStart()
 
         val dialog = requireDialog() as AlertDialog
-        arrangeButtons(dialog)
-        // Set this after the dialog creates its buttons so invalid input does not dismiss it.
-        dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
-            val name = name
-            if (isNameValid(name) && ensureBackgroundNotifications()) {
-                archive(name, true)
-                dismiss()
-            }
-        }
-        updateFormatFields()
-    }
-
-    private fun arrangeButtons(dialog: AlertDialog) {
-        val buttons = listOf(
-            dialog.getButton(AlertDialog.BUTTON_NEUTRAL),
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE),
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+        dialog.setButtonBarEqualWidth(
+            AlertDialog.BUTTON_NEGATIVE, AlertDialog.BUTTON_POSITIVE
         )
-        val oldRow = buttons.first().parent as ViewGroup
-        val parent = oldRow.parent as ViewGroup
-        val buttonHeight = dpToDimensionPixelSize(48)
-        val buttonMargin = dpToDimensionPixelSize(4)
-        // Keep the themed buttons and their listeners, while replacing the spacer and automatic
-        // stacking with one row of equally sized actions outside the scrolling form.
-        val row = LinearLayout(oldRow.context).apply {
-            id = oldRow.id
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            layoutDirection = oldRow.layoutDirection
-            setPaddingRelative(
-                oldRow.paddingStart, oldRow.paddingTop, oldRow.paddingEnd, oldRow.paddingBottom
-            )
-            minimumHeight = buttonHeight + paddingTop + paddingBottom
-        }
-        for (button in buttons) {
-            oldRow.removeView(button)
-            button.minWidth = 0
-            button.minimumWidth = 0
-            button.minHeight = maxOf(button.minHeight, buttonHeight)
-            button.gravity = Gravity.CENTER
-            row.addView(
-                button, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    marginStart = buttonMargin
-                    marginEnd = buttonMargin
-                }
-            )
-        }
-        val rowIndex = parent.indexOfChild(oldRow)
-        val rowLayoutParams = oldRow.layoutParams
-        parent.removeView(oldRow)
-        parent.addView(row, rowIndex, rowLayoutParams)
+        updateFormatFields()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -336,26 +273,6 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
     }
 
     override fun onOk(name: String) {
-        archive(name, false)
-    }
-
-    private fun ensureBackgroundNotifications(): Boolean {
-        val notificationManager = NotificationManagerCompat.from(requireContext())
-        val appNotificationsEnabled = notificationManager.areNotificationsEnabled()
-        val channelBlocked = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-            notificationManager.getNotificationChannel(fileJobNotificationTemplate.channelTemplate.id)
-                ?.importance == NotificationManagerCompat.IMPORTANCE_NONE
-        if (appNotificationsEnabled && !channelBlocked) {
-            return true
-        }
-        if (childFragmentManager.findFragmentByTag(BACKGROUND_NOTIFICATIONS_TAG) == null) {
-            BackgroundNotificationsDialogFragment()
-                .show(childFragmentManager, BACKGROUND_NOTIFICATIONS_TAG)
-        }
-        return false
-    }
-
-    private fun archive(name: String, runInBackground: Boolean) {
         val password = if (archiveType.supportsPassword) {
             binding.passwordEdit.text!!.toString().takeIfNotEmpty()
         } else {
@@ -365,8 +282,7 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
             binding.encryptFileNamesCheck.isChecked
         listener.archive(
             args.files, name, archiveType.format, archiveType.filter, password, encryptFileNames,
-            runInBackground, compressionPreset, checkNotNull(splitSize),
-            binding.deleteSourcesCheck.isChecked
+            compressionPreset, checkNotNull(splitSize), binding.deleteSourcesCheck.isChecked
         )
     }
 
@@ -387,7 +303,6 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
         private const val STATE_NAME = "archiveName"
         private const val STATE_PASSWORD = "password"
         private const val STATE_ENCRYPT_FILE_NAMES = "encryptFileNames"
-        private const val BACKGROUND_NOTIFICATIONS_TAG = "backgroundNotifications"
 
         fun show(files: FileItemSet, fragment: Fragment) {
             CreateArchiveDialogFragment().putArgs(Args(files)).show(fragment)
@@ -396,43 +311,6 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
 
     @Parcelize
     class Args(val files: FileItemSet) : ParcelableArgs
-
-    class BackgroundNotificationsDialogFragment : AppCompatDialogFragment() {
-        override fun onCreateDialog(savedInstanceState: Bundle?): Dialog =
-            MaterialAlertDialogBuilder(requireContext(), theme)
-                .setMessage(R.string.file_create_archive_notifications_required)
-                .setPositiveButton(R.string.file_create_archive_enable_notifications) { _, _ ->
-                    openNotificationSettings()
-                }
-                .setNegativeButton(android.R.string.cancel, null)
-                .create()
-
-        private fun openNotificationSettings() {
-            val context = requireContext()
-            val applicationDetailsIntent = Intent(
-                SystemSettings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                Uri.fromParts("package", context.packageName, null)
-            )
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-                startActivitySafe(applicationDetailsIntent)
-                return
-            }
-            val intent = if (NotificationManagerCompat.from(context).areNotificationsEnabled()) {
-                Intent(SystemSettings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
-                    .putExtra(
-                        SystemSettings.EXTRA_CHANNEL_ID,
-                        fileJobNotificationTemplate.channelTemplate.id
-                    )
-            } else {
-                Intent(SystemSettings.ACTION_APP_NOTIFICATION_SETTINGS)
-            }.putExtra(SystemSettings.EXTRA_APP_PACKAGE, context.packageName)
-            try {
-                startActivity(intent)
-            } catch (_: ActivityNotFoundException) {
-                startActivitySafe(applicationDetailsIntent)
-            }
-        }
-    }
 
     protected class Binding private constructor(
         root: View,
@@ -474,7 +352,6 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
             filter: Int,
             password: String?,
             encryptFileNames: Boolean,
-            runInBackground: Boolean,
             compressionPreset: ArchiveCompressionPreset,
             splitSize: Long,
             deleteSources: Boolean

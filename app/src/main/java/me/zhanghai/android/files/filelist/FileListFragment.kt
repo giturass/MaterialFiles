@@ -984,7 +984,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         filter: Int,
         password: String?,
         encryptFileNames: Boolean,
-        runInBackground: Boolean,
         compressionPreset: ArchiveCompressionPreset,
         splitSize: Long,
         deleteSources: Boolean
@@ -992,7 +991,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         val archiveFile = viewModel.currentPath.resolve(name)
         FileJobService.archive(
             makePathListForJob(files), archiveFile, format, filter, password, encryptFileNames,
-            runInBackground, compressionPreset, splitSize, deleteSources, requireContext()
+            false, compressionPreset, splitSize, deleteSources, requireContext()
         )
         viewModel.selectFiles(files, false)
     }

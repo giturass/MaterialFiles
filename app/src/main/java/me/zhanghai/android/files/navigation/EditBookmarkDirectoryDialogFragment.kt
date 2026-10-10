@@ -9,6 +9,7 @@ import android.app.Dialog
 import android.content.DialogInterface
 import android.os.Bundle
 import android.view.WindowManager
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatDialogFragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import java8.nio.file.Path
@@ -18,6 +19,7 @@ import me.zhanghai.android.files.R
 import me.zhanghai.android.files.databinding.EditBookmarkDirectoryDialogBinding
 import me.zhanghai.android.files.filelist.FileListActivity
 import me.zhanghai.android.files.filelist.toUserFriendlyString
+import me.zhanghai.android.files.ui.setButtonBarEqualWidth
 import me.zhanghai.android.files.util.ParcelableArgs
 import me.zhanghai.android.files.util.ParcelableParceler
 import me.zhanghai.android.files.util.ParcelableState
@@ -66,6 +68,14 @@ class EditBookmarkDirectoryDialogFragment : AppCompatDialogFragment() {
             .apply {
                 window!!.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
             }
+
+    override fun onStart() {
+        super.onStart()
+
+        (requireDialog() as AlertDialog).setButtonBarEqualWidth(
+            AlertDialog.BUTTON_NEUTRAL, AlertDialog.BUTTON_NEGATIVE, AlertDialog.BUTTON_POSITIVE
+        )
+    }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)

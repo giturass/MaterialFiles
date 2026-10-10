@@ -41,8 +41,4 @@
     <string name="file_create_archive_delete_sources">压缩成功后删除源文件</string>
     <string name="file_create_archive_encrypt_file_names">加密文件名</string>
     <string name="file_create_archive_encrypt_file_names_password_required">加密文件名需要设置密码</string>
-    <string name="file_create_archive_background">后台</string>
-    <string name="file_create_archive_background_hint">选择“后台”后，可在通知栏查看压缩进度</string>
-    <string name="file_create_archive_notifications_required">请先开启“文件操作”通知，以便在通知栏查看后台压缩进度。开启后返回此处，点击“后台”开始压缩。</string>
-    <string name="file_create_archive_enable_notifications">开启通知</string>
 </resources>

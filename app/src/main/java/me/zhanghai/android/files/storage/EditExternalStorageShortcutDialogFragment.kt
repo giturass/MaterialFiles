@@ -20,6 +20,7 @@ import me.zhanghai.android.files.compat.DocumentsContractCompat
 import me.zhanghai.android.files.databinding.EditExternalStorageShortcutDialogBinding
 import me.zhanghai.android.files.file.ExternalStorageUri
 import me.zhanghai.android.files.file.displayName
+import me.zhanghai.android.files.ui.setButtonBarEqualWidth
 import me.zhanghai.android.files.util.ParcelableArgs
 import me.zhanghai.android.files.util.args
 import me.zhanghai.android.files.util.finish
@@ -63,6 +64,14 @@ class EditExternalStorageShortcutDialogFragment : AppCompatDialogFragment() {
                     getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { save() }
                 }
             }
+
+    override fun onStart() {
+        super.onStart()
+
+        (requireDialog() as AlertDialog).setButtonBarEqualWidth(
+            AlertDialog.BUTTON_NEUTRAL, AlertDialog.BUTTON_NEGATIVE, AlertDialog.BUTTON_POSITIVE
+        )
+    }
 
     private fun updateNamePlaceholder() {
         val rootId = binding.rootIdEdit.text.toString().takeIfNotEmpty()

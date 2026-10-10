@@ -19,6 +19,7 @@ import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.IOException
 import java.io.InterruptedIOException
+import java.net.SocketTimeoutException
 import java8.nio.channels.SeekableByteChannel
 import java8.nio.file.CopyOption
 import java8.nio.file.DirectoryIteratorException
@@ -680,19 +681,39 @@ class ArchiveFileJob(
 
     @Throws(IOException::class)
     override fun run() {
-        try {
+        var archiveCreated = false
+        val result = try {
             // Scanning remote or large directories may take a while before the first entry.
             postScanNotification(ScanInfo(), R.plurals.file_job_archive_scan_notification_title_format)
-            createArchive()
+            val scanInfo = createArchive()
+            archiveCreated = true
+            getString(
+                if (!deleteSources || deleteArchivedSources(scanInfo)) {
+                    R.string.file_job_archive_success
+                } else {
+                    R.string.file_job_archive_sources_kept
+                }
+            )
+        } catch (e: Exception) {
+            e.printStackTrace()
+            when {
+                archiveCreated -> getString(R.string.file_job_archive_sources_kept)
+                // Socket timeouts also extend InterruptedIOException but are failures.
+                e is InterruptedIOException && e !is SocketTimeoutException ->
+                    getString(R.string.file_job_archive_canceled)
+                else -> getString(R.string.file_job_archive_failed_format, e.toString())
+            }
         } finally {
             if (!runInBackground) {
                 ArchiveJobProgressLiveData.remove(id)
             }
         }
+        // Handle archive outcomes here so FileJob does not also show a generic error toast.
+        showToast(result)
     }
 
     @Throws(IOException::class)
-    private fun createArchive() {
+    private fun createArchive(): ScanInfo {
         if (format == Archive.FORMAT_RAW && (sources.size != 1 || !sources.single()
                 .readAttributes(BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
                 .isRegularFile)) {
@@ -733,16 +754,21 @@ class ArchiveFileJob(
                 }
             }
         }
-        if (deleteSources) {
-            // Publication and every output close must succeed before any source is removed.
-            // A deletion failure leaves the completed archive available to the user.
-            val transferInfo = TransferInfo(scanInfo, null)
-            val actionAllInfo = ActionAllInfo()
-            for (source in archivedSources!!.values.sortedByDescending { it.path.nameCount }) {
-                throwIfInterrupted()
-                delete(source.path, transferInfo, actionAllInfo, source::delete)
-            }
+        return scanInfo
+    }
+
+    @Throws(IOException::class)
+    private fun deleteArchivedSources(scanInfo: ScanInfo): Boolean {
+        // Publication and every output close must succeed before any source is removed.
+        // A deletion failure leaves the completed archive available to the user.
+        val transferInfo = TransferInfo(scanInfo, null)
+        val actionAllInfo = ActionAllInfo()
+        val archivedSources = archivedSources!!
+        for (source in archivedSources.values.sortedByDescending { it.path.nameCount }) {
+            throwIfInterrupted()
+            delete(source.path, transferInfo, actionAllInfo, source::delete)
         }
+        return transferInfo.transferredFileCount == archivedSources.size
     }
 
     @Throws(IOException::class)
@@ -869,22 +895,28 @@ private fun FileJob.archive(
 
 private fun FileJob.showArchiveError(file: Path, archiveFile: Path, exception: IOException): Nothing {
     exception.printStackTrace()
-    val result = showErrorDialog(
-        getString(R.string.file_job_archive_error_title_format, getFileName(file)),
-        getString(
-            R.string.file_job_archive_error_message_format, getFileName(archiveFile),
-            exception.toString()
-        ),
-        getReadOnlyFileStore(archiveFile, exception),
-        false,
-        null,
-        getString(android.R.string.cancel),
-        null
-    )
-    when (result.action) {
-        FileJobErrorAction.NEGATIVE, FileJobErrorAction.CANCELED -> throw InterruptedIOException()
-        else -> throw AssertionError(result.action)
+    try {
+        val result = showErrorDialog(
+            getString(R.string.file_job_archive_error_title_format, getFileName(file)),
+            getString(
+                R.string.file_job_archive_error_message_format, getFileName(archiveFile),
+                exception.toString()
+            ),
+            getReadOnlyFileStore(archiveFile, exception),
+            false,
+            null,
+            getString(android.R.string.cancel),
+            null
+        )
+        when (result.action) {
+            FileJobErrorAction.NEGATIVE, FileJobErrorAction.CANCELED -> Unit
+            else -> throw AssertionError(result.action)
+        }
+    } catch (e: InterruptedIOException) {
+        exception.addSuppressed(e)
     }
+    // Dismissing or interrupting an error dialog must still report the original failure.
+    throw exception
 }
 
 private fun FileJob.postArchiveNotification(transferInfo: TransferInfo, currentFile: Path) {

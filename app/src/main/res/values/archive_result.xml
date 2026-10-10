@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="file_job_archive_success">压缩文件创建成功</string>
+    <string name="file_job_archive_failed_format">压缩文件创建失败：%1$s</string>
+    <string name="file_job_archive_canceled">已取消创建压缩文件</string>
+    <string name="file_job_archive_sources_kept">压缩文件已创建，部分源文件未删除</string>
+</resources>
