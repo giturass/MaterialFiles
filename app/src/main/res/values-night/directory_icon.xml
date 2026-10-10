@@ -8,5 +8,5 @@
 <resources>
 
     <color name="directory_icon_background">#335169</color>
-    <color name="directory_icon_shadow">#90CAF9</color>
+    <color name="directory_icon_shadow">#BBDEFB</color>
 </resources>
