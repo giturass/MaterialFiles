@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<resources>
+    <string name="file_list_selected_count_format">已选择 %1$,d 项</string>
+    <string name="invert_selection">反选</string>
+    <string name="file_list_more_actions">更多操作</string>
+</resources>

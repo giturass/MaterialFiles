@@ -13,8 +13,8 @@ import java.io.OutputStream
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
 import java8.nio.file.Path
-import me.zhanghai.android.files.provider.archive.archiver.ReadArchive
-import me.zhanghai.android.files.provider.archive.archiver.SevenZArchiveReader
+import me.zhanghai.android.files.provider.archive.archiver.ArchiveEntry
+import me.zhanghai.android.files.provider.archive.archiver.SevenZipArchiveReader
 
 /**
  * Adapts one push-based 7-Zip Extract call to the file providers' pull-based copy API.
@@ -24,16 +24,16 @@ import me.zhanghai.android.files.provider.archive.archiver.SevenZArchiveReader
  * unpack a solid archive again for every file or stage its uncompressed contents on disk.
  */
 internal class SevenZExtractionSession(
-    private val selectedEntries: List<Pair<Path, ReadArchive.Entry>>,
-    initialArchive: SevenZArchiveReader,
-    private val openArchive: () -> SevenZArchiveReader,
+    private val selectedEntries: List<Pair<Path, ArchiveEntry>>,
+    initialArchive: SevenZipArchiveReader,
+    private val openArchive: () -> SevenZipArchiveReader,
     private val onClose: () -> Unit
 ) : Closeable {
     val files: List<Path> = selectedEntries.map { it.first }
 
     private val indices = files.withIndex().associate { it.value to it.index }
     private val skipped = mutableSetOf<Path>()
-    private var initialArchive: SevenZArchiveReader? = initialArchive
+    private var initialArchive: SevenZipArchiveReader? = initialArchive
     private var run: ExtractionRun? = null
     private var lastIndex = -1
     private var lastPipe: EntryPipe? = null
@@ -120,8 +120,8 @@ internal class SevenZExtractionSession(
     }
 
     private class ExtractionRun(
-        private val archive: SevenZArchiveReader,
-        private val entries: List<ReadArchive.Entry>
+        private val archive: SevenZipArchiveReader,
+        private val entries: List<ArchiveEntry>
     ) : Closeable {
         private val lock = Object()
         // An absent key means that the job has not decided yet; a null value means skip.
@@ -137,14 +137,14 @@ internal class SevenZExtractionSession(
         var failure: IOException? = null
             private set
 
-        private val thread = Thread({ extract() }, "7z-extract").apply { isDaemon = true }
+        private val thread = Thread({ extract() }, "archive-extract").apply { isDaemon = true }
 
         fun start() {
             try {
                 thread.start()
             } catch (e: Throwable) {
                 isFinished = true
-                val failure = IOException("Unable to start 7z extraction", e)
+                val failure = IOException("Unable to start archive extraction", e)
                 this.failure = failure
                 try {
                     archive.close()
@@ -159,7 +159,7 @@ internal class SevenZExtractionSession(
             val failure = synchronized(lock) {
                 requests[name] = pipe
                 lock.notifyAll()
-                failure ?: if (isFinished) IOException("7z entry was not extracted: $name") else null
+                failure ?: if (isFinished) IOException("Archive entry was not extracted: $name") else null
             }
             if (failure != null) {
                 pipe.finish(failure)
@@ -177,8 +177,8 @@ internal class SevenZExtractionSession(
 
         private fun extract() {
             try {
-                archive.extract(entries, object : SevenZArchiveReader.ExtractionCallback {
-                    override fun openOutput(entry: ReadArchive.Entry): OutputStream? =
+                archive.extract(entries, object : SevenZipArchiveReader.ExtractionCallback {
+                    override fun openOutput(entry: ArchiveEntry): OutputStream? =
                         synchronized(lock) {
                             while (!requests.containsKey(entry.name) && !isClosed) {
                                 waitForDecision()
@@ -190,20 +190,20 @@ internal class SevenZExtractionSession(
                             requests[entry.name]?.outputStream
                         }
 
-                    override fun onResult(entry: ReadArchive.Entry, failure: IOException?) {
+                    override fun onResult(entry: ArchiveEntry, failure: IOException?) {
                         val pipe = synchronized(lock) { requests[entry.name] }
                         // EOF is published only after 7-Zip has checked the entry's CRC.
                         pipe?.finish(failure)
                     }
                 })
             } catch (e: Throwable) {
-                failure = e as? IOException ?: IOException("7z extraction failed", e)
+                failure = e as? IOException ?: IOException("archive extraction failed", e)
             } finally {
                 try {
                     archive.close()
                 } catch (e: Throwable) {
                     if (failure == null) {
-                        failure = e as? IOException ?: IOException("Unable to close 7z archive", e)
+                        failure = e as? IOException ?: IOException("Unable to close archive", e)
                     } else {
                         failure!!.addSuppressed(e)
                     }
@@ -213,7 +213,7 @@ internal class SevenZExtractionSession(
                     lock.notifyAll()
                     requests.values.filterNotNull().toList()
                 }
-                val failure = failure ?: IOException("7z entry was not extracted")
+                val failure = failure ?: IOException("Archive entry was not extracted")
                 for (pipe in pending) {
                     try {
                         pipe.finish(failure)

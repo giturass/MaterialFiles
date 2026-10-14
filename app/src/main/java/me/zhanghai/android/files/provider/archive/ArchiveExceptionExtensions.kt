@@ -1,91 +1,47 @@
 /*
  * Copyright (c) 2023 Hai Zhang <dreaming.in.code.zh@gmail.com>
+ * Copyright (c) 2026 Material Files contributors.
  * All Rights Reserved.
  */
 
 package me.zhanghai.android.files.provider.archive
 
-import android.system.OsConstants
 import java8.nio.file.FileSystemException
 import java8.nio.file.Path
+import me.zhanghai.android.files.provider.archive.archiver.ArchivePassphraseException
 import me.zhanghai.android.files.provider.common.DelegateInputStream
-import me.zhanghai.android.libarchive.ArchiveException
 import java.io.IOException
 import java.io.InputStream
 import java.io.InterruptedIOException
+import java.nio.channels.ClosedByInterruptException
 
-// See also libarchive/archive_platform.h .
-internal const val ARCHIVE_ERRNO_MISC = -1
+internal fun IOException.toFileSystemOrInterruptedIOException(file: Path): IOException = when (this) {
+    is ArchivePasswordRequiredException, is InterruptedIOException -> this
+    is ClosedByInterruptException -> InterruptedIOException(message).apply { initCause(this@toFileSystemOrInterruptedIOException) }
+    is ArchivePassphraseException -> ArchivePasswordRequiredException(file, message).apply {
+        initCause(this@toFileSystemOrInterruptedIOException)
+    }
+    else -> FileSystemException(file.toString(), null, message).apply {
+        initCause(this@toFileSystemOrInterruptedIOException)
+    }
+}
 
-fun ArchiveException.toFileSystemOrInterruptedIOException(file: Path): IOException =
-    when {
-        // See also ReadArchive.toArchiveException .
-        code == OsConstants.EINTR -> InterruptedIOException(message)
-        // See also libarchive/archive_read_support_format_zip.c .
-        code == ARCHIVE_ERRNO_MISC && (
-            message == "Incorrect passphrase" || message == "Passphrase required for this entry"
-        ) -> ArchivePasswordRequiredException(file, message)
-        else -> FileSystemException(file.toString(), null, message)
-    }.apply { initCause(this@toFileSystemOrInterruptedIOException) }
-
-class ArchiveExceptionInputStream(
+/** Also translates failures delivered asynchronously by the native extraction worker. */
+internal class ArchiveExceptionInputStream(
     inputStream: InputStream,
     private val file: Path
 ) : DelegateInputStream(inputStream) {
-    @Throws(IOException::class)
-    override fun read(): Int =
-        try {
-            super.read()
-        } catch (e: ArchiveException) {
-            throw e.toFileSystemOrInterruptedIOException(file)
-        }
+    override fun read(): Int = translate { super.read() }
+    override fun read(b: ByteArray): Int = translate { super.read(b) }
+    override fun read(b: ByteArray, off: Int, len: Int): Int = translate { super.read(b, off, len) }
+    override fun skip(n: Long): Long = translate { super.skip(n) }
+    override fun available(): Int = translate { super.available() }
+    override fun close() = translate { super.close() }
+    override fun reset() = translate { super.reset() }
 
-    @Throws(IOException::class)
-    override fun read(b: ByteArray): Int =
-        try {
-            super.read(b)
-        } catch (e: ArchiveException) {
-            throw e.toFileSystemOrInterruptedIOException(file)
-        }
-
-    @Throws(IOException::class)
-    override fun read(b: ByteArray, off: Int, len: Int): Int =
-        try {
-            super.read(b, off, len)
-        } catch (e: ArchiveException) {
-            throw e.toFileSystemOrInterruptedIOException(file)
-        }
-
-    @Throws(IOException::class)
-    override fun skip(n: Long): Long = try {
-        super.skip(n)
-    } catch (e: ArchiveException) {
+    private inline fun <T> translate(block: () -> T): T = try {
+        block()
+    } catch (e: IOException) {
         throw e.toFileSystemOrInterruptedIOException(file)
-    }
-
-    @Throws(IOException::class)
-    override fun available(): Int =
-        try {
-            super.available()
-        } catch (e: ArchiveException) {
-            throw e.toFileSystemOrInterruptedIOException(file)
-        }
-
-    @Throws(IOException::class)
-    override fun close() {
-        try {
-            super.close()
-        } catch (e: ArchiveException) {
-            throw e.toFileSystemOrInterruptedIOException(file)
-        }
-    }
-
-    @Throws(IOException::class)
-    override fun reset() {
-        try {
-            super.reset()
-        } catch (e: ArchiveException) {
-            throw e.toFileSystemOrInterruptedIOException(file)
-        }
     }
 }

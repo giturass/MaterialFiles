@@ -2,6 +2,7 @@
 
 package me.zhanghai.android.files.provider.archive.archiver
 
+import java8.nio.channels.FileChannels
 import java8.nio.channels.SeekableByteChannel
 import java8.nio.file.NoSuchFileException
 import java8.nio.file.Path
@@ -11,16 +12,70 @@ import me.zhanghai.android.files.provider.common.newByteChannel
 import me.zhanghai.android.files.provider.common.newInputStream
 import me.zhanghai.android.files.provider.common.newOutputStream
 import me.zhanghai.android.files.provider.common.size
+import me.zhanghai.android.files.provider.linux.isLinuxPath
 import java.io.Closeable
 import java.io.EOFException
+import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import java.io.InterruptedIOException
 import java.io.OutputStream
+import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.channels.ClosedChannelException
 import java.nio.channels.NonReadableChannelException
 import java.nio.channels.NonWritableChannelException
+
+/** Finalizes seekable output before publishing it to split volumes or sequential providers. */
+@Throws(IOException::class)
+internal fun writeArchiveOutput(
+    file: Path,
+    splitSize: Long,
+    cacheDir: File,
+    write: (SeekableByteChannel) -> Unit
+) {
+    var temporary: File? = null
+    try {
+        ArchiveOutput(file, splitSize).use { output ->
+            if (splitSize > 0 || !file.isLinuxPath) {
+                val stagingFile = File.createTempFile("archive-", ".tmp", cacheDir)
+                temporary = stagingFile
+                // Internal cache files must bypass rootable providers, media scanning and
+                // remote file services. The caller still publishes through its own provider.
+                RandomAccessFile(stagingFile, "rw").use { randomAccess ->
+                    write(FileChannels.from(randomAccess.channel))
+                }
+                checkArchiveInterrupted()
+                stagingFile.inputStream().use { input ->
+                    val bytes = ByteArray(64 * 1024)
+                    while (true) {
+                        checkArchiveInterrupted()
+                        val count = input.read(bytes)
+                        if (count < 0) break
+                        if (count == 0) throw IOException("The archive staging file made no read progress")
+                        val buffer = ByteBuffer.wrap(bytes, 0, count)
+                        while (buffer.hasRemaining()) {
+                            checkArchiveInterrupted()
+                            if (output.channel.write(buffer) <= 0) {
+                                throw IOException("The archive destination made no write progress")
+                            }
+                        }
+                    }
+                }
+            } else {
+                write(output.channel)
+            }
+            checkArchiveInterrupted()
+            output.commit()
+        }
+    } finally {
+        temporary?.let {
+            if (!it.delete() && it.exists()) {
+                IOException("Unable to remove archive staging file: $it").printStackTrace()
+            }
+        }
+    }
+}
 
 /** Owns only newly created output files. A failed close also rolls back every created volume. */
 internal class ArchiveOutput(private val file: Path, private val splitSize: Long) : Closeable {

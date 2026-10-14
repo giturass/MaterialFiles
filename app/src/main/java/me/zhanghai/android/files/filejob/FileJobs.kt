@@ -52,9 +52,10 @@ import me.zhanghai.android.files.filelist.OpenFileAsDialogFragment
 import me.zhanghai.android.files.provider.archive.archiveFile
 import me.zhanghai.android.files.provider.archive.SevenZExtractionSession
 import me.zhanghai.android.files.provider.archive.archiver.ArchiveCompressionPreset
-import me.zhanghai.android.files.provider.archive.archiver.ArchiveOutput
+import me.zhanghai.android.files.provider.archive.archiver.ArchiveCreationFormat
 import me.zhanghai.android.files.provider.archive.archiver.ArchiveWriter
-import me.zhanghai.android.files.provider.archive.archiver.archiveFileNameWithoutVolume
+import me.zhanghai.android.files.provider.archive.archiver.writeArchiveOutput
+import me.zhanghai.android.files.file.getArchiveBaseName
 import me.zhanghai.android.files.provider.archive.createArchiveRootPath
 import me.zhanghai.android.files.provider.archive.isArchivePath
 import me.zhanghai.android.files.provider.archive.newSevenZExtractionSession
@@ -95,7 +96,6 @@ import me.zhanghai.android.files.provider.common.setSeLinuxContext
 import me.zhanghai.android.files.provider.common.toByteString
 import me.zhanghai.android.files.provider.common.toModeString
 import me.zhanghai.android.files.provider.linux.isLinuxPath
-import me.zhanghai.android.libarchive.Archive
 import me.zhanghai.android.files.util.asFileName
 import me.zhanghai.android.files.util.createInstallPackageIntent
 import me.zhanghai.android.files.util.createIntent
@@ -205,15 +205,7 @@ private fun FileJob.getTargetFileName(source: Path): Path {
         val archiveFile = source.archiveFile
         val archiveRoot = archiveFile.createArchiveRootPath()
         if (source == archiveRoot) {
-            val archiveName = archiveFile.archiveFileNameWithoutVolume()
-            // Match the compression suffixes recognized by ArchiveReader, including those
-            // not treated as double extensions for ordinary file names.
-            val compressedTarSuffix = listOf(
-                ".tar.gz", ".tar.gzip", ".tar.bz2", ".tar.bzip2", ".tar.xz",
-                ".tar.lzma", ".tar.lz", ".tar.zst"
-            ).firstOrNull { archiveName.endsWith(it, ignoreCase = true) }
-            val baseName = (compressedTarSuffix?.let { archiveName.dropLast(it.length) }
-                ?: archiveName.asFileName().baseName).ifEmpty { archiveName }
+            val baseName = getArchiveBaseName(archiveFile.fileName.toString())
             return archiveFile.fileSystem.getPath(baseName)
         }
     }
@@ -664,8 +656,7 @@ private class ActionAllInfo(
 class ArchiveFileJob(
     private val sources: List<Path>,
     internal val archiveFile: Path,
-    private val format: Int,
-    private val filter: Int,
+    private val format: ArchiveCreationFormat,
     private val password: String?,
     private val encryptFileNames: Boolean,
     internal val runInBackground: Boolean,
@@ -714,7 +705,7 @@ class ArchiveFileJob(
 
     @Throws(IOException::class)
     private fun createArchive(): ScanInfo {
-        if (format == Archive.FORMAT_RAW && (sources.size != 1 || !sources.single()
+        if (format.singleFileOnly && (sources.size != 1 || !sources.single()
                 .readAttributes(BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
                 .isRegularFile)) {
             throw IOException("Single-file compression requires exactly one regular file")
@@ -724,35 +715,8 @@ class ArchiveFileJob(
         }
         val scanInfo = scan(sources, R.plurals.file_job_archive_scan_notification_title_format)
         throwIfInterrupted()
-        var temporary: File? = null
-        try {
-            ArchiveOutput(archiveFile, splitSize).use { output ->
-                if (splitSize > 0 || !archiveFile.isLinuxPath) {
-                    // Complete all header rewrites before uploading to providers or splitting
-                    // volumes. FTP STOR can truncate on a rewrite; other providers cannot seek.
-                    val stagingFile = File.createTempFile("archive-", ".tmp", service.cacheDir)
-                    temporary = stagingFile
-                    Paths.get(stagingFile.path).newByteChannel(StandardOpenOption.WRITE).use {
-                        writeArchive(it, scanInfo)
-                    }
-                    throwIfInterrupted()
-                    stagingFile.inputStream().use { input ->
-                        input.copyTo(output.channel.newOutputStream(), PROGRESS_INTERVAL_MILLIS) {
-                            throwIfInterrupted()
-                        }
-                    }
-                } else {
-                    writeArchive(output.channel, scanInfo)
-                }
-                throwIfInterrupted()
-                output.commit()
-            }
-        } finally {
-            temporary?.let {
-                if (!it.delete() && it.exists()) {
-                    IOException("Unable to remove archive staging file: $it").printStackTrace()
-                }
-            }
+        writeArchiveOutput(archiveFile, splitSize, service.cacheDir) {
+            writeArchive(it, scanInfo)
         }
         return scanInfo
     }
@@ -774,24 +738,16 @@ class ArchiveFileJob(
     @Throws(IOException::class)
     private fun writeArchive(channel: SeekableByteChannel, scanInfo: ScanInfo) {
         ArchiveWriter(
-            channel, format, filter, password, encryptFileNames, compressionPreset
+            channel, format, password, encryptFileNames, compressionPreset
         ).use { writer ->
             val transferInfo = TransferInfo(scanInfo, archiveFile)
-            if (format == Archive.FORMAT_7ZIP) {
-                val entries = mutableListOf<Pair<Path, Path>>()
-                for (source in sources) {
-                    walkArchiveSource(source, getTargetFileName(source)) { file, entryName ->
-                        entries += file to entryName
-                    }
-                }
-                writeSevenZEntries(writer, entries, transferInfo)
-            } else {
-                for (source in sources) {
-                    walkArchiveSource(source, getTargetFileName(source)) { file, entryName ->
-                        archive(file, writer, entryName, archiveFile, transferInfo)
-                    }
+            val entries = mutableListOf<Pair<Path, Path>>()
+            for (source in sources) {
+                walkArchiveSource(source, getTargetFileName(source)) { file, entryName ->
+                    entries += file to entryName
                 }
             }
+            writeEntries(writer, entries, transferInfo)
             // Reading the last source byte does not mean the output is ready yet.
             postNotification(
                 getString(
@@ -838,7 +794,7 @@ class ArchiveFileJob(
         })
     }
 
-    private fun writeSevenZEntries(
+    private fun writeEntries(
         writer: ArchiveWriter,
         entries: List<Pair<Path, Path>>,
         transferInfo: TransferInfo
@@ -867,29 +823,6 @@ class ArchiveFileJob(
         } catch (e: IOException) {
             showArchiveError(currentFile, archiveFile, e)
         }
-    }
-}
-
-@Throws(IOException::class)
-private fun FileJob.archive(
-    file: Path,
-    writer: ArchiveWriter,
-    entryName: Path,
-    archiveFile: Path,
-    transferInfo: TransferInfo
-) {
-    try {
-        postArchiveNotification(transferInfo, file)
-        writer.write(file, entryName, PROGRESS_INTERVAL_MILLIS) {
-            transferInfo.addToTransferredSize(it)
-            postArchiveNotification(transferInfo, file)
-        }
-        transferInfo.incrementTransferredFileCount()
-        postArchiveNotification(transferInfo, file)
-    } catch (e: InterruptedIOException) {
-        throw e
-    } catch (e: IOException) {
-        showArchiveError(file, archiveFile, e)
     }
 }
 

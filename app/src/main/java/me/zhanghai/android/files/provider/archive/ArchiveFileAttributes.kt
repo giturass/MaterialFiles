@@ -10,7 +10,7 @@ import java8.nio.file.Path
 import java8.nio.file.attribute.FileTime
 import kotlinx.parcelize.Parcelize
 import kotlinx.parcelize.WriteWith
-import me.zhanghai.android.files.provider.archive.archiver.ReadArchive
+import me.zhanghai.android.files.provider.archive.archiver.ArchiveEntry
 import me.zhanghai.android.files.provider.common.AbstractPosixFileAttributes
 import me.zhanghai.android.files.provider.common.ByteString
 import me.zhanghai.android.files.provider.common.EncryptedFileAttributes
@@ -40,7 +40,7 @@ internal class ArchiveFileAttributes(
     fun entryName(): String = entryName
 
     companion object {
-        fun from(archiveFile: Path, entry: ReadArchive.Entry): ArchiveFileAttributes {
+        fun from(archiveFile: Path, entry: ArchiveEntry): ArchiveFileAttributes {
             val lastModifiedTime = entry.lastModifiedTime ?: FileTime.fromMillis(0)
             val lastAccessTime = entry.lastAccessTime ?: lastModifiedTime
             val creationTime = entry.creationTime ?: lastModifiedTime

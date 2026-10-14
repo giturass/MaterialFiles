@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<resources>
+
+    <string name="file_list_archive_jobs">压缩任务</string>
+    <string name="file_list_archive_jobs_empty">没有进行中的压缩任务</string>
+    <string name="file_list_fab_create">新建</string>
+    <string name="file_list_fab_jobs_format">新建，%1$d 个压缩任务进行中</string>
+    <string name="file_list_fab_tasks_format">%1$d 个压缩任务进行中</string>
+    <string name="file_job_archive_cancel_format">取消：%1$s</string>
+    <string name="file_job_archive_canceling">正在取消…</string>
+</resources>

@@ -4,7 +4,9 @@
 
 [![Android CI status](https://github.com/zhanghai/MaterialFiles/workflows/Android%20CI/badge.svg)](https://github.com/zhanghai/MaterialFiles/actions) [![GitHub release](https://img.shields.io/github/v/release/zhanghai/MaterialFiles)](https://github.com/zhanghai/MaterialFiles/releases) [![License](https://img.shields.io/github/license/zhanghai/MaterialFiles?color=blue)](LICENSE)
 
-An open source Material Design file manager, for Android 5.0+.
+An open source Material Design file manager, for Android 6.0+.
+
+Builds from this repository contain no usage tracking, advertising SDKs or automatic crash reporting. Both debug and release builds use the same tracking-free source, without source preprocessing or service credentials. See the [privacy policy](PRIVACY.md), also available offline from the app's About screen.
 
 [<img alt="Get it on Google Play" src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" width="240">](https://play.google.com/store/apps/details?id=me.zhanghai.android.files) [<img alt="Get it on F-Droid" src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" width="240">](https://f-droid.org/packages/me.zhanghai.android.files) [<img alt="Get it on GitHub" src="https://raw.githubusercontent.com/Kunzisoft/Github-badge/main/get-it-on-github.png" width="240">](https://github.com/zhanghai/MaterialFiles/releases/latest/download/app-release-universal.apk)
 
@@ -21,7 +23,7 @@ An open source Material Design file manager, for Android 5.0+.
 - Material Design: Follows Material Design guidelines, with attention into details.
 - Breadcrumbs: Navigate in the filesystem with ease.
 - Root support: View and manage files with root access.
-- Archive support: View, extract and create common compressed files.
+- Archive support: 7-Zip-JBinding-4Android handles browsing, extraction and creation. See the [format matrix and verification](docs/7z.md). Full RAR support includes upstream's unRAR license restriction.
 - NAS support: View and manage files on FTP, SFTP, SMB and WebDAV servers.
 - Themes: Customizable UI colors, plus night mode with optional true black.
 - Linux-aware: Like [Nautilus](https://apps.gnome.org/Nautilus/), knows symbolic links, file permissions and SELinux context.

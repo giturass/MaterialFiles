@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify a release APK's signer, manifest and bundled Sora assets before upload."""
+"""Verify a release APK's signer, archive libraries, tracking absence and editor assets."""
 
 import argparse
 from datetime import datetime, timezone
@@ -10,6 +10,8 @@ from pathlib import Path
 import re
 import subprocess
 import zipfile
+
+from verify_no_tracking import verify_no_tracking
 
 
 def run(*command):
@@ -43,6 +45,7 @@ def main():
         raise RuntimeError("A release APK must not be debuggable")
     tree = run(args.build_tools / "aapt2", "dump", "xmltree", args.apk,
                "--file", "AndroidManifest.xml")
+    resources = run(args.build_tools / "aapt2", "dump", "resources", args.apk)
     if "me.zhanghai.android.files.viewer.text.SoraEditorActivity" not in tree:
         raise RuntimeError("Sora editor activity is missing from the APK manifest")
     if "me.zhanghai.android.files.viewer.text.TextEditorActivity" in tree:
@@ -51,11 +54,20 @@ def main():
     assets = Path(__file__).resolve().parents[1] / "app/src/main/assets/sora"
     provenance = json.loads((assets / "sources.json").read_text(encoding="utf-8"))
     with zipfile.ZipFile(args.apk) as archive:
+        tracking_checks = verify_no_tracking(archive, tree, resources)
         names = set(archive.namelist())
         abis = sorted({name.split("/")[1] for name in names
                        if name.startswith("lib/") and name.endswith(".so")})
         if "arm64-v8a" not in abis:
             raise RuntimeError("The APK is missing ARM64 native libraries")
+        for abi in abis:
+            if f"lib/{abi}/lib7-Zip-JBinding.so" not in names:
+                raise RuntimeError("The APK is missing the JBinding archive engine for " + abi)
+            if f"lib/{abi}/libarchive_jbinding.so" not in names:
+                raise RuntimeError("The APK is missing the JBinding archive property bridge for " + abi)
+        if any(name.rsplit("/", 1)[-1] in ("libsevenzip.so", "libarchive-jni.so")
+               for name in names):
+            raise RuntimeError("The APK still includes a replaced archive engine")
         sources = sorted(path for path in assets.rglob("*") if path.is_file())
         for source in sources:
             name = "assets/sora/" + source.relative_to(assets).as_posix()
@@ -80,11 +92,16 @@ def main():
         "application_id": package.group(1),
         "debuggable": False,
         "abis": abis,
+        "archive_engine": "7-Zip-JBinding-4Android:Release-16.02-2.03",
+        "archive_engine_abis_checked": abis,
+        "archive_property_bridge": "libarchive_jbinding.so",
+        "archive_property_bridge_abis_checked": abis,
         "sora_activity_registered": True,
         "old_editor_activity_removed": True,
         "source_assets_verified": len(sources),
         "pinned_asset_checksums_verified": len(provenance["files"]),
         "jcodings_runtime_tables": tables,
+        "tracking_sdk_checks": tracking_checks,
         "device_interaction_tested": False,
     }
     args.apk.with_suffix(".verification.json").write_text(

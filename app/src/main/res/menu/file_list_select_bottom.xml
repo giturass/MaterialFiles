@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  ~ Copyright (c) 2018 Hai Zhang <dreaming.in.code.zh@gmail.com>
+  ~ All Rights Reserved.
+  -->
+
+<menu
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:ignore="AlwaysShowAction">
+
+    <item
+        android:id="@+id/action_cut"
+        android:alphabeticShortcut="x"
+        android:icon="@drawable/cut_icon_control_normal_24dp"
+        android:orderInCategory="100"
+        android:title="@string/cut"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/action_copy"
+        android:alphabeticShortcut="c"
+        android:icon="@drawable/copy_icon_control_normal_24dp"
+        android:orderInCategory="100"
+        android:title="@string/copy"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/action_delete"
+        android:icon="@drawable/delete_icon_control_normal_24dp"
+        android:orderInCategory="100"
+        android:title="@string/delete"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/action_archive"
+        android:icon="@drawable/archive_icon_control_normal_24dp"
+        android:orderInCategory="100"
+        android:title="@string/file_list_select_action_archive"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/action_rename"
+        android:icon="@drawable/rename_icon_control_normal_24dp"
+        android:orderInCategory="100"
+        android:title="@string/rename"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/action_open_as"
+        android:orderInCategory="200"
+        android:title="@string/file_open_as_title"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_open_with"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_open_with"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_extract"
+        android:orderInCategory="200"
+        android:title="@string/file_list_select_action_extract"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_share"
+        android:orderInCategory="200"
+        android:title="@string/share"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_copy_path"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_copy_path"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_add_bookmark"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_add_bookmark"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_create_shortcut"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_create_shortcut"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_properties"
+        android:orderInCategory="200"
+        android:title="@string/file_item_action_properties"
+        app:showAsAction="never" />
+</menu>

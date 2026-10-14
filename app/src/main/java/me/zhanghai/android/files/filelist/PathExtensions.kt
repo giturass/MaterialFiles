@@ -20,9 +20,16 @@ val Path.name: String
 
 fun Path.toUserFriendlyString(): String = if (isLinuxPath) toFile().path else toUri().toString()
 
-fun Path.isArchiveFile(mimeType: MimeType): Boolean = !isArchivePath &&
-    (mimeType.isSupportedArchive || (fileName?.toString()?.endsWith(".001") == true &&
-        MimeType.guessFromPath(fileName.toString()).isSupportedArchive))
+fun Path.isArchiveFile(mimeType: MimeType): Boolean {
+    if (isArchivePath || mimeType == MimeType.DIRECTORY ||
+        mimeType.value == "inode/directory" || mimeType.value == "resource/folder") {
+        return false
+    }
+    // Content providers may report a generic or outdated MIME type. Fall back to the file
+    // name for all supported formats, including raw .001 splits without an archive suffix.
+    return mimeType.isSupportedArchive ||
+        fileName?.toString()?.let { MimeType.guessFromPath(it).isSupportedArchive } == true
+}
 
 val Path.isLocalPath: Boolean
     get() =

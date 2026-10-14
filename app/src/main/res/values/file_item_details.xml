@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<resources>
+    <plurals name="file_item_directory_count">
+        <item quantity="other">%1$d 项</item>
+    </plurals>
+    <string name="file_item_count_loading" translatable="false">…</string>
+    <string name="file_item_count_unavailable" translatable="false">—</string>
+    <string name="file_item_count_unavailable_description">无法读取项目数</string>
+    <string name="file_item_select_format">选择“%1$s”</string>
+    <string name="file_item_deselect_format">取消选择“%1$s”</string>
+</resources>

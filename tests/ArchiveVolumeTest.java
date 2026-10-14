@@ -25,6 +25,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import android.os.ParcelUuid;
+import android.system.ErrnoException;
+import android.system.Os;
+import android.system.OsConstants;
+import android.system.StructStat;
+
 import java8.nio.channels.SeekableByteChannel;
 import java8.nio.file.AccessMode;
 import java8.nio.file.CopyOption;
@@ -64,6 +70,46 @@ public final class ArchiveVolumeTest {
     /** Reusable physical provider for APK ArchiveWriter tests, with no application/native setup. */
     public static FileSystem newPhysicalFileSystem(File directory) throws IOException {
         return new Fixture(directory);
+    }
+
+    public static void configureIo(FileSystem filesystem, int maxRead, int maxWrite,
+            boolean streamsOnly, String failInputCloseName, String failOutputCloseName) {
+        Fixture fixture = (Fixture) filesystem;
+        fixture.maxRead = maxRead;
+        fixture.maxWrite = maxWrite;
+        fixture.streamsOnly = streamsOnly;
+        fixture.failInputCloseName = failInputCloseName;
+        fixture.failCloseName = failOutputCloseName;
+    }
+
+    public static void afterFirstSourceRead(FileSystem filesystem, Runnable hook) {
+        ((Fixture) filesystem).sourceReadHook = hook;
+    }
+
+    public static void failSeekProbe(FileSystem filesystem, String sourceName) {
+        ((Fixture) filesystem).failSeekProbeName = sourceName;
+    }
+
+    public static void failOutputProgress(FileSystem filesystem, String outputName) {
+        ((Fixture) filesystem).zeroWriteName = outputName;
+    }
+
+    public static int openedStreamCount(FileSystem filesystem) {
+        Fixture fixture = (Fixture) filesystem;
+        synchronized (fixture) { return fixture.totalOpenedStreams; }
+    }
+
+    public static void usePosixAttributes(FileSystem filesystem, boolean enabled) {
+        ((Fixture) filesystem).posixAttributes = enabled;
+    }
+
+    public static void rejectPrivateCacheAccess(FileSystem filesystem, boolean enabled) {
+        ((Fixture) filesystem).rejectPrivateCacheAccess = enabled;
+    }
+
+    public static void installDefaultProvider(FileSystem filesystem) {
+        ((Fixture) filesystem).allowExistingWrites = true;
+        FileSystemProvider.installDefaultProvider(filesystem.provider());
     }
 
     public static void main(String[] arguments) {
@@ -453,13 +499,21 @@ public final class ArchiveVolumeTest {
         final Provider provider = new Provider(this);
         final List<String> deleted = new ArrayList<>();
         boolean streamsOnly;
+        boolean rejectPrivateCacheAccess;
         boolean zeroWrite;
+        String zeroWriteName;
         int maxWrite = Integer.MAX_VALUE;
         int maxRead = Integer.MAX_VALUE;
         String failCloseName;
+        String failInputCloseName;
+        String failSeekProbeName;
+        Runnable sourceReadHook;
+        boolean posixAttributes;
+        boolean allowExistingWrites;
         int closeFailures;
         int openChannels;
         int openStreams;
+        int totalOpenedStreams;
 
         Fixture(String name) throws IOException {
             this(newCaseDirectory(name));
@@ -489,9 +543,14 @@ public final class ArchiveVolumeTest {
 
         File disk(Path path) throws IOException {
             require(path.getFileSystem() == this, "Unexpected filesystem");
-            File file = new File(path.toString()).getCanonicalFile();
-            require(file.equals(directory) || file.getPath().startsWith(directory.getPath() + File.separator),
+            File file = new File(path.toString()).getAbsoluteFile();
+            File canonical = file.getCanonicalFile();
+            require(canonical.equals(directory) || canonical.getPath().startsWith(directory.getPath() + File.separator),
                     "A provider operation escaped its fixture: " + file);
+            if (rejectPrivateCacheAccess && canonical.getPath()
+                    .startsWith(new File(directory, "cache").getPath() + File.separator)) {
+                throw new IOException("Injected private-cache provider access failure: " + path);
+            }
             return file;
         }
 
@@ -554,7 +613,10 @@ public final class ArchiveVolumeTest {
         @Override public void close() throws IOException {
             require(Arrays.equals(SOURCE, readBytes(file("source.keep"))), "Output cleanup changed the source");
             require(!deleted.contains("source.keep"), "Source participated in output cleanup");
-            require(openChannels == 0 && openStreams == 0, "Provider handles leaked: " + openChannels + "/" + openStreams);
+            synchronized (this) {
+                require(openChannels == 0 && openStreams == 0,
+                        "Provider handles leaked: " + openChannels + "/" + openStreams);
+            }
         }
 
         @Override public FileSystemProvider provider() { return provider; }
@@ -594,7 +656,7 @@ public final class ArchiveVolumeTest {
         }
 
         private void afterClose(File file, boolean writing) throws IOException {
-            if (writing && file.getName().equals(fixture.failCloseName)) {
+            if (file.getName().equals(writing ? fixture.failCloseName : fixture.failInputCloseName)) {
                 ++fixture.closeFailures;
                 throw new IOException("Injected close failure: " + file.getName());
             }
@@ -604,32 +666,43 @@ public final class ArchiveVolumeTest {
                 FileAttribute<?>... attributes) throws IOException {
             if (fixture.streamsOnly) throw unsupported("byte channels");
             boolean writing = options.contains(StandardOpenOption.WRITE);
-            File file = writing ? create(path, options) : existing(path);
+            File file = writing && (!fixture.allowExistingWrites || options.contains(StandardOpenOption.CREATE_NEW))
+                    ? create(path, options) : existing(path);
             RandomAccessFile access = new RandomAccessFile(file, writing ? "rw" : "r");
             FileChannel channel = access.getChannel();
-            ++fixture.openChannels;
+            synchronized (fixture) { ++fixture.openChannels; }
             return new SeekableByteChannel() {
                 private boolean open = true;
                 @Override public int read(ByteBuffer buffer) throws IOException {
                     int limit = buffer.limit();
                     buffer.limit(buffer.position() + Math.min(buffer.remaining(), fixture.maxRead));
-                    try { return channel.read(buffer); } finally { buffer.limit(limit); }
+                    try {
+                        int count = channel.read(buffer);
+                        afterRead(count);
+                        return count;
+                    } finally { buffer.limit(limit); }
                 }
                 @Override public int write(ByteBuffer buffer) throws IOException {
-                    if (fixture.zeroWrite) return 0;
+                    if (fixture.zeroWrite || file.getName().equals(fixture.zeroWriteName)) return 0;
                     int limit = buffer.limit();
                     buffer.limit(buffer.position() + Math.min(buffer.remaining(), fixture.maxWrite));
                     try { return channel.write(buffer); } finally { buffer.limit(limit); }
                 }
                 @Override public long position() throws IOException { return channel.position(); }
-                @Override public SeekableByteChannel position(long position) throws IOException { channel.position(position); return this; }
+                @Override public SeekableByteChannel position(long position) throws IOException {
+                    if (!writing && file.getName().equals(fixture.failSeekProbeName)) {
+                        throw new IOException("Injected source seek probe failure");
+                    }
+                    channel.position(position);
+                    return this;
+                }
                 @Override public long size() throws IOException { return channel.size(); }
                 @Override public SeekableByteChannel truncate(long size) throws IOException { channel.truncate(size); return this; }
                 @Override public boolean isOpen() { return open; }
-                @Override public void close() throws IOException {
+                @Override public synchronized void close() throws IOException {
                     if (!open) return;
                     open = false;
-                    --fixture.openChannels;
+                    synchronized (fixture) { --fixture.openChannels; }
                     access.close();
                     afterClose(file, writing);
                 }
@@ -637,21 +710,39 @@ public final class ArchiveVolumeTest {
         }
 
         @Override public InputStream newInputStream(Path path, OpenOption... options) throws IOException {
-            FileInputStream input = new FileInputStream(existing(path));
-            ++fixture.openStreams;
+            File file = existing(path);
+            FileInputStream input = new FileInputStream(file);
+            synchronized (fixture) {
+                ++fixture.openStreams;
+                ++fixture.totalOpenedStreams;
+            }
             return new InputStream() {
                 private boolean closed;
-                @Override public int read() throws IOException { return input.read(); }
-                @Override public int read(byte[] bytes, int offset, int length) throws IOException {
-                    return input.read(bytes, offset, Math.min(length, fixture.maxRead));
+                @Override public int read() throws IOException {
+                    byte[] bytes = new byte[1];
+                    return read(bytes, 0, 1) < 0 ? -1 : bytes[0] & 255;
                 }
-                @Override public void close() throws IOException {
+                @Override public int read(byte[] bytes, int offset, int length) throws IOException {
+                    int count = input.read(bytes, offset, Math.min(length, fixture.maxRead));
+                    afterRead(count);
+                    return count;
+                }
+                @Override public synchronized void close() throws IOException {
                     if (closed) return;
                     closed = true;
-                    --fixture.openStreams;
+                    synchronized (fixture) { --fixture.openStreams; }
                     input.close();
+                    afterClose(file, false);
                 }
             };
+        }
+
+        private void afterRead(int count) {
+            Runnable hook = fixture.sourceReadHook;
+            if (count > 0 && hook != null) {
+                fixture.sourceReadHook = null;
+                hook.run();
+            }
         }
 
         @Override public OutputStream newOutputStream(Path path, OpenOption... options) throws IOException {
@@ -686,20 +777,70 @@ public final class ArchiveVolumeTest {
         @Override public <A extends BasicFileAttributes> A readAttributes(Path path, Class<A> type,
                 LinkOption... options) throws IOException {
             File file = existing(path);
+            if (fixture.posixAttributes) return (A) posixAttributes(file);
+            final long size = file.length();
+            final FileTime modified = FileTime.fromMillis(file.lastModified());
+            final boolean directory = file.isDirectory();
             return (A) new BasicFileAttributes() {
-                @Override public FileTime lastModifiedTime() { return FileTime.fromMillis(file.lastModified()); }
+                @Override public FileTime lastModifiedTime() { return modified; }
                 @Override public FileTime lastAccessTime() { return lastModifiedTime(); }
                 @Override public FileTime creationTime() { return lastModifiedTime(); }
-                @Override public boolean isRegularFile() { return file.isFile(); }
-                @Override public boolean isDirectory() { return file.isDirectory(); }
+                @Override public boolean isRegularFile() { return !directory; }
+                @Override public boolean isDirectory() { return directory; }
                 @Override public boolean isSymbolicLink() { return false; }
                 @Override public boolean isOther() { return false; }
-                @Override public long size() { return file.length(); }
+                @Override public long size() { return size; }
                 @Override public Object fileKey() { return file.getPath(); }
             };
         }
 
-        @Override public String getScheme() { return "volume-fixture"; }
+        @SuppressWarnings({"rawtypes", "unchecked"})
+        private BasicFileAttributes posixAttributes(File file) throws IOException {
+            try {
+                StructStat stat = Os.lstat(file.toString());
+                Class<?> type = Class.forName("me.zhanghai.android.files.provider.common.PosixFileAttributes");
+                Class<?> kind = Class.forName("me.zhanghai.android.files.provider.common.PosixFileType");
+                Class<?> mode = Class.forName("me.zhanghai.android.files.provider.common.PosixFileMode");
+                Object bits = mode.getMethod("fromInt", int.class).invoke(mode.getField("INSTANCE").get(null), stat.st_mode);
+                boolean directory = OsConstants.S_ISDIR(stat.st_mode);
+                boolean link = OsConstants.S_ISLNK(stat.st_mode);
+                boolean regular = OsConstants.S_ISREG(stat.st_mode);
+                Object fileType = Enum.valueOf((Class) kind, directory ? "DIRECTORY" : link ? "SYMBOLIC_LINK" : "REGULAR_FILE");
+                return (BasicFileAttributes) Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[]{type},
+                        (proxy, method, arguments) -> {
+                            switch (method.getName()) {
+                                case "lastModifiedTime": return FileTime.fromMillis(stat.st_mtime * 1000);
+                                case "lastAccessTime": return FileTime.fromMillis(stat.st_atime * 1000);
+                                case "creationTime": return FileTime.fromMillis(stat.st_ctime * 1000);
+                                case "isDirectory": return directory;
+                                case "isSymbolicLink": return link;
+                                case "isRegularFile": return regular;
+                                case "isOther": return !directory && !link && !regular;
+                                case "type": return fileType;
+                                case "size": return stat.st_size;
+                                case "mode": return bits;
+                                case "fileKey": return new ParcelUuid(new java.util.UUID(stat.st_dev, stat.st_ino));
+                                case "owner": case "group": case "seLinuxContext": return null;
+                                default: throw unsupported(method.toString());
+                            }
+                        });
+            } catch (ErrnoException | ReflectiveOperationException failure) {
+                throw new IOException(failure);
+            }
+        }
+
+        @Override public Path readSymbolicLink(Path path) throws IOException {
+            try {
+                String target = Os.readlink(fixture.disk(path).toString());
+                Class<?> byteString = Class.forName("me.zhanghai.android.files.provider.common.ByteString");
+                Object companion = byteString.getField("Companion").get(null);
+                Object value = companion.getClass().getMethod("fromString", String.class).invoke(companion, target);
+                return (Path) Class.forName("me.zhanghai.android.files.provider.common.ByteStringPath")
+                        .getConstructor(byteString).newInstance(value);
+            } catch (ErrnoException | ReflectiveOperationException failure) { throw new IOException(failure); }
+        }
+
+        @Override public String getScheme() { return fixture.allowExistingWrites ? "file" : "volume-fixture"; }
         @Override public FileSystem newFileSystem(URI uri, java.util.Map<String, ?> env) { throw unsupported("new filesystem"); }
         @Override public FileSystem getFileSystem(URI uri) { return fixture; }
         @Override public Path getPath(URI uri) { return fixture.getPath(new File(uri).getPath()); }

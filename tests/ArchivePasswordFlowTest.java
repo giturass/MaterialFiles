@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.res.Resources;
 import android.os.Build;
+import android.os.Handler;
 import android.os.Looper;
 
 import java.io.ByteArrayOutputStream;
@@ -58,7 +59,8 @@ import java8.nio.file.spi.FileSystemProvider;
  * Runs the APK's reader, archive filesystem, exception wrapper and password Intent on Android.
  * Only the physical file provider, resource strings and UI dispatch are supplied by this harness.
  * The archive directory cache is populated with the real reader's metadata, avoiding application
- * startup and native libarchive in app_process. No Activity, dialog or Toast is rendered.
+ * startup in app_process. The real JBinding JNI library is loaded; no Activity, dialog or Toast
+ * is rendered.
  */
 public final class ArchivePasswordFlowTest {
     private static final String PACKAGE = "me.zhanghai.android.files.";
@@ -87,6 +89,10 @@ public final class ArchivePasswordFlowTest {
             }
             check("encrypted-header root password action names its archive",
                     () -> verifyRootAction(fixtures, application));
+            for (String outcome : new String[]{"success", "incorrect", "cancel", "navigate", "close", "no-path"}) {
+                check("browser password request: " + outcome + ", duplicate observer and dialog callbacks",
+                        () -> verifyBrowserPasswordRequest(fixtures, application, outcome));
+            }
             for (boolean root : new boolean[]{true, false}) {
                 check((root ? "root" : "entry") + ": cancelling the password aborts the waiting job",
                         () -> verifyPasswordCancellation(fixtures, root, application));
@@ -228,18 +234,17 @@ public final class ArchivePasswordFlowTest {
         Path root = (Path) invoke(paths.getMethod("createArchiveRootPath", Path.class),
                 null, physical.path);
         try (FileSystem archive = root.getFileSystem()) {
-            Object reader = openReader(physical.path, Collections.emptyList());
             IOException rejected = null;
-            try (Closeable ownedReader = (Closeable) reader) {
+            try (Closeable reader = (Closeable) openReader(physical.path, Collections.emptyList())) {
                 call(reader, "readEntries");
             } catch (IOException failure) {
                 rejected = failure;
             }
-            Class<?> rawError = Class.forName("me.zhanghai.android.libarchive.ArchiveException");
+            Class<?> rawError = Class.forName(PACKAGE + "provider.archive.archiver.ArchivePassphraseException");
             require(rawError.isInstance(rejected),
                     "Encrypted-header error bypasses the filesystem's path translation");
             Object error = invoke(Class.forName(PACKAGE + "provider.archive.ArchiveExceptionExtensionsKt")
-                    .getMethod("toFileSystemOrInterruptedIOException", rawError, Path.class),
+                    .getMethod("toFileSystemOrInterruptedIOException", IOException.class, Path.class),
                     null, rejected, root);
             Class<?> continuationClass = Class.forName("kotlin.coroutines.Continuation");
             Object continuation = Proxy.newProxyInstance(continuationClass.getClassLoader(),
@@ -264,12 +269,142 @@ public final class ArchivePasswordFlowTest {
     }
 
     private static Object openReader(Path physical, List<String> passwords) throws Throwable {
-        Class<?> readerClass = Class.forName(PACKAGE + "provider.archive.archiver.SevenZArchiveReader");
+        Class<?> readerClass = Class.forName(PACKAGE + "provider.archive.archiver.SevenZipArchiveReader");
         Object companion = readerClass.getField("Companion").get(null);
-        Object reader = invoke(companion.getClass().getMethod("openOrNull", Path.class, List.class),
+        Object reader = invoke(companion.getClass().getMethod("open", Path.class, List.class),
                 companion, physical, passwords);
         require(reader != null, "Fixture is not recognized as 7z");
         return reader;
+    }
+
+    private static void verifyBrowserPasswordRequest(File fixtures, TestApplication application,
+            String outcome) throws Throwable {
+        FixtureFileSystem physical = new FixtureFileSystem(new File(fixtures, "official-headers.7z"));
+        Class<?> paths = Class.forName(PACKAGE + "provider.archive.PathArchiveExtensionsKt");
+        Path root = (Path) invoke(paths.getMethod("createArchiveRootPath", Path.class), null, physical.path);
+        try (FileSystem archive = root.getFileSystem()) {
+            if (outcome.equals("incorrect")) {
+                invoke(paths.getMethod("archiveAddPassword", Path.class, String.class),
+                        null, root, WRONG_PASSWORD);
+            }
+            IOException rejected = null;
+            try (DirectoryStream<Path> ignored = archive.provider().newDirectoryStream(root, path -> true)) {
+                throw new AssertionError("Initial browsing exposed encrypted file names");
+            } catch (IOException failure) {
+                rejected = failure;
+            }
+            Class<?> errorType = Class.forName(PACKAGE + "provider.archive.ArchivePasswordRequiredException");
+            require(errorType.isInstance(rejected), "Browser failure lost its password action: " + rejected);
+            Class<?> function0 = Class.forName("kotlin.jvm.functions.Function0");
+            Class<?> function1 = Class.forName("kotlin.jvm.functions.Function1");
+            Object unit = Class.forName("kotlin.Unit").getField("INSTANCE").get(null);
+            Path[] currentPath = {outcome.equals("no-path") ? null : root};
+            int[] reloaded = {0};
+            List<Intent> launched = new ArrayList<>();
+            Object getPath = Proxy.newProxyInstance(function0.getClassLoader(), new Class<?>[]{function0},
+                    (proxy, method, arguments) -> currentPath[0]);
+            Object reload = Proxy.newProxyInstance(function0.getClassLoader(), new Class<?>[]{function0},
+                    (proxy, method, arguments) -> { ++reloaded[0]; return unit; });
+            Object launch = Proxy.newProxyInstance(function1.getClassLoader(), new Class<?>[]{function1},
+                    (proxy, method, arguments) -> { launched.add((Intent) arguments[0]); return unit; });
+            Class<?> helperType = Class.forName(PACKAGE + "filelist.FileListUserAction");
+            Method request = helperType.getMethod("request",
+                    Class.forName(PACKAGE + "provider.common.UserActionRequiredException"),
+                    Context.class, function1);
+            try (Closeable helper = (Closeable) helperType.getConstructor(function0, function0)
+                    .newInstance(getPath, reload)) {
+                invoke(request, helper, rejected, application, launch);
+                if (outcome.equals("no-path")) {
+                    require(launched.isEmpty(), "A browser without a current path launched a password prompt");
+                    currentPath[0] = root;
+                    invoke(request, helper, rejected, application, launch);
+                }
+                invoke(request, helper, rejected, application, launch);
+                Object laterError = errorType.getConstructor(Path.class, String.class)
+                        .newInstance(root, "Incorrect passphrase");
+                invoke(request, helper, laterError, application, launch);
+                require(launched.size() == 1, "Repeated observers or fragment recreation launched duplicate prompts");
+                require(reloaded[0] == 0, "The browser reloaded before the password dialog completed");
+                Object args = launched.get(0).getParcelableExtra(
+                        PACKAGE + "fileaction.ArchivePasswordDialogFragment$Args");
+                require(root.equals(call(args, "getPath")), "Browser prompt lost its archive root");
+                require(Boolean.valueOf(outcome.equals("incorrect")).equals(call(args, "isPasswordIncorrect")),
+                        "Browser prompt confused missing and incorrect passwords");
+                if (outcome.equals("navigate")) currentPath[0] = root.resolve("another-directory");
+                if (outcome.equals("close")) helper.close();
+                boolean accepted = !outcome.equals("cancel");
+                if (accepted) {
+                    invoke(paths.getMethod("archiveAddPassword", Path.class, String.class),
+                            null, call(args, "getPath"), PASSWORD);
+                }
+                Object listener = call(args, "getListener");
+                Method respond = function1.getMethod("invoke", Object.class);
+                if (accepted) {
+                    invoke(respond, listener, Boolean.TRUE);
+                    invoke(respond, listener, Boolean.TRUE);
+                } else {
+                    // The cancellation action queues a Toast through the test Context's executor
+                    // when called off the UI thread, just like the file-job cancellation checks.
+                    // Keep that notification captured while dispatching the helper's real result.
+                    AtomicReference<Throwable> callbackFailure = new AtomicReference<>();
+                    int uiTasksBefore = application.uiTasks.size();
+                    Thread responder = new Thread(() -> {
+                        try {
+                            invoke(respond, listener, Boolean.FALSE);
+                            invoke(respond, listener, Boolean.FALSE);
+                        } catch (Throwable failure) {
+                            callbackFailure.set(failure);
+                        }
+                    }, "cancel-browser-archive-password");
+                    responder.setDaemon(true);
+                    responder.start();
+                    responder.join(10000);
+                    require(!responder.isAlive(), "Browser password cancellation did not finish");
+                    if (callbackFailure.get() != null) throw callbackFailure.get();
+                    require(application.uiTasks.size() == uiTasksBefore + 2,
+                            "Browser cancellation did not capture both notification callbacks");
+                    drainMainCallbacks();
+                }
+                boolean shouldReload = accepted && !outcome.equals("navigate") && !outcome.equals("close");
+                require(reloaded[0] == (shouldReload ? 1 : 0),
+                        "Browser password result caused a missing, repeated or stale reload: " + outcome);
+                invoke(request, helper, rejected, application, launch);
+                require(launched.size() == 1, "A completed/cancelled password prompt was automatically shown again");
+                if (shouldReload) {
+                    try (DirectoryStream<Path> children = archive.provider().newDirectoryStream(root, path -> true)) {
+                        require(children.iterator().hasNext(), "Browser retry could not list the decrypted archive");
+                    }
+                }
+                if (outcome.equals("cancel")) {
+                    invoke(request, helper, laterError, application, launch);
+                    require(launched.size() == 2, "Cancelling a password blocked a later explicit retry");
+                    Object retryArgs = launched.get(1).getParcelableExtra(
+                            PACKAGE + "fileaction.ArchivePasswordDialogFragment$Args");
+                    require(Boolean.TRUE.equals(call(retryArgs, "isPasswordIncorrect")),
+                            "A later incorrect-password failure did not update the prompt");
+                    invoke(respond, call(retryArgs, "getListener"), Boolean.TRUE);
+                    require(reloaded[0] == 1, "The later password retry did not reload the current directory");
+                }
+            }
+            require(physical.openChannels == 0, "Browser password flow leaked its archive handle");
+        } finally {
+            physical.close();
+        }
+    }
+
+    private static void drainMainCallbacks() {
+        require(Looper.myLooper() == Looper.getMainLooper(), "Only the test UI thread may dispatch callbacks");
+        // A main Looper cannot quit. A marker behind the worker's posted completion callbacks
+        // returns control to this harness after the actual Handler queue has dispatched them.
+        RuntimeException drained = new RuntimeException("Test main-thread callbacks drained");
+        require(new Handler(Looper.getMainLooper()).post(() -> { throw drained; }),
+                "Unable to queue the main-thread completion marker");
+        try {
+            Looper.loop();
+            throw new AssertionError("The main Looper stopped before dispatching the completion marker");
+        } catch (RuntimeException completion) {
+            if (completion != drained) throw completion;
+        }
     }
 
     private static void verifyPasswordCancellation(File fixtures, boolean rootAction,

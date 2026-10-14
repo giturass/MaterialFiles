@@ -130,12 +130,6 @@ object Settings {
             RootStrategy::class.java
         )
 
-    val ARCHIVE_FILE_NAME_ENCODING: SettingLiveData<String> =
-        StringSettingLiveData(
-            R.string.pref_key_archive_file_name_encoding,
-            R.string.pref_default_value_archive_file_name_encoding
-        )
-
     val OPEN_APK_DEFAULT_ACTION: SettingLiveData<OpenApkDefaultAction> =
         EnumSettingLiveData(
             R.string.pref_key_open_apk_default_action,

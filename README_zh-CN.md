@@ -2,7 +2,9 @@
 
 [![Android CI 状态](https://github.com/zhanghai/MaterialFiles/workflows/Android%20CI/badge.svg)](https://github.com/zhanghai/MaterialFiles/actions) [![GitHub 发行版](https://img.shields.io/github/v/release/zhanghai/MaterialFiles)](https://github.com/zhanghai/MaterialFiles/releases) [![许可证](https://img.shields.io/github/license/zhanghai/MaterialFiles?color=blue)](LICENSE)
 
-一个开源的 Material Design 文件管理器，适用于 Android 5.0+。
+一个开源的 Material Design 文件管理器，适用于 Android 6.0+。
+
+本仓库构建不包含使用情况跟踪、广告 SDK 或自动崩溃报告。调试版和发行版使用相同的无跟踪源码，无需预处理源码或配置服务凭据。详见[隐私政策](PRIVACY.md)，应用「关于」页面也可离线查看隐私说明。
 
 [<img alt="下载应用，请到 Google Play" src="https://play.google.com/intl/en_us/badges/static/images/badges/zh-cn_badge_web_generic.png" width="240">](https://play.google.com/store/apps/details?id=me.zhanghai.android.files) [<img alt="下载应用，请到 F-Droid" src="https://fdroid.gitlab.io/artwork/badge/get-it-on-zh-cn.png" width="240">](https://f-droid.org/packages/me.zhanghai.android.files) [<img alt="下载应用，请到 GitHub" src="https://raw.githubusercontent.com/Kunzisoft/Github-badge/main/get-it-on-github.png" width="240">](https://github.com/zhanghai/MaterialFiles/releases/latest/download/app-release-universal.apk)
 
@@ -19,7 +21,7 @@
 - Material Design：遵循 Material Design 规范，并且注重细节。
 - 面包屑导航栏：点击导航栏所显示路径中的任一文件夹即可快速访问。
 - Root 支持：使用 root 权限查看和管理文件。
-- 压缩文件支持：查看、提取和创建常见的压缩文件。
+- 压缩文件支持：统一由 7-Zip-JBinding-4Android 浏览、提取和创建，详见[格式表与验证](docs/7z.md)。完整 RAR 支持保留上游的 unRAR 许可限制。
 - NAS 支持：查看和管理 FTP、SFTP、SMB 和 WebDAV 服务器上的文件。
 - 主题：可定制的界面颜色，以及可选纯黑的夜间模式。
 - Linux 友好：类似 [Nautilus](https://wiki.gnome.org/action/show/Apps/Files)，支持符号链接、文件权限和 SELinux 上下文。

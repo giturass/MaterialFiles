@@ -5,6 +5,7 @@
 
 package me.zhanghai.android.files.filelist
 
+import android.content.Intent
 import android.os.Parcelable
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MediatorLiveData
@@ -12,11 +13,13 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.map
 import java8.nio.file.Path
+import me.zhanghai.android.files.app.application
 import me.zhanghai.android.files.file.FileItem
 import me.zhanghai.android.files.filelist.FileSortOptions.By
 import me.zhanghai.android.files.filelist.FileSortOptions.Order
 import me.zhanghai.android.files.provider.archive.archiveRefresh
 import me.zhanghai.android.files.provider.archive.isArchivePath
+import me.zhanghai.android.files.provider.common.UserActionRequiredException
 import me.zhanghai.android.files.util.CloseableLiveData
 import me.zhanghai.android.files.util.Stateful
 import me.zhanghai.android.files.util.valueCompat
@@ -67,6 +70,13 @@ class FileListViewModel : ViewModel() {
         get() = _fileListLiveData
     val fileListStateful: Stateful<List<FileItem>>
         get() = _fileListLiveData.valueCompat
+
+    private val fileListUserAction = FileListUserAction(
+        { currentPathLiveData.value }, { reload() }
+    )
+
+    fun requestUserAction(exception: UserActionRequiredException, launch: (Intent) -> Unit) =
+        fileListUserAction.request(exception, application, launch)
 
     fun reload() {
         val path = currentPath
@@ -226,6 +236,7 @@ class FileListViewModel : ViewModel() {
         }
 
     override fun onCleared() {
+        fileListUserAction.close()
         _fileListLiveData.close()
     }
 

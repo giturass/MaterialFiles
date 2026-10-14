@@ -1,0 +1,64 @@
+{
+  "project": "https://github.com/omicronapps/7-Zip-JBinding-4Android",
+  "version": "Release-16.02-2.03",
+  "commit": "875f38aac441f41e6eb693177e020e97971dca97",
+  "artifact": "com.github.omicronapps:7-Zip-JBinding-4Android:Release-16.02-2.03",
+  "license_sources": [
+    {
+      "path": "sevenzipjbinding/src/main/cpp/7zip/DOC/License.txt",
+      "url": "https://raw.githubusercontent.com/omicronapps/7-Zip-JBinding-4Android/875f38aac441f41e6eb693177e020e97971dca97/sevenzipjbinding/src/main/cpp/7zip/DOC/License.txt",
+      "sha256": "1bfd7845bd3a047ccfe9f9bdcd475e171396464cb082fa350a9e551b80da8a61"
+    },
+    {
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/omicronapps/7-Zip-JBinding-4Android/875f38aac441f41e6eb693177e020e97971dca97/LICENSE",
+      "sha256": "ea20d713b1fad2f86f1051a90611858f9dc2642f873e18e467578afe943fc05d"
+    }
+  ],
+  "aar": {
+    "sha256": "88b2860ddb0fe8eac45a8fc59222cee1bee1c48b58f050f155b0b78074a147d9",
+    "size": 4068013,
+    "libraries": [
+      {
+        "path": "jni/arm64-v8a/lib7-Zip-JBinding.so",
+        "size": 2676496,
+        "sha256": "7023aa7a67074339e47d902bff909004dc49684cabd96d5753ccfd046c547c45",
+        "load_alignment": [
+          16384,
+          16384,
+          16384
+        ]
+      },
+      {
+        "path": "jni/armeabi-v7a/lib7-Zip-JBinding.so",
+        "size": 1801136,
+        "sha256": "aaec70f378e86d919cabfc43f8184c705a02750a0e63c9e678c9466a4982b8ce",
+        "load_alignment": [
+          16384,
+          16384,
+          16384
+        ]
+      },
+      {
+        "path": "jni/x86/lib7-Zip-JBinding.so",
+        "size": 2633496,
+        "sha256": "9637b506cee9197c82c86ebe73266d887abe552f3f403f7ca7d6a83c38087492",
+        "load_alignment": [
+          16384,
+          16384,
+          16384
+        ]
+      },
+      {
+        "path": "jni/x86_64/lib7-Zip-JBinding.so",
+        "size": 2663640,
+        "sha256": "3b6dfaa278c0193bd1ed3efdf7bb8c2cb960f090b4c4a5ddbccce8daf1290eae",
+        "load_alignment": [
+          16384,
+          16384,
+          16384
+        ]
+      }
+    ]
+  }
+}

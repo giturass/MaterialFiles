@@ -211,48 +211,6 @@
     </notice>
 
     <notice>
-        <name>libarchive-android</name>
-        <url>https://github.com/zhanghai/libarchive-android</url>
-        <copyright>Copyright 2023 Google LLC</copyright>
-        <license>Apache Software License 2.0</license>
-    </notice>
-
-    <notice>
-        <name>libarchive</name>
-        <url>https://github.com/libarchive/libarchive</url>
-        <copyright>Copyright 2003 Tim Kientzle</copyright>
-        <license>BSD 2-Clause License</license>
-    </notice>
-
-    <notice>
-        <name>bzip2</name>
-        <url>https://gitlab.com/bzip2/bzip2</url>
-        <copyright>Copyright 1996 Julian Seward</copyright>
-        <license>BSD 3-Clause License</license>
-    </notice>
-
-    <notice>
-        <name>lz4</name>
-        <url>https://github.com/lz4/lz4</url>
-        <copyright>Copyright 2011 Yann Collet</copyright>
-        <license>BSD 2-Clause License</license>
-    </notice>
-
-    <notice>
-        <name>zstd</name>
-        <url>https://github.com/facebook/zstd</url>
-        <copyright>Copyright Meta Platforms, Inc. and affiliates</copyright>
-        <license>BSD 3-Clause License</license>
-    </notice>
-
-    <notice>
-        <name>mbedtls</name>
-        <url>https://github.com/Mbed-TLS/mbedtls</url>
-        <copyright>Copyright The Mbed TLS Contributors</copyright>
-        <license>Apache Software License 2.0</license>
-    </notice>
-
-    <notice>
         <name>libselinux-android</name>
         <url>https://github.com/zhanghai/libselinux-android</url>
         <copyright>Copyright 2019 Hai Zhang</copyright>
@@ -288,10 +246,17 @@
     </notice>
 
     <notice>
-        <name>7-Zip 26.04</name>
-        <url>https://www.7-zip.org/</url>
-        <copyright>Copyright 1999–2026 Igor Pavlov. Includes public-domain LZMA SDK code. The application builds the 7z handler and its codecs from the accompanying source.</copyright>
+        <name>7-Zip-JBinding-4Android 16.02-2.03</name>
+        <url>https://github.com/omicronapps/7-Zip-JBinding-4Android/tree/Release-16.02-2.03</url>
+        <copyright>Copyright Boris Brodski and the 7-Zip-JBinding-4Android contributors.</copyright>
         <license>GNU Lesser General Public License 2.1</license>
+    </notice>
+
+    <notice>
+        <name>7-Zip 16.02 (including RAR decoder)</name>
+        <url>https://www.7-zip.org/</url>
+        <copyright>Copyright 1999–2016 Igor Pavlov. RAR decompression includes code by Alexander Roshal. The unRAR sources may not be used to develop a RAR (WinRAR) compatible archiver.</copyright>
+        <license>LGPL 2.1 with unRAR restriction</license>
     </notice>
 
     <notice>

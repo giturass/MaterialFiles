@@ -164,15 +164,17 @@ public final class ArchiveExtractionTest {
                     {"backup.tar", "backup"}, {"backup.tar.gz", "backup"},
                     {"backup.tar.bz2", "backup"}, {"backup.tar.xz", "backup"},
                     {"backup.tar.gzip", "backup"}, {"backup.tar.bzip2", "backup"},
-                    {"backup.tar.lzma", "backup"}, {"backup.tar.lz", "backup"},
-                    {"backup.tar.zst", "backup"}, {"backup.TAR.ZST", "backup"},
-                    {"backup.v1.tar.zst", "backup.v1"}, {"backup.tar.tar.gz", "backup.tar"},
+                    {"backup.tar.lzma", "backup"}, {"backup.tar.z", "backup"},
+                    {"backup.TAR.LZMA", "backup"}, {"backup.tar.tar.gz", "backup.tar"},
                     {"backup.gz", "backup"}, {"backup.bz2", "backup"}, {"backup.xz", "backup"},
                     {"backup.zip.001", "backup"}, {"backup.7z.001", "backup"},
                     {"backup.tar.xz.001", "backup"}, {"backup.TAR.GZ", "backup"},
-                    {"backup.v1.tar.zst.001", "backup.v1"},
                     {"backup.TAR.BZ2.001", "backup"}, {"backup.v2.zip", "backup.v2"},
-                    {"a", "a"}, {".zip", ".zip"}}) {
+                    {"backup.part01.rar", "backup"}, {"backup.PART001.RAR", "backup"},
+                    {"backup.rar.001", "backup"}, {"backup.v2.7z.001", "backup.v2"},
+                    {"raw.txt.001", "raw.txt"}, {"data.001", "data"},
+                    {"backup.txt.gz", "backup.txt"},
+                    {"a", "a"}, {".zip", ".zip"}, {".001", ".001"}}) {
                 Path root = (Path) invoke(archiveRoot, null, fixture.path(new File(fixture.base, names[0])));
                 require(names[1].equals(invoke(getTargetFileName, null, fixture.job, root).toString()),
                         "Unexpected extraction container for " + names[0]);
@@ -225,9 +227,9 @@ public final class ArchiveExtractionTest {
             Class<?> paths = Class.forName(PACKAGE + "provider.archive.PathArchiveExtensionsKt");
             invoke(paths.getMethod("archiveAddPassword", Path.class, String.class), null,
                     root, "测试-password-🔐");
-            Class<?> readerType = Class.forName(PACKAGE + "provider.archive.archiver.SevenZArchiveReader");
+            Class<?> readerType = Class.forName(PACKAGE + "provider.archive.archiver.SevenZipArchiveReader");
             Object companion = readerType.getField("Companion").get(null);
-            Method open = companion.getClass().getMethod("openOrNull", Path.class, List.class);
+            Method open = companion.getClass().getMethod("open", Path.class, List.class);
             Map<Path, Object> entries = new LinkedHashMap<>();
             try (Closeable reader = (Closeable) invoke(open, companion, archive,
                     Collections.singletonList("测试-password-🔐"))) {
@@ -238,7 +240,7 @@ public final class ArchiveExtractionTest {
                 }
             }
             Class<?> archiveReader = Class.forName(PACKAGE + "provider.archive.archiver.ArchiveReader");
-            Method directoryEntry = archiveReader.getDeclaredMethod("createDirectoryEntry", String.class);
+            Method directoryEntry = archiveReader.getDeclaredMethod("directoryEntry", String.class);
             directoryEntry.setAccessible(true);
             entries.put(root, invoke(directoryEntry, archiveReader.getField("INSTANCE").get(null), ""));
             set(root.getFileSystem(), "entries", entries);

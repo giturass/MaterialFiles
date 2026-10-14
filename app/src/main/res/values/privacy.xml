@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="about_privacy_policy_message">本应用不包含广告、使用情况跟踪或自动崩溃报告，不会向开发者发送文件内容、设备标识或诊断数据。\n\n文件、设置和缩略图保存在设备或您选择的存储位置。应用支持 Android 系统备份；备份与设备迁移行为取决于系统设置。\n\n访问 FTP、SFTP、SMB、WebDAV 等远程存储、发现局域网服务器或开启 FTP 服务时，会发生相应的网络通信。服务器可能收到连接信息、认证凭据和您操作的文件。\n\n打开外部链接，或将文件交给其他应用时，由相应的网站或应用处理数据。Android 系统可能保留本地诊断日志，本应用不会自动上传这些日志。</string>
+</resources>

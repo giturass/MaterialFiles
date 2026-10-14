@@ -12,18 +12,20 @@
     <item name="xzRadio" type="id" />
 
     <string name="file_create_archive_name">压缩文件名</string>
+    <string name="file_create_archive_default_name">归档</string>
     <string name="file_create_archive_name_preview_format">将创建：%1$s</string>
     <string name="file_create_archive_format">压缩格式</string>
-    <string name="file_create_archive_type_tar_gz">.tar.gz</string>
     <string name="file_create_archive_type_tar">.tar</string>
-    <string name="file_create_archive_type_tar_bz2">.tar.bz2</string>
     <string name="file_create_archive_type_gz">.gz</string>
     <string name="file_create_archive_type_bz2">.bz2</string>
     <string name="file_create_archive_type_xz">.xz</string>
     <string name="file_create_archive_no_encryption">此格式不支持密码保护</string>
     <string name="file_create_archive_single_file_hint">此格式只压缩单个文件，不支持密码保护</string>
     <string name="file_create_archive_single_file_required">此格式只能压缩一个常规文件</string>
-    <string name="file_create_archive_password_aes256">填写密码后使用 AES-256 加密</string>
+    <string name="file_create_archive_password_aes256">填写密码后使用 AES-256 加密，支持中文等 Unicode 字符；留空则不加密</string>
+    <string name="file_create_archive_password_zip_aes256">填写密码后使用 AES-256 加密，最多 99 个英文字母、数字、半角符号或空格；留空则不加密</string>
+    <string name="file_create_archive_password_zip_ascii_required">ZIP 密码仅支持英文字母、数字、半角符号和空格；其他字符请使用 7z</string>
+    <string name="file_create_archive_password_zip_too_long">ZIP 密码不能超过 99 个字符</string>
     <string name="file_create_archive_compression">压缩偏好</string>
     <string name="file_create_archive_compression_speed">速度优先</string>
     <string name="file_create_archive_compression_standard">标准</string>

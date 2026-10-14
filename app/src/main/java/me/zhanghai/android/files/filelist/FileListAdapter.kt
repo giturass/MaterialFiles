@@ -6,10 +6,12 @@
 package me.zhanghai.android.files.filelist
 
 import android.text.TextUtils
+import android.text.format.Formatter
 import android.view.View
 import android.view.ViewGroup
-import androidx.appcompat.widget.PopupMenu
 import androidx.core.view.isVisible
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import java8.nio.file.Path
@@ -25,16 +27,18 @@ import me.zhanghai.android.files.file.FileItem
 import me.zhanghai.android.files.file.fileSize
 import me.zhanghai.android.files.file.formatShort
 import me.zhanghai.android.files.file.iconRes
-import me.zhanghai.android.files.provider.archive.isArchivePath
 import me.zhanghai.android.files.provider.common.isEncrypted
 import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.ui.AnimatedListAdapter
 import me.zhanghai.android.files.ui.CheckableItemBackground
 import me.zhanghai.android.files.util.layoutInflater
 import me.zhanghai.android.files.util.valueCompat
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 class FileListAdapter(
+    lifecycleOwner: LifecycleOwner,
     private val listener: Listener
 ) : AnimatedListAdapter<FileItem, FileListAdapter.ViewHolder>(CALLBACK), PopupTextProvider {
     private var isSearching = false
@@ -61,6 +65,11 @@ class FileListAdapter(
 
     private val filePositionMap = mutableMapOf<Path, Int>()
 
+    private val directoryItemCountLoader =
+        DirectoryItemCountLoader(lifecycleOwner.lifecycleScope) { path ->
+            filePositionMap[path]?.let { notifyItemChanged(it, PAYLOAD_DETAILS_CHANGED) }
+        }
+
     private lateinit var _nameEllipsize: TextUtils.TruncateAt
     var nameEllipsize: TextUtils.TruncateAt
         get() = _nameEllipsize
@@ -80,8 +89,9 @@ class FileListAdapter(
             }
         }
         for (file in files) {
-            if (file !in selectedFiles) {
-                selectedFiles.add(file)
+            // MapSet.add() also replaces the value for an already-selected path, keeping its
+            // attributes current when the ViewModel publishes a newer FileItem.
+            if (selectedFiles.add(file)) {
                 changedFiles.add(file)
             }
         }
@@ -104,6 +114,9 @@ class FileListAdapter(
     }
 
     fun selectAllFiles() {
+        if (pickOptions?.allowMultiple == false) {
+            return
+        }
         val files = fileItemSetOf()
         for (index in 0..<itemCount) {
             val file = getItem(index)
@@ -112,6 +125,25 @@ class FileListAdapter(
             }
         }
         listener.selectFiles(files, true)
+    }
+
+    fun getInvertedSelection(selection: FileItemSet): FileItemSet {
+        // Selection may span directories; only invert rows in the current filtered list.
+        val files = fileItemSetOf().apply { addAll(selection) }
+        if (pickOptions?.allowMultiple == false) {
+            return files
+        }
+        for (file in list) {
+            if (!isFileSelectable(file)) {
+                continue
+            }
+            if (file in selection) {
+                files.remove(file)
+            } else {
+                files.add(file)
+            }
+        }
+        return files
     }
 
     private fun isFileSelectable(file: FileItem): Boolean {
@@ -125,9 +157,16 @@ class FileListAdapter(
     }
 
     override fun clear() {
+        directoryItemCountLoader.clear()
         super.clear()
 
         rebuildFilePositionMap()
+    }
+
+    fun invalidateDirectoryCounts() {
+        for (path in directoryItemCountLoader.invalidate()) {
+            filePositionMap[path]?.let { notifyItemChanged(it, PAYLOAD_DETAILS_CHANGED) }
+        }
     }
 
     @Deprecated("", ReplaceWith("replaceListAndSearching(list, searching)"))
@@ -139,8 +178,12 @@ class FileListAdapter(
         val clear = this.isSearching != isSearching
         this.isSearching = isSearching
         val sortedList = if (!isSearching) list.sortedWith(sortOptions.createComparator()) else list
+        val changedCountPaths = directoryItemCountLoader.retainFiles(sortedList)
         super.replace(sortedList, clear)
         rebuildFilePositionMap()
+        for (path in changedCountPaths) {
+            filePositionMap[path]?.let { notifyItemChanged(it, PAYLOAD_DETAILS_CHANGED) }
+        }
     }
 
     private fun rebuildFilePositionMap() {
@@ -158,9 +201,6 @@ class FileListAdapter(
             itemLayout.apply {
                 background = CheckableItemBackground.create(0f, 0f, context)
             }
-            popupMenu = PopupMenu(menuButton.context, menuButton)
-                .apply { inflate(R.menu.file_item) }
-            menuButton.setOnClickListener { popupMenu.show() }
         }
     }
 
@@ -173,15 +213,14 @@ class FileListAdapter(
         val isDirectory = file.attributes.isDirectory
         val isEnabled = isFileSelectable(file) || isDirectory
         holder.itemLayout.isEnabled = isEnabled
-        holder.menuButton.isEnabled = isEnabled
-        val menu = holder.popupMenu.menu
         val path = file.path
-        val hasPickOptions = pickOptions != null
-        val isReadOnly = path.fileSystem.isReadOnly
-        menu.findItem(R.id.action_cut).isVisible = !hasPickOptions && !isReadOnly
-        menu.findItem(R.id.action_copy).isVisible = !hasPickOptions
         val checked = file in selectedFiles
         holder.itemLayout.isChecked = checked
+        holder.iconLayout.isEnabled = isFileSelectable(file)
+        holder.iconLayout.contentDescription = holder.iconLayout.context.getString(
+            if (checked) R.string.file_item_deselect_format else R.string.file_item_select_format,
+            file.name
+        )
         holder.nameText.apply {
             if (isSingleLineCompat) {
                 val nameEllipsize = nameEllipsize
@@ -190,6 +229,9 @@ class FileListAdapter(
             }
         }
         if (payloads.isNotEmpty()) {
+            if (PAYLOAD_DETAILS_CHANGED in payloads) {
+                bindDetails(holder, file)
+            }
             return
         }
         bindViewHolderAnimation(holder)
@@ -202,11 +244,7 @@ class FileListAdapter(
                 }
             }
             setOnLongClickListener {
-                if (selectedFiles.isEmpty()) {
-                    selectFile(file)
-                } else {
-                    listener.openFile(file)
-                }
+                selectFile(file)
                 true
             }
         }
@@ -261,77 +299,40 @@ class FileListAdapter(
             }
         }
         holder.nameText.text = file.name
-        holder.descriptionText.text = if (isDirectory) {
-            null
-        } else {
-            val context = holder.descriptionText.context
-            val lastModificationTime = attributes.lastModifiedTime().toInstant()
-                .formatShort(context)
-            val size = attributes.fileSize.formatHumanReadable(context)
-            val descriptionSeparator = context.getString(R.string.file_item_description_separator)
-            listOf(lastModificationTime, size).joinToString(descriptionSeparator)
-        }
-        val isArchivePath = path.isArchivePath
-        menu.findItem(R.id.action_copy)
-            .setTitle(if (isArchivePath) R.string.file_item_action_extract else R.string.copy)
-        menu.findItem(R.id.action_delete).isVisible = !isReadOnly
-        menu.findItem(R.id.action_rename).isVisible = !isReadOnly
-        menu.findItem(R.id.action_extract).isVisible = file.isArchiveFile
-        menu.findItem(R.id.action_archive).isVisible = !isArchivePath
-        menu.findItem(R.id.action_add_bookmark).isVisible = isDirectory
-        holder.popupMenu.setOnMenuItemClickListener {
-            when (it.itemId) {
-                R.id.action_open_with -> {
-                    listener.openFileWith(file)
-                    true
+        bindDetails(holder, file)
+    }
+
+    private fun bindDetails(holder: ViewHolder, file: FileItem) {
+        val context = holder.descriptionText.context
+        val attributes = file.attributes
+        holder.descriptionText.contentDescription = null
+        if (attributes.isDirectory) {
+            val result = directoryItemCountLoader.getCount(file)
+            val count = result?.value
+            when {
+                result == null -> {
+                    holder.descriptionText.setText(R.string.file_item_count_loading)
+                    holder.descriptionText.contentDescription = context.getString(R.string.loading)
                 }
-                R.id.action_cut -> {
-                    listener.cutFile(file)
-                    true
+                count == null -> {
+                    holder.descriptionText.setText(R.string.file_item_count_unavailable)
+                    holder.descriptionText.contentDescription =
+                        context.getString(R.string.file_item_count_unavailable_description)
                 }
-                R.id.action_copy -> {
-                    listener.copyFile(file)
-                    true
+                else -> {
+                    holder.descriptionText.text = context.resources.getQuantityString(
+                        R.plurals.file_item_directory_count,
+                        count.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(), count
+                    )
                 }
-                R.id.action_delete -> {
-                    listener.confirmDeleteFile(file)
-                    true
-                }
-                R.id.action_rename -> {
-                    listener.showRenameFileDialog(file)
-                    true
-                }
-                R.id.action_extract -> {
-                    listener.extractFile(file)
-                    true
-                }
-                R.id.action_archive -> {
-                    listener.showCreateArchiveDialog(file)
-                    true
-                }
-                R.id.action_share -> {
-                    listener.shareFile(file)
-                    true
-                }
-                R.id.action_copy_path -> {
-                    listener.copyPath(file)
-                    true
-                }
-                R.id.action_add_bookmark -> {
-                    listener.addBookmark(file)
-                    true
-                }
-                R.id.action_create_shortcut -> {
-                    listener.createShortcut(file)
-                    true
-                }
-                R.id.action_properties -> {
-                    listener.showPropertiesDialog(file)
-                    true
-                }
-                else -> false
             }
+        } else {
+            holder.descriptionText.text = Formatter.formatShortFileSize(context, attributes.size())
         }
+        val lastModified = LAST_MODIFIED_FORMATTER.withZone(ZoneId.systemDefault())
+            .format(attributes.lastModifiedTime().toInstant())
+        holder.lastModifiedText.text = lastModified
+        holder.lastModifiedText.contentDescription = lastModified
     }
 
     override fun onViewRecycled(holder: ViewHolder) {
@@ -356,6 +357,10 @@ class FileListAdapter(
 
     companion object {
         private val PAYLOAD_STATE_CHANGED = Any()
+        private val PAYLOAD_DETAILS_CHANGED = Any()
+
+        private val LAST_MODIFIED_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm", Locale.ROOT)
 
         private val CALLBACK = object : DiffUtil.ItemCallback<FileItem>() {
             override fun areItemsTheSame(oldItem: FileItem, newItem: FileItem): Boolean =
@@ -376,14 +381,12 @@ class FileListAdapter(
         val badgeImage = binding.badgeImage
         val nameText = binding.nameText
         val descriptionText = binding.descriptionText
-        val menuButton = binding.menuButton
+        val lastModifiedText = binding.lastModifiedText
 
         internal val thumbnailRequest = RetainedImageRequest(thumbnailImage) { success ->
             iconImage.isVisible = !success
         }
         internal val appIconBadgeRequest = RetainedImageRequest(appIconBadgeImage)
-
-        lateinit var popupMenu: PopupMenu
     }
 
     interface Listener {

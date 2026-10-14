@@ -64,18 +64,6 @@
         app:showAsAction="never" />
 
     <item
-        android:id="@+id/action_create_file"
-        android:orderInCategory="100"
-        android:title="@string/file_create_file_title"
-        app:showAsAction="never" />
-
-    <item
-        android:id="@+id/action_create_directory"
-        android:orderInCategory="100"
-        android:title="@string/file_create_directory_title"
-        app:showAsAction="never" />
-
-    <item
         android:id="@+id/action_refresh"
         android:alphabeticShortcut="r"
         android:orderInCategory="100"

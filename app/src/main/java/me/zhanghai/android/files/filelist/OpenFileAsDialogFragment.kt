@@ -18,6 +18,7 @@ import me.zhanghai.android.files.R
 import me.zhanghai.android.files.file.MimeType
 import me.zhanghai.android.files.file.asMimeType
 import me.zhanghai.android.files.file.fileProviderUri
+import me.zhanghai.android.files.provider.archive.createArchiveRootPath
 import me.zhanghai.android.files.util.ParcelableArgs
 import me.zhanghai.android.files.util.ParcelableParceler
 import me.zhanghai.android.files.util.args
@@ -39,7 +40,13 @@ class OpenFileAsDialogFragment : AppCompatDialogFragment() {
             }
             .create()
 
-    private fun openAs(mimeType: MimeType) {
+    private fun openAs(mimeType: MimeType?) {
+        if (mimeType == null) {
+            // NSIS installers and archives with unknown extensions require an explicit choice.
+            startActivitySafe(FileListActivity.createViewIntent(args.path.createArchiveRootPath()))
+            finish()
+            return
+        }
         val intent = args.path.fileProviderUri.createViewIntent(mimeType)
             .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
             .apply { extraPath = args.path }
@@ -60,9 +67,10 @@ class OpenFileAsDialogFragment : AppCompatDialogFragment() {
             R.string.file_open_as_type_image to "image/*",
             R.string.file_open_as_type_audio to "audio/*",
             R.string.file_open_as_type_video to "video/*",
+            R.string.file_open_as_type_archive to null,
             R.string.file_open_as_type_directory to MimeType.DIRECTORY.value,
             R.string.file_open_as_type_any to "*/*"
-        ).map { it.first to it.second.asMimeType() }
+        ).map { it.first to it.second?.asMimeType() }
     }
 
     @Parcelize

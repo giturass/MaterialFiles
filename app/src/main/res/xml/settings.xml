@@ -60,12 +60,6 @@
             android:entryValues="@array/pref_entry_values_root_strategy"
             app:useSimpleSummaryProvider="true" />
 
-        <me.zhanghai.android.files.settings.CharsetPreference
-            android:key="@string/pref_key_archive_file_name_encoding"
-            android:title="@string/settings_archive_file_name_encoding_title"
-            android:defaultValue="@string/pref_default_value_archive_file_name_encoding"
-            app:useSimpleSummaryProvider="true" />
-
         <rikka.preference.SimpleMenuPreference
             android:key="@string/pref_key_open_apk_default_action"
             android:title="@string/settings_open_apk_default_action_title"

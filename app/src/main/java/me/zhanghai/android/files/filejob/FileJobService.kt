@@ -14,6 +14,7 @@ import java8.nio.file.Path
 import me.zhanghai.android.files.app.AppLocaleHelper
 import me.zhanghai.android.files.file.MimeType
 import me.zhanghai.android.files.provider.archive.archiver.ArchiveCompressionPreset
+import me.zhanghai.android.files.provider.archive.archiver.ArchiveCreationFormat
 import me.zhanghai.android.files.provider.common.PosixFileModeBit
 import me.zhanghai.android.files.provider.common.PosixGroup
 import me.zhanghai.android.files.provider.common.PosixUser
@@ -121,8 +122,7 @@ class FileJobService : Service() {
         fun archive(
             sources: List<Path>,
             archiveFile: Path,
-            format: Int,
-            filter: Int,
+            format: ArchiveCreationFormat,
             password: String?,
             encryptFileNames: Boolean,
             runInBackground: Boolean,
@@ -133,7 +133,7 @@ class FileJobService : Service() {
         ) {
             startJob(
                 ArchiveFileJob(
-                    sources, archiveFile, format, filter, password, encryptFileNames,
+                    sources, archiveFile, format, password, encryptFileNames,
                     runInBackground, compressionPreset, splitSize, deleteSources
                 ),
                 context

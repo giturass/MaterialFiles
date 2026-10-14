@@ -1,0 +1,35 @@
+{
+  "repository": "https://github.com/omicronapps/7-Zip-JBinding-4Android",
+  "commit": "875f38aac441f41e6eb693177e020e97971dca97",
+  "base_path": "sevenzipjbinding/src/androidTest/assets/testdata/",
+  "ppmd": {
+    "source_url": "https://raw.githubusercontent.com/miurahr/pyppmd/623f6338c3d9d289754cb68cbbdb8c29e60821ca/tests/test_ppmd8.py",
+    "source_sha256": "61331fa7252adcee58de35cae00b60c2c852995051ff3b64dc6ef9d2740b1844",
+    "encoded_hex": "5416436d5cd8d73ab35831ac1d0923fd11d572627313b6ceb2e76ab9f6e866f508c30a093612ebdadaba",
+    "archive_sha256": "c9fe52314e459813988438cebdb55af58ec60da3cca829b228569a35582fc32d",
+    "content_sha256": "12d9bad8bc62e56d78786ae27eb9f32cd417c0df075f5149fe3730e34503065f",
+    "header": "PPMd version I, order 6, 8 MiB memory; public-domain PpmdHandler.cpp container layout"
+  },
+  "fixtures": [
+    {"format": "HXS", "path": "Project/Docs/Rules/Bin/StyleCop.hxs", "url": "https://raw.githubusercontent.com/StyleCop/StyleCop/d2c8e52dd2e5e113cc40092e7ffe06a4e018f351/Project/Docs/Rules/Bin/StyleCop.hxs", "sha256": "0dba8c4ec8d025ff0b6ae4c2264320d34f994edb8b1c801b44577e30be91ccad", "reference_format": "Hxs", "sample_members": ["StyleCop 4.3.html", "SA1600.html", "SA1400.html", "icons/alert_caution.gif", "StyleCop.HxK", "StyleCop_D.HxK"]},
+    {"format": "HFS", "path": "multiple-files/hfs/archive3.zip.1.hfs.zip", "url": "https://raw.githubusercontent.com/borisbrodski/sevenzipjbinding/941e5beab543d8c6eed1599cf0fc4593e7fe969f/test/JavaTests/testdata/multiple-files/hfs/archive3.zip.1.hfs.zip", "sha256": "c1258a9b48b6f8201f971003ad3b5c8a313ad792f70c50411536ca6ec97940b1", "unwrap_zip": true},
+    {"format": "AR", "path": "multiple-files/ar/archive1.zip.1.deb", "git_blob_sha1": "cfd439a0736b2534f118169302d995109f91b39f"},
+    {"format": "ARJ", "path": "multiple-files/arj/archive1.zip.0.arj", "git_blob_sha1": "8457ba1493cece122351e903cbbd4d37f0e53234"},
+    {"format": "CAB", "path": "multiple-files/cab/archive1.zip.0.cab", "git_blob_sha1": "098184daa968884331597133495c80b863625b56"},
+    {"format": "CPIO", "path": "multiple-files/cpio/archive1.zip.0.cpio", "git_blob_sha1": "289ed778dbeca7bb01286774e0d6c29884f3c93b"},
+    {"format": "FAT", "path": "multiple-files/fat/archive1.zip.1.fat.zip", "git_blob_sha1": "86f7edebed667dbb80fd032e4117ef4b012890d1", "unwrap_zip": true},
+    {"format": "ISO", "path": "multiple-files/iso/archive1.zip.0.iso.zip", "git_blob_sha1": "a21d0baeb233ff4861ffad1577e7a47a494c34d7", "unwrap_zip": true},
+    {"format": "LZH", "path": "multiple-files/lzh/archive1.zip.5.lzh", "git_blob_sha1": "3426f06762b7377ffa921f0e23edc5eba7ae24b1"},
+    {"format": "NTFS", "path": "multiple-files/ntfs/archive1.zip.1.ntfs.zip", "git_blob_sha1": "76b2df2d3eb0157838c3482b962a7765145ae158", "unwrap_zip": true},
+    {"format": "RAR", "path": "multiple-files/rar/archive1.zip.0.rar", "git_blob_sha1": "15a6bda3e8a8655622eafa0b8113b242c87dc6a2"},
+    {"format": "RAR5", "path": "multiple-files/rar5/archive1.zip.0.rar", "git_blob_sha1": "4b8238ecd86b900f0d5dff1da0f3c685dbdab347"},
+    {"format": "UDF", "path": "multiple-files/udf/archive1.zip.102.udf.zip", "git_blob_sha1": "a6e48146bc88db2eab7000cfbf7c427805630df3", "unwrap_zip": true},
+    {"format": "WIM", "path": "multiple-files/wim/archive1.zip.0.wim", "git_blob_sha1": "be7ecc868940f227ed0d295e5d1114194bd326b8"},
+    {"format": "XAR", "path": "multiple-files/xar/archive1.zip.1.xar", "git_blob_sha1": "540ace966693bff30660533bea1fc9dfdd30f284"},
+    {"format": "CHM", "path": "simple/chm/simple1.dat.0.chm", "git_blob_sha1": "648cecad8481134b6303800f86c1483b6568950c"},
+    {"format": "LZMA", "path": "simple/lzma/simple1.dat.1.lzma", "git_blob_sha1": "02d27ef5f5e52c613c3466992cc826c4e54fd68b"},
+    {"format": "NSIS", "path": "simple/nsis/simple1.dat.1.exe", "git_blob_sha1": "f81f73e3d2c01dd84d7a937dfc8f09c6c931005b"},
+    {"format": "RPM", "path": "simple/rpm/simple1.dat.0.rpm", "git_blob_sha1": "77c103d4c5ca7116281475502293a65c3fb0a502", "reference_format": "Rpm"},
+    {"format": "Z", "path": "simple/z/simple1.dat.0.Z", "git_blob_sha1": "9e27ef5aae85ffea08508d6a2674b775e5299cf2"}
+  ]
+}

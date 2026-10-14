@@ -36,5 +36,11 @@ APK 使用与 [MDTerm 发布构建](https://github.com/giturass/MDTerm/actions/r
 ARM64 原生库、全部语言资源及固定校验和、JCodings 运行时表。校验失败不会
 上传 APK。Lint 和 R8 报告另存为 `materialfiles-build-reports-<提交 SHA>` artifact。
 
+校验也会拒绝 Firebase/Crashlytics/Google Play Services 的 Manifest、配置资源和
+实际 DEX 类；AndroidX 照片选择器与 HTTP 库中的可选兼容性字符串不等于打包了这些 SDK。
+每个包含原生代码的 ABI 都必须包含 `lib7-Zip-JBinding.so` 和用于批量设置创建属性的
+`libarchive_jbinding.so`，并且不允许遗留的
+`libsevenzip.so` 或 `libarchive-jni.so`。
+
 APK 内的语法资源检查不能替代混淆后代码的设备交互验收。编辑器的 Android
 运行时测试和交互覆盖范围见 [Sora 编辑器说明](sora-editor.md)。

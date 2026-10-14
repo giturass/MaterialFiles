@@ -39,5 +39,11 @@
                 android:inputType="text"
                 android:maxLines="1" />
         </androidx.appcompat.widget.Toolbar>
+
+        <me.zhanghai.android.files.filelist.FileSelectionBar
+            android:id="@+id/selectionBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone" />
     </me.zhanghai.android.files.ui.BottomBarLayout>
 </merge>

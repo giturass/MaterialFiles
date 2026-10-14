@@ -62,7 +62,7 @@ jobs:
           test -n "$KEY_PASSWORD"
           ./gradlew --no-daemon --console=plain :app:assembleRelease :app:lintRelease
 
-      - name: Verify signature and packaged editor
+      - name: Verify signature, absence of tracking SDKs and packaged editor
         run: |
           artifact_dir="$RUNNER_TEMP/materialfiles-release"
           mkdir -p "$artifact_dir"

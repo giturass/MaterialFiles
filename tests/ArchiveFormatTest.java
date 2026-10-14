@@ -7,12 +7,13 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InterruptedIOException;
+import java.io.RandomAccessFile;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
-import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
+import java.lang.reflect.UndeclaredThrowableException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
@@ -23,20 +24,27 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 
 import java8.nio.channels.SeekableByteChannel;
+import java8.nio.file.DirectoryStream;
 import java8.nio.file.DirectoryNotEmptyException;
 import java8.nio.file.FileSystem;
 import java8.nio.file.LinkOption;
 import java8.nio.file.Path;
 import java8.nio.file.attribute.BasicFileAttributes;
+import android.app.Application;
+import android.content.Context;
+import android.content.Intent;
+import android.content.res.Resources;
+import android.system.Os;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
- * Creates archives through the APK's ArchiveWriter, reads them through its official 7-Zip or
- * libarchive reader, and leaves a manifest for independent official 7zz interoperability checks.
+ * Creates archives through the APK's JBinding ArchiveWriter and reads them through ArchiveReader.
+ * Leaves a manifest for independent official 7zz interoperability checks.
  * The physical provider comes from ArchiveVolumeTest; no Activity or application preferences are
  * needed. ArchiveSourceSnapshot checks exercise the actual post-commit source-deletion guard.
  */
@@ -44,18 +52,17 @@ public final class ArchiveFormatTest {
     private static final String PACKAGE = "me.zhanghai.android.files.";
     private static final String ARCHIVER = PACKAGE + "provider.archive.archiver.";
     private static final String PASSWORD = "测试-password-🔐";
+    private static final String ZIP_PASSWORD = "zip-password-123!";
     private static final List<String> FAILURES = new ArrayList<>();
     private static final JSONArray MANIFEST = new JSONArray();
     private static File work;
     private static FileSystem filesystem;
-    private static Class<?> constants;
+    private static Class<?> creationType;
     private static Class<?> presetType;
     private static Class<?> functionType;
     private static Class<?> writerType;
     private static Class<?> readerType;
-    private static Class<?> readArchiveType;
     private static Class<?> entryType;
-    private static Class<?> outputType;
     private static Class<?> splitType;
     private static Object unit;
     private static int checks;
@@ -67,40 +74,71 @@ public final class ArchiveFormatTest {
             work = new File(arguments[0]).getCanonicalFile();
             mkdir(work);
             mkdir(new File(work, "output"));
-            mkdir(new File(work, "stage"));
+            File cache = new File(work, "cache");
+            ArchiveTestSupport.installApplication(cache);
             loadTypes();
             try (FileSystem owned = ArchiveVolumeTest.newPhysicalFileSystem(work)) {
                 filesystem = owned;
+                ArchiveVolumeTest.installDefaultProvider(filesystem);
+                // App-private staging must remain independent of the active file/root provider.
+                ArchiveVolumeTest.rejectPrivateCacheAccess(filesystem, true);
                 List<Entry> entries = createSources(new File(work, "source"));
                 List<Entry> rawEntries = Collections.singletonList(new Entry("payload.bin",
                         new File(work, "source/payload.bin"), payload(24577)));
                 putNew(rawEntries.get(0).file, rawEntries.get(0).bytes);
                 for (String preset : new String[]{"SPEED", "STANDARD", "QUALITY"}) {
                     String suffix = preset.toLowerCase(Locale.ROOT);
-                    verify(new Spec("zip-aes-" + suffix + ".zip", "zip", "ZIP", "NONE",
-                            preset, PASSWORD, false, false, 0), entries);
-                    verify(new Spec("7z-aes-" + suffix + ".7z", "7z", "7ZIP", "NONE",
+                    verify(new Spec("zip-password-" + suffix + ".zip", "zip", "ZIP",
+                            preset, ZIP_PASSWORD, false, false, 0), entries);
+                    verify(new Spec("7z-headers-" + suffix + ".7z", "7z", "SEVEN_Z",
                             preset, PASSWORD, true, false, 0), entries);
-                    verify(new Spec("tar-xz-" + suffix + ".tar.xz", "tar.xz", "TAR", "XZ",
-                            preset, null, false, false, 0), entries);
+                    verify(new Spec("7z-contents-" + suffix + ".7z", "7z", "SEVEN_Z",
+                            preset, PASSWORD, false, false, 0), entries);
+                    verify(new Spec("payload-" + suffix + ".bin.bz2", "bzip2", "BZIP2",
+                            preset, null, false, true, 0), Collections.singletonList(
+                                    new Entry("payload-" + suffix + ".bin", rawEntries.get(0).file,
+                                            rawEntries.get(0).bytes)));
                 }
-                verify(standard("zip-plain.zip", "zip", "ZIP", "NONE"), entries);
-                verify(standard("7z-plain.7z", "7z", "7ZIP", "NONE"), entries);
-                verify(standard("plain.tar", "tar", "TAR", "NONE"), entries);
-                verify(standard("tar-gzip.tar.gz", "tar.gz", "TAR", "GZIP"), entries);
-                verify(standard("tar-bzip2.tar.bz2", "tar.bz2", "TAR", "BZIP2"), entries);
-                verify(new Spec("payload.bin.gz", "gzip", "RAW", "GZIP", "STANDARD",
+                verify(standard("zip-plain.zip", "zip", "ZIP"), entries);
+                verify(standard("7z-plain.7z", "7z", "SEVEN_Z"), entries);
+                verify(standard("plain.tar", "tar", "TAR"), entries);
+                verify(new Spec("zip-password-99.zip", "zip", "ZIP", "STANDARD",
+                        String.join("", Collections.nCopies(99, "x")), false, false, 0), entries);
+                verify(new Spec("payload.bin.gz", "gzip", "GZIP", "STANDARD",
                         null, false, true, 0), rawEntries);
-                verify(new Spec("payload.bin.bz2", "bzip2", "RAW", "BZIP2", "STANDARD",
+                verify(new Spec("payload.bin.bz2", "bzip2", "BZIP2", "STANDARD",
                         null, false, true, 0), rawEntries);
-                verify(new Spec("payload.bin.xz", "xz", "RAW", "XZ", "STANDARD",
-                        null, false, true, 0), rawEntries);
-                verify(new Spec("split.zip", "zip", "ZIP", "NONE", "STANDARD",
-                        PASSWORD, false, false, 37), entries);
-                verify(new Spec("split.7z", "7z", "7ZIP", "NONE", "STANDARD",
+                verify(new Spec("split.zip", "zip", "ZIP", "STANDARD",
+                        ZIP_PASSWORD, false, false, 37), entries);
+                verify(new Spec("split.7z", "7z", "SEVEN_Z", "STANDARD",
                         PASSWORD, true, false, 37), entries);
-                verify(new Spec("split.tar.gz", "tar.gz", "TAR", "GZIP", "STANDARD",
-                        null, false, false, 37), entries);
+                verify(new Spec("split.tar", "tar", "TAR", "STANDARD",
+                        null, false, false, 4093), entries);
+                check("new split encrypted 7z roots request a password and retry without cached metadata",
+                        () -> verifySplitPasswordRetry(entries.subList(0, 5)));
+                for (String creation : new String[]{"ZIP", "SEVEN_Z", "TAR"}) {
+                    verify(standard("empty-" + creation + ".archive", creation.toLowerCase(Locale.ROOT),
+                            creation), Collections.emptyList());
+                }
+                check("symbolic links and executable modes survive ZIP/7z/TAR creation",
+                        ArchiveFormatTest::verifySymlinks);
+                check("short provider reads and writes preserve archive contents",
+                        ArchiveFormatTest::verifyShortIo);
+                check("stream-only providers read encrypted 7z through temporary storage",
+                        ArchiveFormatTest::verifyStreamOnly);
+                check("ZIP caches a stream-only source without provider cache access or double-counting progress",
+                        ArchiveFormatTest::verifyZipStreamOnlySource);
+                check("a failed ZIP seek probe and source close cannot fall back or publish output",
+                        ArchiveFormatTest::verifyProbeCloseFailure);
+                for (String failure : new String[]{"source-close", "output-close", "grow", "shrink",
+                        "zero-write", "cancel", "header-zero-write"}) {
+                    check("failed creation rolls back output and retains sources: " + failure,
+                            () -> verifyCreationFailure(failure));
+                }
+                check("raw formats reject multiple inputs and directories",
+                        () -> verifyRawInputsRejected(entries));
+                check("ZIP rejects Unicode, control characters and passwords over 99 bytes",
+                        () -> verifyZipPasswordsRejected(entries));
                 check("unfiltered ordinary input is rejected instead of exposed as a raw archive",
                         ArchiveFormatTest::verifyUnfilteredInputRejected);
                 for (int mode = 0; mode < 3; ++mode) {
@@ -110,6 +148,7 @@ public final class ArchiveFormatTest {
                             "new child survives deletion of the previously archived tree"}[mode],
                             () -> verifySourceDeletion(currentMode));
                 }
+                ArchiveTestSupport.requireEmptyCache(cache);
             }
             JSONObject manifest = new JSONObject();
             manifest.put("archives", MANIFEST);
@@ -127,15 +166,13 @@ public final class ArchiveFormatTest {
     }
 
     private static void loadTypes() throws ClassNotFoundException, ReflectiveOperationException {
-        constants = Class.forName("me.zhanghai.android.libarchive.Archive");
+        creationType = Class.forName(ARCHIVER + "ArchiveCreationFormat");
         presetType = Class.forName(ARCHIVER + "ArchiveCompressionPreset");
         functionType = Class.forName("kotlin.jvm.functions.Function1");
         unit = Class.forName("kotlin.Unit").getField("INSTANCE").get(null);
         writerType = Class.forName(ARCHIVER + "ArchiveWriter");
         readerType = Class.forName(ARCHIVER + "ArchiveReader");
-        readArchiveType = Class.forName(ARCHIVER + "ReadArchive");
-        entryType = Class.forName(ARCHIVER + "ReadArchive$Entry");
-        outputType = Class.forName(ARCHIVER + "ArchiveOutput");
+        entryType = Class.forName(ARCHIVER + "ArchiveEntry");
         splitType = Class.forName(ARCHIVER + "SplitArchiveKt");
     }
 
@@ -143,11 +180,14 @@ public final class ArchiveFormatTest {
         mkdir(directory);
         List<Entry> entries = new ArrayList<>();
         entries.add(new Entry("hello.txt", new File(directory, "hello.txt"),
-                "Native archive engines preserve UTF-8: 测试 🔐\n".getBytes(StandardCharsets.UTF_8)));
+                "7-Zip-JBinding preserves UTF-8: 测试 🔐\n".getBytes(StandardCharsets.UTF_8)));
         entries.add(new Entry("文档", new File(directory, "文档"), null));
         entries.add(new Entry("文档/数据.bin", new File(directory, "文档/数据.bin"), payload(32771)));
         entries.add(new Entry("empty.bin", new File(directory, "empty.bin"), new byte[0]));
         entries.add(new Entry("empty-directory", new File(directory, "empty-directory"), null));
+        byte[] random = new byte[131101];
+        new Random(0x5EED7A1FL).nextBytes(random);
+        entries.add(new Entry("incompressible.bin", new File(directory, "incompressible.bin"), random));
         for (Entry entry : entries) {
             if (entry.directory()) mkdir(entry.file);
             else putNew(entry.file, entry.bytes);
@@ -163,12 +203,12 @@ public final class ArchiveFormatTest {
         return bytes;
     }
 
-    private static Spec standard(String filename, String format, String container, String filter) {
-        return new Spec(filename, format, container, filter, "STANDARD", null, false, false, 0);
+    private static Spec standard(String filename, String format, String creation) {
+        return new Spec(filename, format, creation, "STANDARD", null, false, false, 0);
     }
 
     private static void verify(Spec spec, List<Entry> entries) {
-        check(spec.filename + ": write, progress, close, reopen and compare every entry", () -> {
+        check(spec.filename + ": production output transaction, progress, reopen and compare every entry", () -> {
             Path archive = create(spec, entries);
             readAndCompare(spec, archive, entries);
             addManifest(spec, entries);
@@ -177,37 +217,28 @@ public final class ArchiveFormatTest {
 
     private static Path create(Spec spec, List<Entry> entries) throws Throwable {
         File outputFile = new File(work, "output/" + spec.filename);
-        File stage = spec.splitSize == 0 ? outputFile : new File(work, "stage/" + spec.filename);
-        writeArchive(spec, path(stage), entries);
+        long archiveSize = writeArchive(spec, path(outputFile), entries);
         if (spec.splitSize > 0) {
-            // The complete archive is staged before sequential volume creation, just as in
-            // ArchiveFileJob: the 7z writer must be free to rewrite its leading header.
-            try (ArchiveOutput output = new ArchiveOutput(path(outputFile), spec.splitSize);
-                 InputStream input = new FileInputStream(stage)) {
-                byte[] bytes = new byte[8192];
-                int count;
-                while ((count = input.read(bytes)) >= 0) {
-                    ByteBuffer buffer = ByteBuffer.wrap(bytes, 0, count);
-                    while (buffer.hasRemaining()) {
-                        require(output.channel.write(buffer) > 0, "Volume output made no progress");
-                    }
-                }
-                output.commit();
-            }
-            assertVolumes(outputFile, spec.splitSize, stage.length());
+            assertVolumes(outputFile, spec.splitSize, archiveSize);
         }
         return path(new File(work, spec.archiveName()));
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private static void writeArchive(Spec spec, Path target, List<Entry> entries) throws Throwable {
+    private static long writeArchive(Spec spec, Path target, List<Entry> entries) throws Throwable {
+        return writeArchive(spec, target, entries, null);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static long writeArchive(Spec spec, Path target, List<Entry> entries,
+            CheckedRunnable onStart) throws Throwable {
         List<Object> pairs = new ArrayList<>();
         Map<String, Integer> completed = new LinkedHashMap<>();
         Set<String> started = new HashSet<>();
         Constructor<?> pair = Class.forName("kotlin.Pair").getConstructor(Object.class, Object.class);
         long expectedProgress = 0;
         for (Entry entry : entries) {
-            Path source = path(entry.file);
+            Path source = entry.providerPath != null ? entry.providerPath : path(entry.file);
             pairs.add(construct(pair, source, filesystem.getPath(entry.name)));
             completed.put(source.toString(), 0);
             expectedProgress += attributes(source).size();
@@ -221,7 +252,8 @@ public final class ArchiveFormatTest {
         Object onEntry = function(value -> {
             String source = value.toString();
             require(completed.containsKey(source), "Started an unselected source: " + source);
-            started.add(source);
+            require(started.add(source), "Started a selected source more than once: " + source);
+            if (onStart != null) onStart.run();
         });
         Object onComplete = function(value -> {
             String source = value.toString();
@@ -229,16 +261,28 @@ public final class ArchiveFormatTest {
             completed.put(source, completed.get(source) + 1);
         });
         Object preset = Enum.valueOf((Class) presetType, spec.preset);
-        try (ArchiveOutput output = new ArchiveOutput(target, 0)) {
+        long[] archiveSize = {-1};
+        Object write = function(value -> {
+            SeekableByteChannel channel = (SeekableByteChannel) value;
             try (Closeable writer = (Closeable) construct(writerType.getConstructor(
-                    SeekableByteChannel.class, int.class, int.class, String.class, boolean.class,
-                    presetType), output.channel, constant("FORMAT_" + spec.container),
-                    constant("FILTER_" + spec.filter), spec.password, spec.encryptNames, preset)) {
+                    SeekableByteChannel.class, creationType, String.class, boolean.class,
+                    presetType), channel, Enum.valueOf((Class) creationType, spec.creation),
+                    spec.password, spec.encryptNames, preset)) {
                 invoke(writerType.getMethod("writeEntries", List.class, long.class, functionType,
                         functionType, functionType), writer, pairs, 0L, listener, onEntry, onComplete);
             }
-            output.commit();
+            archiveSize[0] = channel.size();
+        });
+        File cache = new File(work, "cache");
+        try {
+            // This is the same transaction used by ArchiveFileJob, including its real staging,
+            // sequential volume publication, commit, close and rollback paths.
+            invoke(splitType.getMethod("writeArchiveOutput", Path.class, long.class, File.class,
+                    functionType), null, target, spec.splitSize, cache, write);
+        } finally {
+            ArchiveTestSupport.requireEmptyCache(cache);
         }
+        require(archiveSize[0] >= 0, "Output transaction never completed its archive writer");
         require(progress[0] == expectedProgress,
                 "Progress mismatch: " + progress[0] + " != " + expectedProgress);
         require(started.equals(completed.keySet()), "Some selected inputs were never started");
@@ -246,6 +290,7 @@ public final class ArchiveFormatTest {
             require(completedEntry.getValue() == 1,
                     "Entry completion was missing or repeated: " + completedEntry);
         }
+        return archiveSize[0];
     }
 
     private static void readAndCompare(Spec spec, Path archive, List<Entry> entries) throws Throwable {
@@ -254,37 +299,167 @@ public final class ArchiveFormatTest {
         Set<String> seen = new HashSet<>();
         List<String> passwords = spec.password == null ? Collections.emptyList()
                 : Collections.singletonList(spec.password);
-        if (spec.container.equals("7ZIP")) {
-            // Exercise ArchiveReader's signature-based routing; its non-7z path needs Android
-            // preferences, while the official reader is deliberately independent of them.
-            Object reader = readerType.getField("INSTANCE").get(null);
-            Method readEntries = readerType.getDeclaredMethod("readEntries", Path.class, List.class);
-            readEntries.setAccessible(true);
-            for (Object entry : (List<?>) invoke(readEntries, reader, archive, passwords)) {
-                Entry original = compareMetadata(entry, spec, expected, seen);
-                if (!original.directory()) {
-                    InputStream input = (InputStream) invoke(readerType.getMethod("newInputStream",
-                            Path.class, List.class, entryType), reader, archive, passwords, entry);
-                    compareStream(input, original);
-                }
-            }
-        } else {
-            try (SeekableByteChannel channel = openChannel(archive);
-                 Closeable reader = (Closeable) construct(readArchiveType.getConstructor(
-                         SeekableByteChannel.class, List.class), channel, passwords)) {
-                Method readEntry = readArchiveType.getMethod("readEntry", Charset.class, String.class);
-                Object entry;
-                while ((entry = invoke(readEntry, reader, StandardCharsets.UTF_8,
-                        spec.raw ? entries.get(0).name : null)) != null) {
-                    Entry original = compareMetadata(entry, spec, expected, seen);
-                    if (!original.directory()) {
-                        compareStream((InputStream) call(reader, "newDataInputStream"), original);
-                    }
-                }
+        Object reader = readerType.getField("INSTANCE").get(null);
+        Method readEntries = readerType.getDeclaredMethod("readEntries", Path.class, List.class);
+        readEntries.setAccessible(true);
+        for (Object entry : (List<?>) invoke(readEntries, reader, archive, passwords)) {
+            Entry original = compareMetadata(entry, spec, expected, seen);
+            if (!original.directory() && !original.symbolicLink()) {
+                InputStream input = (InputStream) invoke(readerType.getMethod("newInputStream",
+                        Path.class, List.class, entryType), reader, archive, passwords, entry);
+                compareStream(input, original);
             }
         }
         require(seen.equals(expected.keySet()), "Reopening lost archive entries: " + expected.keySet()
                 + " != " + seen);
+        if (spec.password != null) {
+            if (spec.encryptNames) {
+                for (List<String> invalid : Arrays.asList(Collections.<String>emptyList(),
+                        Collections.singletonList("wrong-password"))) {
+                    try {
+                        invoke(readEntries, reader, archive, invalid);
+                        throw new AssertionError("Encrypted file names can be listed without the correct password");
+                    } catch (IOException failure) {
+                        require(Class.forName(ARCHIVER + "ArchivePassphraseException").isInstance(failure),
+                                "Encrypted-header listing did not request a password: " + failure);
+                    }
+                }
+            } else {
+                List<?> visible = (List<?>) invoke(readEntries, reader, archive, Collections.emptyList());
+                require(visible.size() == expected.size(), "Content-only encryption unexpectedly hid file names");
+                Object encryptedSample = null;
+                for (Object entry : visible) {
+                    if ((boolean) call(entry, "isEncrypted") && (long) call(entry, "getSize") > 0
+                            && !(boolean) call(entry, "isDirectory")) {
+                        encryptedSample = entry;
+                        break;
+                    }
+                }
+                require(encryptedSample != null, "Password fixture contains no encrypted file data");
+                for (List<String> invalid : Arrays.asList(Collections.<String>emptyList(),
+                        Collections.singletonList("wrong-password"))) {
+                    try (InputStream input = (InputStream) invoke(readerType.getMethod("newInputStream",
+                            Path.class, List.class, entryType), reader, archive, invalid, encryptedSample)) {
+                        byte[] bytes = new byte[8192];
+                        while (input.read(bytes) >= 0) {}
+                        throw new AssertionError("Encrypted archive data accepted an absent or incorrect password");
+                    } catch (IOException failure) {
+                        require(Class.forName(ARCHIVER + "ArchivePassphraseException").isInstance(failure),
+                                "Encrypted data extraction did not report a password error: " + failure);
+                    }
+                }
+            }
+        }
+    }
+
+    private static void verifySplitPasswordRetry(List<Entry> entries) throws Throwable {
+        Spec spec = new Spec("retry-headers.7z", "7z", "SEVEN_Z", "STANDARD",
+                PASSWORD, true, false, 173);
+        // First touch the new archive through the same provider entry point used for browsing.
+        // Pre-populating ArchiveFileSystem.entries would bypass the initial header-password failure.
+        Path archiveFile = create(spec, entries);
+        Class<?> paths = Class.forName(PACKAGE + "provider.archive.PathArchiveExtensionsKt");
+        File cache = new File(work, "cache");
+        for (boolean streamsOnly : new boolean[]{false, true}) {
+            ArchiveVolumeTest.configureIo(filesystem, streamsOnly ? 19 : Integer.MAX_VALUE,
+                    Integer.MAX_VALUE, streamsOnly, null, null);
+            Path root = (Path) invoke(paths.getMethod("createArchiveRootPath", Path.class),
+                    null, archiveFile);
+            try (FileSystem archive = root.getFileSystem()) {
+                retryPasswordPrompt(root, archiveFile, false, "wrong-password");
+                ArchiveTestSupport.requireEmptyCache(cache);
+                retryPasswordPrompt(root, archiveFile, true, PASSWORD);
+                ArchiveTestSupport.requireEmptyCache(cache);
+                Set<String> listed = new HashSet<>();
+                collectArchiveChildren(root, root, listed);
+                Set<String> expectedNames = new HashSet<>();
+                Map<String, Entry> expected = new LinkedHashMap<>();
+                for (Entry entry : entries) {
+                    expectedNames.add(entry.name);
+                    expected.put(entry.name, entry);
+                }
+                require(listed.equals(expectedNames), "Password retry lost the archive directory tree: "
+                        + listed + " != " + expectedNames);
+                Set<String> seen = new HashSet<>();
+                for (Entry original : entries) {
+                    Path member = root.resolve(original.name);
+                    Object entry = invoke(archive.getClass().getMethod("getEntry", Path.class),
+                            archive, member);
+                    compareMetadata(entry, spec, expected, seen);
+                    if (!original.directory() && !original.symbolicLink()) {
+                        compareStream(archive.provider().newInputStream(member), original);
+                    }
+                }
+                ArchiveTestSupport.requireEmptyCache(cache);
+            } finally {
+                ArchiveVolumeTest.configureIo(filesystem, Integer.MAX_VALUE, Integer.MAX_VALUE,
+                        false, null, null);
+            }
+        }
+        addManifest(spec, entries);
+    }
+
+    private static void collectArchiveChildren(Path root, Path directory, Set<String> names)
+            throws IOException {
+        try (DirectoryStream<Path> children = directory.getFileSystem().provider()
+                .newDirectoryStream(directory, path -> true)) {
+            for (Path child : children) {
+                require(names.add(root.relativize(child).toString()), "Repeated archive child: " + child);
+                if (child.getFileSystem().provider().readAttributes(child, BasicFileAttributes.class)
+                        .isDirectory()) {
+                    collectArchiveChildren(root, child, names);
+                }
+            }
+        }
+    }
+
+    private static void retryPasswordPrompt(Path root, Path archiveFile, boolean incorrect,
+            String nextPassword) throws Throwable {
+        IOException rejected = null;
+        try (DirectoryStream<Path> ignored = root.getFileSystem().provider()
+                .newDirectoryStream(root, path -> true)) {
+            throw new AssertionError("Encrypted split file names were visible without the correct password");
+        } catch (IOException failure) {
+            rejected = failure;
+        }
+        Class<?> errorType = Class.forName(PACKAGE + "provider.archive.ArchivePasswordRequiredException");
+        require(errorType.isInstance(rejected), "First root listing lost its actionable password error: " + rejected);
+        require(Boolean.valueOf(incorrect).equals(call(rejected, "isPasswordIncorrect")),
+                "Root listing confused missing and incorrect passwords");
+        Resources resources = new Resources(Resources.getSystem().getAssets(),
+                Resources.getSystem().getDisplayMetrics(), Resources.getSystem().getConfiguration()) {
+            @Override public String getString(int id) { return "Archive password"; }
+            @Override public String getString(int id, Object... arguments) { return Arrays.toString(arguments); }
+        };
+        Context context = new Application() {
+            @Override public Resources getResources() { return resources; }
+        };
+        Class<?> continuationType = Class.forName("kotlin.coroutines.Continuation");
+        int[] resumed = {0};
+        Object continuation = Proxy.newProxyInstance(continuationType.getClassLoader(),
+                new Class<?>[]{continuationType}, (proxy, method, arguments) -> {
+                    require(method.getName().equals("resumeWith") && Boolean.TRUE.equals(arguments[0]),
+                            "Password retry did not resume successfully");
+                    ++resumed[0];
+                    return null;
+                });
+        Object action = invoke(errorType.getMethod("getUserAction", continuationType, Context.class),
+                rejected, continuation, context);
+        require(("[" + archiveFile.getFileName() + "]").equals(call(action, "getMessage")),
+                "Split-password prompt did not identify its .001 volume");
+        Intent intent = (Intent) call(action, "getIntent");
+        Object args = intent.getParcelableExtra(PACKAGE + "fileaction.ArchivePasswordDialogFragment$Args");
+        require(args != null && root.equals(call(args, "getPath")), "Password prompt lost the archive root");
+        require(Boolean.valueOf(incorrect).equals(call(args, "isPasswordIncorrect")),
+                "Password dialog lost its incorrect-password flag");
+        Class<?> paths = Class.forName(PACKAGE + "provider.archive.PathArchiveExtensionsKt");
+        require(archiveFile.equals(invoke(paths.getMethod("getArchiveFile", Path.class), null, root)),
+                "Password prompt changed the physical split archive");
+        invoke(paths.getMethod("archiveAddPassword", Path.class, String.class),
+                null, call(args, "getPath"), nextPassword);
+        invoke(Class.forName("kotlin.jvm.functions.Function1").getMethod("invoke", Object.class),
+                call(args, "getListener"), Boolean.TRUE);
+        require(resumed[0] == 1, "Password submission resumed listing more than once");
     }
 
     private static Entry compareMetadata(Object actual, Spec spec, Map<String, Entry> expected,
@@ -296,8 +471,18 @@ public final class ArchiveFormatTest {
         require(seen.add(name), "Duplicate archive entry: " + name);
         require((boolean) call(actual, "isDirectory") == original.directory(),
                 "Directory type was not preserved: " + name);
-        require(!(boolean) call(actual, "isSymbolicLink"), "Regular source became a symbolic link");
-        if (!original.directory() && !spec.raw) {
+        require((boolean) call(actual, "isSymbolicLink") == original.symbolicLink(),
+                "Symbolic link type was not preserved: " + name);
+        if (original.symbolicLink()) {
+            require(original.linkTarget.equals(call(actual, "getSymbolicLinkTarget")),
+                    "Symbolic link target changed: " + name);
+        }
+        if (original.mode != null) {
+            int mode = (int) invoke(Class.forName(PACKAGE + "provider.common.PosixFileModeKt")
+                    .getMethod("toInt", Set.class), null, call(actual, "getMode"));
+            require((mode & 0777) == original.mode, "File permissions changed: " + name);
+        }
+        if (!original.directory() && !original.symbolicLink() && !spec.raw) {
             require((long) call(actual, "getSize") == original.bytes.length,
                     "Incorrect stored entry size: " + name);
             if (original.bytes.length > 0) {
@@ -349,14 +534,192 @@ public final class ArchiveFormatTest {
     private static void verifyUnfilteredInputRejected() throws Throwable {
         File file = new File(work, "source/plain-input.txt");
         putNew(file, "This ordinary text is not a compressed stream.\n".getBytes(StandardCharsets.UTF_8));
-        try (SeekableByteChannel channel = openChannel(path(file))) {
-            expect(IOException.class, () -> {
-                try (Closeable reader = (Closeable) construct(readArchiveType.getConstructor(
-                        SeekableByteChannel.class, List.class), channel, Collections.emptyList())) {
-                    invoke(readArchiveType.getMethod("readEntry", Charset.class, String.class),
-                            reader, StandardCharsets.UTF_8, "plain-input.txt");
-                }
+        Object reader = readerType.getField("INSTANCE").get(null);
+        Method readEntries = readerType.getDeclaredMethod("readEntries", Path.class, List.class);
+        readEntries.setAccessible(true);
+        expect(IOException.class, () -> invoke(readEntries, reader, path(file), Collections.emptyList()));
+    }
+
+    private static void verifySymlinks() throws Throwable {
+        File directory = new File(work, "symbolic-sources");
+        mkdir(directory);
+        File script = new File(directory, "executable.sh");
+        byte[] scriptBytes = "#!/bin/sh\nprintf archive\n".getBytes(StandardCharsets.UTF_8);
+        putNew(script, scriptBytes);
+        Os.chmod(script.toString(), 0750);
+        File link = new File(directory, "link");
+        Os.symlink("executable.sh", link.toString());
+        List<Entry> entries = Arrays.asList(new Entry("executable.sh", script, scriptBytes, null, 0750),
+                new Entry("link", link, "executable.sh".getBytes(StandardCharsets.UTF_8), "executable.sh", 0777));
+        ArchiveVolumeTest.usePosixAttributes(filesystem, true);
+        try {
+            for (String[] format : new String[][]{{"ZIP", "zip"}, {"SEVEN_Z", "7z"}, {"TAR", "tar"}}) {
+                Spec spec = standard("symlinks." + format[1], format[1], format[0]);
+                Path archive = create(spec, entries);
+                readAndCompare(spec, archive, entries);
+                addManifest(spec, entries);
+            }
+        } finally {
+            ArchiveVolumeTest.usePosixAttributes(filesystem, false);
+        }
+    }
+
+    private static void verifyShortIo() throws Throwable {
+        Entry entry = new Entry("payload.bin", new File(work, "short-source.bin"), payload(33101));
+        putNew(entry.file, entry.bytes);
+        ArchiveVolumeTest.configureIo(filesystem, 5, 3, false, null, null);
+        try {
+            for (Spec spec : Arrays.asList(
+                    new Spec("short-io.7z", "7z", "SEVEN_Z", "STANDARD", PASSWORD, true, false, 0),
+                    new Spec("short-io.zip", "zip", "ZIP", "STANDARD", ZIP_PASSWORD, false, false, 0))) {
+                Path archive = create(spec, Collections.singletonList(entry));
+                readAndCompare(spec, archive, Collections.singletonList(entry));
+                addManifest(spec, Collections.singletonList(entry));
+            }
+        } finally {
+            ArchiveVolumeTest.configureIo(filesystem, Integer.MAX_VALUE, Integer.MAX_VALUE, false, null, null);
+        }
+    }
+
+    private static void verifyStreamOnly() throws Throwable {
+        Entry entry = new Entry("payload.bin", new File(work, "stream-source.bin"), payload(18001));
+        putNew(entry.file, entry.bytes);
+        Spec spec = new Spec("stream-provider.7z", "7z", "SEVEN_Z", "STANDARD",
+                PASSWORD, true, false, 0);
+        Path archive = create(spec, Collections.singletonList(entry));
+        ArchiveVolumeTest.configureIo(filesystem, 17, Integer.MAX_VALUE, true, null, null);
+        try {
+            readAndCompare(spec, archive, Collections.singletonList(entry));
+            addManifest(spec, Collections.singletonList(entry));
+        } finally {
+            ArchiveVolumeTest.configureIo(filesystem, Integer.MAX_VALUE, Integer.MAX_VALUE, false, null, null);
+        }
+    }
+
+    private static void verifyZipStreamOnlySource() throws Throwable {
+        File directory = new File(work, "zip-stream-sources");
+        mkdir(directory);
+        try (FileSystem sourceFilesystem = ArchiveVolumeTest.newPhysicalFileSystem(directory)) {
+            byte[] random = new byte[131111];
+            new Random(0x21757EADL).nextBytes(random);
+            Entry entry = new Entry("source.bin", new File(directory, "source.bin"), random);
+            putNew(entry.file, entry.bytes);
+            entry.providerPath = sourceFilesystem.getPath(entry.file.toString());
+            ArchiveVolumeTest.configureIo(sourceFilesystem, 19, Integer.MAX_VALUE, true, null, null);
+            Spec spec = new Spec("zip-stream-source.zip", "zip", "ZIP", "STANDARD", ZIP_PASSWORD, false, false, 0);
+            Path archive = create(spec, Collections.singletonList(entry));
+            readAndCompare(spec, archive, Collections.singletonList(entry));
+            addManifest(spec, Collections.singletonList(entry));
+        }
+    }
+
+    private static void verifyCreationFailure(String failure) throws Throwable {
+        Thread ownerThread = Thread.currentThread();
+        Entry entry = new Entry("payload.bin", new File(work, "failure-source-" + failure + ".bin"), payload(32779));
+        putNew(entry.file, entry.bytes);
+        File output = new File(work, "output/failure-" + failure + ".7z");
+        Spec spec = failure.equals("header-zero-write")
+                ? new Spec(output.getName(), "7z", "SEVEN_Z", "STANDARD", PASSWORD, true, false, 0)
+                : standard(output.getName(), "7z", "SEVEN_Z");
+        ArchiveVolumeTest.configureIo(filesystem, 11, failure.equals("zero-write") ? 0 : 127, false,
+                failure.equals("source-close") ? entry.file.getName() : null,
+                failure.equals("output-close") ? output.getName() : null);
+        ArchiveVolumeTest.failOutputProgress(filesystem, failure.equals("header-zero-write") ? output.getName() : null);
+        if (failure.equals("grow") || failure.equals("shrink")) {
+            ArchiveVolumeTest.afterFirstSourceRead(filesystem, () -> {
+                try (RandomAccessFile source = new RandomAccessFile(entry.file, "rw")) {
+                    source.setLength(failure.equals("grow") ? entry.bytes.length + 100 : 13);
+                } catch (IOException error) { throw new RuntimeException(error); }
             });
+        }
+        try {
+            expect(failure.equals("cancel") ? InterruptedIOException.class : IOException.class,
+                    () -> writeArchive(spec, path(output), Collections.singletonList(entry),
+                            failure.equals("cancel") ? () -> ownerThread.interrupt() : null));
+            require(!output.exists(), "Failed writer left a partial archive: " + output);
+            require(entry.file.isFile(), "Failed writer deleted its source");
+            if (!failure.equals("grow") && !failure.equals("shrink")) {
+                require(Arrays.equals(entry.bytes, readFile(entry.file)), "Failed writer changed source bytes");
+            }
+            if (failure.equals("cancel")) {
+                require(Thread.currentThread().isInterrupted(), "Writer swallowed cancellation");
+            }
+            if (failure.equals("header-zero-write")) ArchiveTestSupport.requireEmptyCache(new File(work, "cache"));
+        } finally {
+            Thread.interrupted();
+            ArchiveVolumeTest.afterFirstSourceRead(filesystem, null);
+            ArchiveVolumeTest.failOutputProgress(filesystem, null);
+            ArchiveVolumeTest.configureIo(filesystem, Integer.MAX_VALUE, Integer.MAX_VALUE, false, null, null);
+        }
+    }
+
+    private static void verifyProbeCloseFailure() throws Throwable {
+        Entry entry = new Entry("payload.bin", new File(work, "probe-close-source.bin"), payload(1031));
+        putNew(entry.file, entry.bytes);
+        File output = new File(work, "output/failure-probe-close.zip");
+        Spec spec = standard(output.getName(), "zip", "ZIP");
+        ArchiveVolumeTest.configureIo(filesystem, Integer.MAX_VALUE, Integer.MAX_VALUE, false,
+                entry.file.getName(), null);
+        ArchiveVolumeTest.failSeekProbe(filesystem, entry.file.getName());
+        int openedStreams = ArchiveVolumeTest.openedStreamCount(filesystem);
+        try {
+            try {
+                writeArchive(spec, path(output), Collections.singletonList(entry));
+                throw new AssertionError("A source probe and close failure published a ZIP archive");
+            } catch (IOException expected) {
+                require(hasFailureMessage(expected, "Injected source seek probe failure"),
+                        "ZIP lost the original source seek failure: " + expected);
+                require(hasFailureMessage(expected, "Injected close failure"),
+                        "ZIP lost the source probe cleanup failure: " + expected);
+            }
+            require(ArchiveVolumeTest.openedStreamCount(filesystem) == openedStreams,
+                    "ZIP fell back to an InputStream after the source probe could not close");
+            require(!output.exists(), "Failed source probe left a partial archive");
+            require(Arrays.equals(entry.bytes, readFile(entry.file)), "Failed source probe changed its source");
+        } finally {
+            ArchiveVolumeTest.failSeekProbe(filesystem, null);
+            ArchiveVolumeTest.configureIo(filesystem, Integer.MAX_VALUE, Integer.MAX_VALUE, false, null, null);
+        }
+    }
+
+    private static boolean hasFailureMessage(Throwable failure, String message) {
+        if (failure == null) return false;
+        if (failure.getMessage() != null && failure.getMessage().contains(message)) return true;
+        for (Throwable suppressed : failure.getSuppressed()) {
+            if (hasFailureMessage(suppressed, message)) return true;
+        }
+        return hasFailureMessage(failure.getCause(), message);
+    }
+
+    private static void verifyRawInputsRejected(List<Entry> entries) throws Throwable {
+        for (String creation : new String[]{"GZIP", "BZIP2"}) {
+            for (List<Entry> selected : Arrays.asList(entries, Collections.singletonList(entries.get(1)))) {
+                File output = new File(work, "output/invalid-" + creation + "-" + selected.size());
+                Spec spec = standard(output.getName(), creation.toLowerCase(Locale.ROOT), creation);
+                try {
+                    writeArchive(spec, path(output), selected);
+                    throw new AssertionError("Raw compression accepted multiple files or a directory");
+                } catch (IOException | IllegalArgumentException expected) {
+                    require(!output.exists(), "Rejected raw input left an archive behind");
+                }
+            }
+        }
+    }
+
+    private static void verifyZipPasswordsRejected(List<Entry> entries) throws Throwable {
+        for (String password : new String[]{PASSWORD, "line\nbreak", "tab\tpassword", "control\u007f",
+                String.join("", Collections.nCopies(100, "x"))}) {
+            File output = new File(work, "output/invalid-zip-password.zip");
+            Spec spec = new Spec(output.getName(), "zip", "ZIP", "STANDARD", password, false, false, 0);
+            try {
+                writeArchive(spec, path(output), entries);
+                throw new AssertionError("ZIP accepted an unsupported password");
+            } catch (IOException | IllegalArgumentException expected) {
+                require(!output.exists(), "Rejected ZIP password left an archive behind");
+                String message = expected.getMessage();
+                require(message != null && (message.toLowerCase(Locale.ROOT).contains("password")
+                        || message.toLowerCase(Locale.ROOT).contains("ascii")), "ZIP password rejection has no useful explanation: " + expected);
+            }
         }
     }
 
@@ -371,7 +734,7 @@ public final class ArchiveFormatTest {
                 new Entry("source-tree/original.txt", originalFile, saved));
         Object directorySnapshot = snapshot(path(directory));
         Object fileSnapshot = snapshot(path(originalFile));
-        Spec spec = standard("delete-" + label + ".zip", "zip", "ZIP", "NONE");
+        Spec spec = standard("delete-" + label + ".zip", "zip", "ZIP");
         Path archive = create(spec, entries);
         // create() only returns after writer close, output commit and output close succeed.
         readAndCompare(spec, archive, entries);
@@ -423,6 +786,8 @@ public final class ArchiveFormatTest {
                 JSONObject member = new JSONObject();
                 member.put("sha256", sha256(entry.bytes));
                 member.put("size", entry.bytes.length);
+                if (entry.symbolicLink()) member.put("symlink", entry.linkTarget);
+                if (entry.mode != null) member.put("mode", entry.mode);
                 members.put(entry.name, member);
             }
         }
@@ -453,12 +818,8 @@ public final class ArchiveFormatTest {
                 });
     }
 
-    private static int constant(String name) throws ReflectiveOperationException {
-        return constants.getField(name).getInt(null);
-    }
-
     private static BasicFileAttributes attributes(Path path) throws IOException {
-        return filesystem.provider().readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+        return path.getFileSystem().provider().readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
     }
 
     private static Path path(File file) { return filesystem.getPath(file.getAbsolutePath()); }
@@ -474,7 +835,15 @@ public final class ArchiveFormatTest {
 
     private static Object invoke(Method method, Object target, Object... arguments) throws Throwable {
         try { return method.invoke(target, arguments); }
-        catch (InvocationTargetException failure) { throw failure.getCause(); }
+        catch (InvocationTargetException failure) {
+            Throwable cause = failure.getCause();
+            // Kotlin callbacks declare no checked exceptions; a Java Proxy adds this wrapper
+            // when the real archive writer throws IOException through the output transaction.
+            while (cause instanceof UndeclaredThrowableException) {
+                cause = ((UndeclaredThrowableException) cause).getUndeclaredThrowable();
+            }
+            throw cause;
+        }
     }
 
     private static Object construct(Constructor<?> constructor, Object... arguments) throws Throwable {
@@ -535,30 +904,37 @@ public final class ArchiveFormatTest {
         final String name;
         final File file;
         final byte[] bytes;
+        final String linkTarget;
+        final Integer mode;
+        Path providerPath;
         Entry(String name, File file, byte[] bytes) {
+            this(name, file, bytes, null, null);
+        }
+        Entry(String name, File file, byte[] bytes, String linkTarget, Integer mode) {
             this.name = name;
             this.file = file;
             this.bytes = bytes;
+            this.linkTarget = linkTarget;
+            this.mode = mode;
         }
         boolean directory() { return bytes == null; }
+        boolean symbolicLink() { return linkTarget != null; }
     }
 
     private static final class Spec {
         final String filename;
         final String format;
-        final String container;
-        final String filter;
+        final String creation;
         final String preset;
         final String password;
         final boolean encryptNames;
         final boolean raw;
         final long splitSize;
-        Spec(String filename, String format, String container, String filter, String preset,
+        Spec(String filename, String format, String creation, String preset,
                 String password, boolean encryptNames, boolean raw, long splitSize) {
             this.filename = filename;
             this.format = format;
-            this.container = container;
-            this.filter = filter;
+            this.creation = creation;
             this.preset = preset;
             this.password = password;
             this.encryptNames = encryptNames;
@@ -566,17 +942,6 @@ public final class ArchiveFormatTest {
             this.splitSize = splitSize;
         }
         String archiveName() { return "output/" + filename + (splitSize == 0 ? "" : ".001"); }
-    }
-
-    private static final class ArchiveOutput implements Closeable {
-        final Object delegate;
-        final SeekableByteChannel channel;
-        ArchiveOutput(Path file, long splitSize) throws Throwable {
-            delegate = construct(outputType.getConstructor(Path.class, long.class), file, splitSize);
-            channel = (SeekableByteChannel) call(delegate, "getChannel");
-        }
-        void commit() throws Throwable { call(delegate, "commit"); }
-        @Override public void close() throws IOException { ((Closeable) delegate).close(); }
     }
 
     private interface CheckedRunnable { void run() throws Throwable; }

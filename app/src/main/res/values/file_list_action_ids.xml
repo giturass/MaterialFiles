@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<resources>
+    <item name="action_archive_jobs" type="id" />
+    <item name="action_create_file" type="id" />
+    <item name="action_create_directory" type="id" />
+</resources>

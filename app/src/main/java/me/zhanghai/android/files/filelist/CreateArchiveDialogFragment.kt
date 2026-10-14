@@ -25,6 +25,8 @@ import kotlinx.parcelize.Parcelize
 import me.zhanghai.android.files.R
 import me.zhanghai.android.files.databinding.CreateArchiveDialogBinding
 import me.zhanghai.android.files.provider.archive.archiver.ArchiveCompressionPreset
+import me.zhanghai.android.files.provider.archive.archiver.ArchiveCreationFormat
+import me.zhanghai.android.files.provider.archive.archiver.MAX_ZIP_PASSWORD_LENGTH
 import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.ui.setButtonBarEqualWidth
 import me.zhanghai.android.files.util.ParcelableArgs
@@ -35,7 +37,6 @@ import me.zhanghai.android.files.util.setTextWithSelection
 import me.zhanghai.android.files.util.show
 import me.zhanghai.android.files.util.takeIfNotEmpty
 import me.zhanghai.android.files.util.valueCompat
-import me.zhanghai.android.libarchive.Archive
 
 class CreateArchiveDialogFragment : FileNameDialogFragment() {
     private val args by args<Args>()
@@ -73,8 +74,28 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
         binding.typeEdit.setSimpleItems(archiveTypes.map { getString(it.titleRes) }.toTypedArray())
         binding.typeEdit.setText(getString(archiveType.titleRes), false)
         binding.typeEdit.setOnItemClickListener { _, _, position, _ ->
+            val oldType = archiveType
+            val currentName = binding.nameEdit.text.toString()
+            val useSuggestedName = currentName == suggestedName(oldType)
             archiveType = archiveTypes[position]
             Settings.CREATE_ARCHIVE_TYPE.putValue(archiveType.preferenceId)
+            if (useSuggestedName) {
+                binding.nameEdit.setTextWithSelection(suggestedName(archiveType))
+            } else {
+                val volumeSuffix = if (splitOption != SplitOption.NONE
+                    && currentName.endsWith(".${oldType.extension}.001", ignoreCase = true)) {
+                    ".001"
+                } else {
+                    ""
+                }
+                val oldSuffix = ".${oldType.extension}$volumeSuffix"
+                if (currentName.endsWith(oldSuffix, ignoreCase = true)) {
+                    binding.nameEdit.setTextWithSelection(
+                        currentName.dropLast(oldSuffix.length) +
+                            ".${archiveType.extension}$volumeSuffix"
+                    )
+                }
+            }
             binding.nameLayout.error = null
             updateFormatFields()
         }
@@ -111,28 +132,7 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
         binding.deleteSourcesCheck.isChecked = savedInstanceState?.getBoolean(STATE_DELETE_SOURCES)
             ?: false
         if (savedInstanceState == null) {
-            val files = args.files
-            var name: String? = null
-            if (files.size == 1) {
-                val file = files.single()
-                val baseName = file.baseName.ifEmpty {
-                    file.name.substringBeforeLast('.').ifEmpty { file.name }
-                }
-                val suffix = ".${archiveType.extension}"
-                // A directory's dotted name is not an extension and must remain intact.
-                name = if (file.attributes.isDirectory &&
-                    baseName.endsWith(suffix, ignoreCase = true)) {
-                    baseName + suffix
-                } else {
-                    baseName
-                }
-            } else {
-                val parent = files.mapTo(mutableSetOf()) { it.path.parent }.singleOrNull()
-                if (parent != null && parent.nameCount > 0) {
-                    name = parent.fileName.toString()
-                }
-            }
-            name?.let { binding.nameEdit.setTextWithSelection(it) }
+            binding.nameEdit.setTextWithSelection(suggestedName(archiveType))
         } else {
             binding.nameEdit.setText(savedInstanceState.getString(STATE_NAME))
             binding.passwordEdit.setText(savedInstanceState.getString(STATE_PASSWORD))
@@ -141,12 +141,12 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
             binding.customSplitSizeEdit.setText(savedInstanceState.getString(STATE_CUSTOM_SPLIT_SIZE))
         }
         binding.nameEdit.doAfterTextChanged { updateNamePreview() }
-        binding.passwordEdit.doAfterTextChanged { binding.passwordLayout.error = null }
+        binding.passwordEdit.doAfterTextChanged { updatePasswordError() }
         binding.passwordEdit.setOnEditorConfirmActionListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         }
         binding.encryptFileNamesCheck.setOnCheckedChangeListener { _, _ ->
-            binding.passwordLayout.error = null
+            updatePasswordError()
         }
         updateFormatFields()
         // This form has several choices; the keyboard should only open when an input is tapped.
@@ -186,6 +186,29 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
     override fun onInflateBinding(inflater: LayoutInflater): NameDialogFragment.Binding =
         Binding.inflate(inflater)
 
+    private fun suggestedName(type: ArchiveType): String {
+        val files = args.files
+        if (files.size == 1) {
+            val file = files.single()
+            val baseName = if (type.singleFileOnly) {
+                file.name
+            } else {
+                file.baseName.ifEmpty {
+                    file.name.substringBeforeLast('.').ifEmpty { file.name }
+                }
+            }
+            val suffix = ".${type.extension}"
+            val name = baseName + suffix
+            // Show the complete output name, including the format suffix, without
+            // suggesting the selected source itself as the destination.
+            return if (name == file.name) file.name + suffix else name
+        }
+        val parent = files.mapTo(mutableSetOf()) { it.path.parent }.singleOrNull()
+        val baseName = parent?.takeIf { it.nameCount > 0 }?.fileName?.toString()
+            ?: getString(R.string.file_create_archive_default_name)
+        return "$baseName.${type.extension}"
+    }
+
     override val name: String
         get() {
             val name = super.name
@@ -210,7 +233,11 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
 
     private fun updateFormatFields() {
         binding.passwordLayout.isGone = !archiveType.supportsPassword
-        binding.passwordLayout.error = null
+        binding.passwordLayout.helperText = when (archiveType) {
+            ArchiveType.SEVEN_Z -> getString(R.string.file_create_archive_password_aes256)
+            ArchiveType.ZIP -> getString(R.string.file_create_archive_password_zip_aes256)
+            else -> null
+        }
         binding.encryptFileNamesCheck.isGone = archiveType != ArchiveType.SEVEN_Z
         binding.compressionLayout.isGone = archiveType == ArchiveType.TAR
         binding.typeLayout.helperText = when {
@@ -218,7 +245,24 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
             !archiveType.supportsPassword -> getString(R.string.file_create_archive_no_encryption)
             else -> null
         }
+        updatePasswordError()
         updateSplitFields()
+    }
+
+    private fun updatePasswordError(): Boolean {
+        val password = binding.passwordEdit.text?.toString().orEmpty()
+        val errorRes = when {
+            archiveType == ArchiveType.ZIP && password.any { it !in ' '..'~' } ->
+                R.string.file_create_archive_password_zip_ascii_required
+            archiveType == ArchiveType.ZIP && password.length > MAX_ZIP_PASSWORD_LENGTH ->
+                R.string.file_create_archive_password_zip_too_long
+            archiveType == ArchiveType.SEVEN_Z && binding.encryptFileNamesCheck.isChecked
+                && password.isEmpty() ->
+                R.string.file_create_archive_encrypt_file_names_password_required
+            else -> null
+        }
+        binding.passwordLayout.error = errorRes?.let { getString(it) }
+        return errorRes == null
     }
 
     private fun updateSplitFields() {
@@ -262,10 +306,7 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
             binding.customSplitSizeEdit.requestFocus()
             return false
         }
-        if (archiveType == ArchiveType.SEVEN_Z && binding.encryptFileNamesCheck.isChecked &&
-            binding.passwordEdit.text.isNullOrEmpty()) {
-            binding.passwordLayout.error =
-                getString(R.string.file_create_archive_encrypt_file_names_password_required)
+        if (!updatePasswordError()) {
             binding.passwordEdit.requestFocus()
             return false
         }
@@ -281,7 +322,7 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
         val encryptFileNames = archiveType == ArchiveType.SEVEN_Z &&
             binding.encryptFileNamesCheck.isChecked
         listener.archive(
-            args.files, name, archiveType.format, archiveType.filter, password, encryptFileNames,
+            args.files, name, archiveType.format, password, encryptFileNames,
             compressionPreset, checkNotNull(splitSize), binding.deleteSourcesCheck.isChecked
         )
     }
@@ -348,8 +389,7 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
         fun archive(
             files: FileItemSet,
             name: String,
-            format: Int,
-            filter: Int,
+            format: ArchiveCreationFormat,
             password: String?,
             encryptFileNames: Boolean,
             compressionPreset: ArchiveCompressionPreset,
@@ -361,34 +401,22 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
     private enum class ArchiveType(
         @IdRes val preferenceId: Int,
         @StringRes val titleRes: Int,
-        val extension: String,
-        val format: Int,
-        val filter: Int
+        val format: ArchiveCreationFormat
     ) {
-        ZIP(R.id.zipRadio, R.string.file_create_archive_type_zip, "zip",
-            Archive.FORMAT_ZIP, Archive.FILTER_NONE),
-        SEVEN_Z(R.id.sevenZRadio, R.string.file_create_archive_type_7z, "7z",
-            Archive.FORMAT_7ZIP, Archive.FILTER_NONE),
-        TAR(R.id.tarRadio, R.string.file_create_archive_type_tar, "tar",
-            Archive.FORMAT_TAR, Archive.FILTER_NONE),
-        GZ(R.id.gzipRadio, R.string.file_create_archive_type_gz, "gz",
-            Archive.FORMAT_RAW, Archive.FILTER_GZIP),
-        XZ(R.id.xzRadio, R.string.file_create_archive_type_xz, "xz",
-            Archive.FORMAT_RAW, Archive.FILTER_XZ),
-        BZ2(R.id.bzip2Radio, R.string.file_create_archive_type_bz2, "bz2",
-            Archive.FORMAT_RAW, Archive.FILTER_BZIP2),
-        TAR_GZ(R.id.tarGzRadio, R.string.file_create_archive_type_tar_gz, "tar.gz",
-            Archive.FORMAT_TAR, Archive.FILTER_GZIP),
-        TAR_XZ(R.id.tarXzRadio, R.string.file_create_archive_type_tar_xz, "tar.xz",
-            Archive.FORMAT_TAR, Archive.FILTER_XZ),
-        TAR_BZ2(R.id.tarBz2Radio, R.string.file_create_archive_type_tar_bz2, "tar.bz2",
-            Archive.FORMAT_TAR, Archive.FILTER_BZIP2);
+        ZIP(R.id.zipRadio, R.string.file_create_archive_type_zip, ArchiveCreationFormat.ZIP),
+        SEVEN_Z(R.id.sevenZRadio, R.string.file_create_archive_type_7z, ArchiveCreationFormat.SEVEN_Z),
+        TAR(R.id.tarRadio, R.string.file_create_archive_type_tar, ArchiveCreationFormat.TAR),
+        GZ(R.id.gzipRadio, R.string.file_create_archive_type_gz, ArchiveCreationFormat.GZIP),
+        BZ2(R.id.bzip2Radio, R.string.file_create_archive_type_bz2, ArchiveCreationFormat.BZIP2);
+
+        val extension: String
+            get() = format.extension
 
         val supportsPassword: Boolean
-            get() = this == ZIP || this == SEVEN_Z
+            get() = format.supportsPassword
 
         val singleFileOnly: Boolean
-            get() = format == Archive.FORMAT_RAW
+            get() = format.singleFileOnly
     }
 
     private enum class SplitOption(@StringRes val titleRes: Int, val megabytes: Long) {

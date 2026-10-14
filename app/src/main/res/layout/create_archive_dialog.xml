@@ -126,7 +126,6 @@
                 android:layout_marginTop="12dp"
                 android:hint="@string/file_create_archive_password"
                 app:endIconMode="password_toggle"
-                app:helperText="@string/file_create_archive_password_aes256"
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
 
                 <com.google.android.material.textfield.TextInputEditText

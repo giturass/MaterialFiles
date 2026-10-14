@@ -55,3 +55,12 @@
 
 # SMBJ-RPC
 -dontwarn java.rmi.UnmarshalException
+
+# 7-Zip-JBinding resolves its Java classes, properties and callbacks from JNI.
+-keep class net.sf.sevenzipjbinding.** { *; }
+-keep class me.zhanghai.android.files.provider.archive.archiver.SevenZipArchiveProperties { *; }
+-keep class * implements net.sf.sevenzipjbinding.IArchiveOpenCallback { *; }
+-keep class * implements net.sf.sevenzipjbinding.IArchiveExtractCallback { *; }
+-keep class * implements net.sf.sevenzipjbinding.IOutCreateCallback { *; }
+-keep class * implements net.sf.sevenzipjbinding.ISequentialInStream { *; }
+-keep class * implements net.sf.sevenzipjbinding.ISequentialOutStream { *; }

@@ -19,15 +19,14 @@ import java8.nio.file.WatchService
 import java8.nio.file.attribute.UserPrincipalLookupService
 import java8.nio.file.spi.FileSystemProvider
 import me.zhanghai.android.files.provider.archive.archiver.ArchiveReader
-import me.zhanghai.android.files.provider.archive.archiver.ReadArchive
-import me.zhanghai.android.files.provider.archive.archiver.SevenZArchiveReader
+import me.zhanghai.android.files.provider.archive.archiver.ArchiveEntry
+import me.zhanghai.android.files.provider.archive.archiver.SevenZipArchiveReader
 import me.zhanghai.android.files.provider.common.ByteString
 import me.zhanghai.android.files.provider.common.ByteStringBuilder
 import me.zhanghai.android.files.provider.common.ByteStringListPathCreator
 import me.zhanghai.android.files.provider.common.IsDirectoryException
 import me.zhanghai.android.files.provider.common.PosixFileType
 import me.zhanghai.android.files.provider.common.toByteString
-import me.zhanghai.android.libarchive.ArchiveException
 import java.io.IOException
 import java.io.InputStream
 
@@ -57,7 +56,7 @@ internal class ArchiveFileSystem(
 
     private var isRefreshNeeded = true
 
-    private var entries: Map<Path, ReadArchive.Entry>? = null
+    private var entries: Map<Path, ArchiveEntry>? = null
 
     private var tree: Map<Path, List<Path>>? = null
 
@@ -66,14 +65,14 @@ internal class ArchiveFileSystem(
     private val extractionSession = ThreadLocal<SevenZExtractionSession>()
 
     @Throws(IOException::class)
-    fun getEntry(path: Path): ReadArchive.Entry =
+    fun getEntry(path: Path): ArchiveEntry =
         synchronized(lock) {
             ensureEntriesLocked(path)
             getEntryLocked(path)
         }
 
     @Throws(IOException::class)
-    private fun getEntryLocked(path: Path): ReadArchive.Entry =
+    private fun getEntryLocked(path: Path): ArchiveEntry =
         synchronized(lock) {
             entries!![path] ?: throw NoSuchFileException(path.toString())
         }
@@ -95,7 +94,7 @@ internal class ArchiveFileSystem(
             } else {
                 ArchiveReader.newInputStream(archiveFile, passwords, entry)
             }
-        } catch (e: ArchiveException) {
+        } catch (e: IOException) {
             throw e.toFileSystemOrInterruptedIOException(file)
         } ?: throw NoSuchFileException(file.toString())
         return ArchiveExceptionInputStream(inputStream, file)
@@ -113,17 +112,17 @@ internal class ArchiveFileSystem(
         if (selectedEntries.isEmpty()) {
             return null
         }
-        fun openArchive(): SevenZArchiveReader? {
+        fun openArchive(): SevenZipArchiveReader {
             val passwords = synchronized(lock) {
                 if (!isOpen) {
                     throw ClosedFileSystemException()
                 }
                 passwords
             }
-            return SevenZArchiveReader.openOrNull(archiveFile, passwords)
+            return SevenZipArchiveReader.open(archiveFile, passwords)
         }
         try {
-            val archive = openArchive() ?: return null
+            val archive = openArchive()
             var successful = false
             try {
                 val filesByName = selectedEntries.associate { it.second.name to it.first }
@@ -131,7 +130,7 @@ internal class ArchiveFileSystem(
                     .map { filesByName.getValue(it.name) to it }
                 val session = SevenZExtractionSession(
                     orderedEntries, archive,
-                    { openArchive() ?: throw IOException("Archive format changed: $archiveFile") },
+                    { openArchive() },
                     { extractionSession.remove() }
                 )
                 extractionSession.set(session)
@@ -142,7 +141,7 @@ internal class ArchiveFileSystem(
                     archive.close()
                 }
             }
-        } catch (e: ArchiveException) {
+        } catch (e: IOException) {
             throw e.toFileSystemOrInterruptedIOException(file)
         }
     }
@@ -195,7 +194,7 @@ internal class ArchiveFileSystem(
         if (isRefreshNeeded) {
             val entriesAndTree = try {
                 ArchiveReader.readEntries(archiveFile, passwords, rootDirectory)
-            } catch (e: ArchiveException) {
+            } catch (e: IOException) {
                 throw e.toFileSystemOrInterruptedIOException(file)
             }
             entries = entriesAndTree.first

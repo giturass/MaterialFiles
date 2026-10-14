@@ -38,7 +38,8 @@ enum class MimeTypeIcon(val resourceId: Int) {
 // See also /usr/share/mime/packages/freedesktop.org.xml
 val MimeType.icon: MimeTypeIcon
     get() =
-        mimeTypeToIconMap[this] ?: typeToIconMap[type] ?: suffix?.let { suffixToIconMap[it] }
+        mimeTypeToIconMap[this] ?: takeIf { isSupportedArchive }?.let { MimeTypeIcon.ARCHIVE }
+        ?: typeToIconMap[type] ?: suffix?.let { suffixToIconMap[it] }
         ?: MimeTypeIcon.GENERIC
 
 // See also https://mimesniff.spec.whatwg.org/#mime-type-groups
