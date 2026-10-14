@@ -29,7 +29,7 @@ Termux / MDTerm 首次使用需要授予本应用“在 Termux 环境中运行�
 
 常规 Android 构建使用仓库原有 Gradle 配置：JDK 17 及以上、SDK 37.2、Build Tools 37.0.0、NDK 30.0.16248370，执行 `./gradlew assembleDebug lintDebug`。
 
-远端 `master` 推送和手动触发的 GitHub Actions 改为构建已签名的 Release APK，执行 Release Lint，并在上传前验证证书指纹与 MDTerm 发布版一致。产物包含 APK、SHA-256 和校验记录；流程及 Secrets 名称见 [Release APK 构建说明](docs/release-apk.md)。
+远端 `master` 推送和手动触发的 GitHub Actions 仅构建已签名的 Release APK，执行 Release Lint，并在上传前验证证书指纹与 MDTerm 发布版一致。产物包含 APK、SHA-256 和校验记录；流程及 Secrets 名称见 [Release APK 构建说明](docs/release-apk.md)。
 
 本机 Termux 验证使用 `~/tmp/materialfiles-check/` 中的隔离工具链与 Gradle init script。原有两个 JNI 库由 Termux Clang 21 和 NDK r29 的 Android API 23 sysroot 编译为 ARM64，再交给 Gradle 打包；通用项目仍使用常规的 Gradle 与 NDK 配置。本地产物采用调试签名，不能覆盖不同签名的官方安装版本。
 

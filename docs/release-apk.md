@@ -1,5 +1,7 @@
 # GitHub Actions Release APK
 
+GitHub Actions 仅构建签名的 Release APK。
+
 推送 `master` 或手动运行 [Release APK](https://github.com/giturass/MaterialFiles/actions/workflows/android.yml)
 工作流，会在 Ubuntu 上使用 JDK 21、SDK 37.2、Build Tools 37.0.0、NDK
 30.0.16248370 和 CMake 3.22.1 执行 `:app:assembleRelease :app:lintRelease`。
