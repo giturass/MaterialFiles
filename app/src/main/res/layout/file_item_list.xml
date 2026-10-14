@@ -25,7 +25,7 @@
         android:layout_width="@dimen/touch_target_size"
         android:layout_height="@dimen/touch_target_size"
         android:layout_marginStart="@dimen/screen_edge_margin_minus_4dp"
-        android:layout_marginEnd="@dimen/content_start_from_screen_edge_margin_minus_44dp"
+        android:layout_marginEnd="@dimen/content_start_from_screen_edge_margin_minus_40dp"
         android:clipChildren="false"
         android:clipToPadding="false"
         android:duplicateParentState="true"
