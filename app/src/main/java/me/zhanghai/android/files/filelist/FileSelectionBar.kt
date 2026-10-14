@@ -16,6 +16,7 @@ import androidx.annotation.AttrRes
 import androidx.appcompat.widget.AppCompatImageButton
 import androidx.appcompat.widget.PopupMenu
 import androidx.appcompat.widget.TooltipCompat
+import androidx.core.widget.ImageViewCompat
 import me.zhanghai.android.files.R
 import me.zhanghai.android.files.util.getColorStateListByAttr
 import me.zhanghai.android.files.util.getDimensionPixelSizeByAttr
@@ -79,8 +80,10 @@ class FileSelectionBar @JvmOverloads constructor(
             background = context.getDrawableByAttr(
                 androidx.appcompat.R.attr.selectableItemBackgroundBorderless
             )
-            supportImageTintList =
+            ImageViewCompat.setImageTintList(
+                this,
                 context.getColorStateListByAttr(androidx.appcompat.R.attr.colorControlNormal)
+            )
             isFocusable = true
         }
 
