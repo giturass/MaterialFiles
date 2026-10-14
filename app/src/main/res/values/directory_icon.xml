@@ -10,7 +10,7 @@
     <dimen name="directory_icon_background_size">48dp</dimen>
     <dimen name="directory_icon_background_elevation">3dp</dimen>
 
-    <!-- USurf: res/drawable/icon_background_circle.xml and res/values/colors.xml. -->
-    <color name="directory_icon_background">#1E168DDA</color>
-    <color name="directory_icon_shadow">#168DDA</color>
+    <!-- Use the same fixed blue in light and dark themes. -->
+    <color name="directory_icon_background">@color/material_blue_500</color>
+    <color name="directory_icon_shadow">@color/material_blue_500</color>
 </resources>
