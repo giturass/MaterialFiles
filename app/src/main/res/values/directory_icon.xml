@@ -10,7 +10,7 @@
     <dimen name="directory_icon_background_size">48dp</dimen>
     <dimen name="directory_icon_background_elevation">3dp</dimen>
 
-    <!-- Use the same fixed blue in light and dark themes. -->
-    <color name="directory_icon_background">@color/material_blue_500</color>
+    <!-- Keep the circle translucent and use the same blue in both light and dark themes. -->
+    <color name="directory_icon_background">#1E2196F3</color>
     <color name="directory_icon_shadow">@color/material_blue_500</color>
 </resources>
