@@ -100,7 +100,6 @@ import me.zhanghai.android.files.util.asFileName
 import me.zhanghai.android.files.util.createInstallPackageIntent
 import me.zhanghai.android.files.util.createIntent
 import me.zhanghai.android.files.util.createViewIntent
-import me.zhanghai.android.files.util.extraPath
 import me.zhanghai.android.files.util.getQuantityString
 import me.zhanghai.android.files.util.putArgs
 import me.zhanghai.android.files.util.showToast
@@ -1742,9 +1741,7 @@ class OpenFileJob(
             file, R.string.file_open_from_background_title_format,
             R.string.file_open_from_background_text
         ) { file ->
-            file.fileProviderUri.createViewIntent(mimeType)
-                .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-                .apply { extraPath = file }
+            file.createViewIntent(mimeType, useInternalEditor = !withChooser)
                 .let {
                     if (withChooser) {
                         it.withChooser(

@@ -12,13 +12,16 @@ import android.os.Parcelable
 import android.provider.MediaStore
 import android.provider.Settings
 import androidx.core.app.ShareCompat
+import java8.nio.file.Path
 import me.zhanghai.android.files.app.appClassLoader
 import me.zhanghai.android.files.app.application
 import me.zhanghai.android.files.app.packageManager
 import me.zhanghai.android.files.compat.DocumentsContractCompat
 import me.zhanghai.android.files.compat.removeFlagsCompat
 import me.zhanghai.android.files.file.MimeType
+import me.zhanghai.android.files.file.fileProviderUri
 import me.zhanghai.android.files.file.intentType
+import me.zhanghai.android.files.viewer.text.SoraEditorActivity
 import kotlin.reflect.KClass
 
 fun <T : Context> KClass<T>.createIntent(): Intent = Intent(application, java)
@@ -165,6 +168,20 @@ fun Uri.createViewIntent(mimeType: MimeType): Intent =
         // Calling setType() will clear data.
         .setDataAndType(this, mimeType.intentType)
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
+fun Path.createViewIntent(mimeType: MimeType, useInternalEditor: Boolean = true): Intent =
+    fileProviderUri.createViewIntent(mimeType)
+        .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        .apply {
+            extraPath = this@createViewIntent
+            if (useInternalEditor) {
+                val name = this@createViewIntent.fileName?.toString().orEmpty()
+                if (name.endsWith(".txt", ignoreCase = true)
+                    || name.endsWith(".md", ignoreCase = true)) {
+                    setClass(application, SoraEditorActivity::class.java)
+                }
+            }
+        }
 
 @Suppress("DEPRECATION")
 fun Uri.createInstallPackageIntent(): Intent =

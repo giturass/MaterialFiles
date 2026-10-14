@@ -1443,12 +1443,8 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         if (path.isArchivePath) {
             FileJobService.open(path, mimeType, withChooser, requireContext())
         } else {
-            val intent = path.fileProviderUri.createViewIntent(mimeType)
-                .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-                .apply {
-                    extraPath = path
-                    maybeAddImageViewerActivityExtras(this, path, mimeType)
-                }
+            val intent = path.createViewIntent(mimeType, useInternalEditor = !withChooser)
+                .apply { maybeAddImageViewerActivityExtras(this, path, mimeType) }
                 .let {
                     if (withChooser) {
                         it.withChooser(
