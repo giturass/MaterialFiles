@@ -189,19 +189,7 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
     private fun suggestedName(type: ArchiveType): String {
         val files = args.files
         if (files.size == 1) {
-            val file = files.single()
-            val baseName = if (type.singleFileOnly) {
-                file.name
-            } else {
-                file.baseName.ifEmpty {
-                    file.name.substringBeforeLast('.').ifEmpty { file.name }
-                }
-            }
-            val suffix = ".${type.extension}"
-            val name = baseName + suffix
-            // Show the complete output name, including the format suffix, without
-            // suggesting the selected source itself as the destination.
-            return if (name == file.name) file.name + suffix else name
+            return "${files.single().name}.${type.extension}"
         }
         val parent = files.mapTo(mutableSetOf()) { it.path.parent }.singleOrNull()
         val baseName = parent?.takeIf { it.nameCount > 0 }?.fileName?.toString()
