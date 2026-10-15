@@ -55,12 +55,6 @@
         app:showAsAction="never" />
 
     <item
-        android:id="@+id/action_open_with"
-        android:orderInCategory="200"
-        android:title="@string/file_item_action_open_with"
-        app:showAsAction="never" />
-
-    <item
         android:id="@+id/action_extract"
         android:orderInCategory="200"
         android:title="@string/file_list_select_action_extract"

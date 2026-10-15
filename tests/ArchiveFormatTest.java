@@ -26,6 +26,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 import java8.nio.channels.SeekableByteChannel;
 import java8.nio.file.DirectoryStream;
@@ -128,6 +130,8 @@ public final class ArchiveFormatTest {
                         ArchiveFormatTest::verifyStreamOnly);
                 check("ZIP caches a stream-only source without provider cache access or double-counting progress",
                         ArchiveFormatTest::verifyZipStreamOnlySource);
+                check("7z reports encoded work instead of read-ahead and advances before completion",
+                        ArchiveFormatTest::verifySevenZipProgress);
                 check("a failed ZIP seek probe and source close cannot fall back or publish output",
                         ArchiveFormatTest::verifyProbeCloseFailure);
                 for (String failure : new String[]{"source-close", "output-close", "grow", "shrink",
@@ -231,7 +235,7 @@ public final class ArchiveFormatTest {
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static long writeArchive(Spec spec, Path target, List<Entry> entries,
-            CheckedRunnable onStart) throws Throwable {
+            CheckedConsumer onProgress) throws Throwable {
         List<Object> pairs = new ArrayList<>();
         Map<String, Integer> completed = new LinkedHashMap<>();
         Set<String> started = new HashSet<>();
@@ -243,17 +247,21 @@ public final class ArchiveFormatTest {
             completed.put(source.toString(), 0);
             expectedProgress += attributes(source).size();
         }
+        final long progressMax = expectedProgress;
         long[] progress = {0};
+        long[] previousProgress = {0};
         Object listener = function(value -> {
             long amount = (Long) value;
-            require(amount >= 0, "Archive progress moved backwards");
+            require(amount > 0, "Archive progress did not advance");
+            previousProgress[0] = progress[0];
             progress[0] += amount;
+            require(progress[0] <= progressMax, "Archive progress exceeded its total");
+            if (onProgress != null) onProgress.accept(progress[0]);
         });
         Object onEntry = function(value -> {
             String source = value.toString();
             require(completed.containsKey(source), "Started an unselected source: " + source);
             require(started.add(source), "Started a selected source more than once: " + source);
-            if (onStart != null) onStart.run();
         });
         Object onComplete = function(value -> {
             String source = value.toString();
@@ -285,6 +293,8 @@ public final class ArchiveFormatTest {
         require(archiveSize[0] >= 0, "Output transaction never completed its archive writer");
         require(progress[0] == expectedProgress,
                 "Progress mismatch: " + progress[0] + " != " + expectedProgress);
+        require(expectedProgress == 0 || previousProgress[0] / (double) expectedProgress <= 0.99,
+                "Archive progress could display 100% before the final completion callback");
         require(started.equals(completed.keySet()), "Some selected inputs were never started");
         for (Map.Entry<String, Integer> completedEntry : completed.entrySet()) {
             require(completedEntry.getValue() == 1,
@@ -613,8 +623,47 @@ public final class ArchiveFormatTest {
         }
     }
 
+    private static void verifySevenZipProgress() throws Throwable {
+        Entry entry = new Entry("progress.bin", new File(work, "progress-source.bin"),
+                payload(8 * 1024 * 1024 + 37));
+        putNew(entry.file, entry.bytes);
+        Spec spec = standard("encoding-progress.7z", "7z", "SEVEN_Z");
+        AtomicLong progress = new AtomicLong();
+        AtomicLong intermediateUpdates = new AtomicLong();
+        AtomicBoolean checkedReadAhead = new AtomicBoolean();
+        // Shorten only the first read. LZMA2 must fill its input buffer before it can encode
+        // a block, so consuming those first 17 bytes must not count as completed work.
+        ArchiveVolumeTest.configureIo(filesystem, 17, Integer.MAX_VALUE, false, null, null);
+        ArchiveVolumeTest.afterFirstSourceRead(filesystem, () -> {
+            ArchiveVolumeTest.configureIo(filesystem, 64 * 1024, Integer.MAX_VALUE, false, null, null);
+            ArchiveVolumeTest.afterFirstSourceRead(filesystem, () -> {
+                require(progress.get() == 0, "7z reported buffered source bytes as encoded work");
+                checkedReadAhead.set(true);
+            });
+        });
+        Path output = path(new File(work, spec.archiveName()));
+        try {
+            writeArchive(spec, output, Collections.singletonList(entry), value -> {
+                long completed = (Long) value;
+                progress.set(completed);
+                if (completed > 0 && completed < entry.bytes.length) {
+                    intermediateUpdates.incrementAndGet();
+                }
+            });
+            require(checkedReadAhead.get(), "7z did not exercise multiple source reads");
+            require(intermediateUpdates.get() >= 2,
+                    "7z did not report encoding progress before its final update");
+        } finally {
+            ArchiveVolumeTest.afterFirstSourceRead(filesystem, null);
+            ArchiveVolumeTest.configureIo(filesystem, Integer.MAX_VALUE, Integer.MAX_VALUE, false, null, null);
+        }
+        readAndCompare(spec, output, Collections.singletonList(entry));
+        addManifest(spec, Collections.singletonList(entry));
+    }
+
     private static void verifyCreationFailure(String failure) throws Throwable {
         Thread ownerThread = Thread.currentThread();
+        AtomicLong lastProgress = new AtomicLong();
         Entry entry = new Entry("payload.bin", new File(work, "failure-source-" + failure + ".bin"), payload(32779));
         putNew(entry.file, entry.bytes);
         File output = new File(work, "output/failure-" + failure + ".7z");
@@ -635,7 +684,10 @@ public final class ArchiveFormatTest {
         try {
             expect(failure.equals("cancel") ? InterruptedIOException.class : IOException.class,
                     () -> writeArchive(spec, path(output), Collections.singletonList(entry),
-                            failure.equals("cancel") ? () -> ownerThread.interrupt() : null));
+                            value -> {
+                                lastProgress.set((Long) value);
+                                if (failure.equals("cancel")) ownerThread.interrupt();
+                            }));
             require(!output.exists(), "Failed writer left a partial archive: " + output);
             require(entry.file.isFile(), "Failed writer deleted its source");
             if (!failure.equals("grow") && !failure.equals("shrink")) {
@@ -643,6 +695,8 @@ public final class ArchiveFormatTest {
             }
             if (failure.equals("cancel")) {
                 require(Thread.currentThread().isInterrupted(), "Writer swallowed cancellation");
+                require(lastProgress.get() > 0 && lastProgress.get() < entry.bytes.length,
+                        "Cancelled 7z encoding reported full completion or never exercised progress");
             }
             if (failure.equals("header-zero-write")) ArchiveTestSupport.requireEmptyCache(new File(work, "cache"));
         } finally {

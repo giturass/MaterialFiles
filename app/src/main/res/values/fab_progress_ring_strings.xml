@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <resources>
-    <string name="fab_archive_progress_indeterminate">压缩进行中</string>
-    <string name="fab_archive_progress_format">压缩进度 %1$s</string>
+    <string name="fab_archive_progress_indeterminate">任务进行中</string>
+    <string name="fab_archive_progress_format">任务进度 %1$s</string>
 </resources>

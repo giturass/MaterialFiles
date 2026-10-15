@@ -97,7 +97,10 @@ class ArchiveWriter @Throws(IOException::class) constructor(
             && (sources.size != 1 || !sources.single().attributes.isRegularFile)) {
             throw IOException("Single-file compression requires exactly one regular file")
         }
-        val progress = Progress(sources, intervalMillis, listener, onEntry, onEntryComplete)
+        val progress = Progress(
+            sources, format == ArchiveCreationFormat.SEVEN_Z, intervalMillis, listener, onEntry,
+            onEntryComplete
+        )
         create(format.nativeFormat, channel, sources, progress, ownerThread)
         checkInterrupted(ownerThread)
         // Empty entries may never receive getStream(), so validate every source again.
@@ -172,8 +175,15 @@ class ArchiveWriter @Throws(IOException::class) constructor(
                         }
                     }
 
-                    override fun setTotal(total: Long) = checkInterrupted(ownerThread)
-                    override fun setCompleted(complete: Long) = checkInterrupted(ownerThread)
+                    override fun setTotal(total: Long) {
+                        checkInterrupted(ownerThread)
+                        progress?.setTotal(total)
+                    }
+
+                    override fun setCompleted(complete: Long) {
+                        checkInterrupted(ownerThread)
+                        progress?.setCompleted(complete)
+                    }
                 }
                 val createCallback = if (!password.isNullOrEmpty()) {
                     PasswordCallback(callback, password)
@@ -599,14 +609,20 @@ class ArchiveWriter @Throws(IOException::class) constructor(
 
     private class Progress(
         private val sources: List<Source>,
+        private val useNativeProgress: Boolean,
         private val intervalMillis: Long,
         private val listener: ((Long) -> Unit)?,
         private val onEntry: ((Path) -> Unit)?,
         private val onEntryComplete: ((Path) -> Unit)?
     ) {
         private val total = sources.sumOf { it.attributes.size() }
+        // One remaining byte can round to 100% in the FAB. Leave a visible margin until
+        // creation, header writing and source validation have all succeeded.
+        private val maximumBeforeFinish =
+            (total - total / 100 - if (total % 100 != 0L) 1 else 0).coerceAtLeast(0)
         private val started = mutableSetOf<Source>()
         private val sourceReadUntil = mutableMapOf<Source, Long>()
+        private var nativeTotal = 0L
         private var read = 0L
         private var reported = 0L
         private var lastUpdate = System.nanoTime()
@@ -618,14 +634,36 @@ class ArchiveWriter @Throws(IOException::class) constructor(
 
         @Synchronized
         fun advance(source: Source, position: Long) {
+            // LZMA2 can read entire solid blocks ahead of encoding them. For 7z, use the
+            // encoder's completed input bytes rather than its input stream's read position.
+            if (useNativeProgress) return
             val previous = sourceReadUntil[source] ?: 0
             if (position <= previous) return
             sourceReadUntil[source] = position
             read += position - previous
+            report(read)
+        }
+
+        @Synchronized
+        fun setTotal(total: Long) {
+            nativeTotal = total.coerceAtLeast(0)
+        }
+
+        @Synchronized
+        fun setCompleted(complete: Long) {
+            if (!useNativeProgress || nativeTotal == 0L) return
+            // The file-job scan also counts directory metadata. Normalize the native work
+            // total to that same scale so the notification and FAB show the encoded fraction.
+            val fraction = complete.coerceIn(0, nativeTotal).toDouble() / nativeTotal
+            report((fraction * total).toLong())
+        }
+
+        private fun report(completed: Long) {
+            val completed = completed.coerceIn(reported, maximumBeforeFinish)
+            if (completed == reported) return
             val now = System.nanoTime()
             if ((now - lastUpdate) / 1_000_000 < intervalMillis) return
-            val completed = minOf(read, (total - 1).coerceAtLeast(0))
-            if (completed > reported) listener?.invoke(completed - reported)
+            listener?.invoke(completed - reported)
             reported = completed
             lastUpdate = now
         }

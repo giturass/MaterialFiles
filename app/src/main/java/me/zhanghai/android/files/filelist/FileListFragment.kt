@@ -1032,10 +1032,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 }
                 true
             }
-            R.id.action_open_with -> {
-                viewModel.selectedFiles.singleOrNull()?.let { openFileWith(it) }
-                true
-            }
             R.id.action_share -> {
                 shareFiles(viewModel.selectedFiles)
                 true
@@ -1273,10 +1269,9 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         menu.findItem(R.id.action_delete).isEnabled = !isAnyFileReadOnly
         menu.findItem(R.id.action_archive).isEnabled = !viewModel.currentPath.fileSystem.isReadOnly
         menu.findItem(R.id.action_rename).isEnabled = singleFile != null && !isAnyFileReadOnly
-        // Archive entries need the extraction/cache step provided by the existing Open with flow.
+        // Archive entries need extraction before they can be opened as a different type.
         menu.findItem(R.id.action_open_as).isVisible =
             singleFile != null && !singleFile.path.isArchivePath
-        menu.findItem(R.id.action_open_with).isVisible = singleFile != null
         menu.findItem(R.id.action_extract).isVisible = files.all { it.isArchiveFile }
         menu.findItem(R.id.action_add_bookmark).isVisible = singleFile?.attributes?.isDirectory == true
         menu.findItem(R.id.action_create_shortcut).isVisible = singleFile != null

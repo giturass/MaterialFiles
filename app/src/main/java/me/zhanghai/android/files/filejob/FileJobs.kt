@@ -136,7 +136,8 @@ private fun FileJob.postNotification(
     indeterminate: Boolean,
     showCancel: Boolean
 ) {
-    if (this is ArchiveFileJob && !runInBackground) {
+    if ((this is ArchiveFileJob && !runInBackground)
+        || (this is CopyFileJob && hasArchiveSources)) {
         ArchiveJobProgressLiveData.update(
             ArchiveJobProgress(id, title, text, max, progress, indeterminate)
         )
@@ -693,10 +694,6 @@ class ArchiveFileJob(
                     getString(R.string.file_job_archive_canceled)
                 else -> getString(R.string.file_job_archive_failed_format, e.toString())
             }
-        } finally {
-            if (!runInBackground) {
-                ArchiveJobProgressLiveData.remove(id)
-            }
         }
         // Handle archive outcomes here so FileJob does not also show a generic error toast.
         showToast(result)
@@ -863,8 +860,14 @@ class CopyFileJob(
     private val targetDirectory: Path,
     private val flattenArchiveRoots: Boolean = false
 ) : FileJob() {
+    internal val hasArchiveSources = sources.any { it.isArchivePath }
+
     @Throws(IOException::class)
     override fun run() {
+        if (hasArchiveSources) {
+            // Resolving archive roots can open remote files or wait for a password before scanning.
+            postScanNotification(ScanInfo(), R.plurals.file_job_extract_scan_notification_title_format)
+        }
         val sources = resolveSources()
         val isExtract = sources.all { it.isArchivePath }
         val scanInfo = scan(
