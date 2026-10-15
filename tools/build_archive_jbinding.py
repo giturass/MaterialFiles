@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the JBinding property adapter with Termux clang and the Android NDK sysroot."""
+"""Build the JBinding creation adapter with Termux clang and the Android NDK sysroot."""
 
 import argparse
 import os

@@ -8,12 +8,12 @@
 
 namespace {
 
-// Only the COM ABI declarations used to configure the existing upstream engine are reproduced here.
+// Only the COM ABI declarations used to adapt the existing upstream engine are reproduced here.
 // Source: omicronapps/7-Zip-JBinding-4Android, Release-16.02-2.03,
 // commit 875f38aac441f41e6eb693177e020e97971dca97 (also pinned in docs/7zip-jbinding-source.json).
-// Under sevenzipjbinding/src/main/cpp/7zip/CPP/:
+// The Android CMakeLists.txt builds sevenzipjbinding/src/main/cpp/p7zip/CPP/:
 //   Common/MyWindows.h, Common/MyGuidDef.h, 7zip/IDecl.h, 7zip/Archive/IArchive.h.
-// The JavaToCPPOutArchiveImpl.cpp GetArchive() helper restores this same IOutArchive* handle.
+// jbinding-cpp/JavaToCPP/JavaToCPP{In,Out}ArchiveImpl.cpp restores these same COM handles.
 // No codec implementation, archive data or password crosses this bridge.
 struct Guid {
     uint32_t data1;
@@ -51,6 +51,8 @@ struct SetProperties : Unknown {
 
 constexpr Guid kSetPropertiesId = {
         0x23170F69, 0x40C1, 0x278A, {0, 0, 0, 6, 0, 3, 0, 0}};
+constexpr Guid kOutArchiveId = {
+        0x23170F69, 0x40C1, 0x278A, {0, 0, 0, 6, 0, 0xA0, 0, 0}};
 constexpr uint16_t kString = 8;
 constexpr uint16_t kBoolean = 11;
 constexpr uint16_t kUnsigned = 19;
@@ -84,7 +86,113 @@ struct PropertiesReference {
     }
 };
 
+struct ArchiveReference {
+    Unknown* archive = nullptr;
+
+    ~ArchiveReference() {
+        if (archive) archive->release();
+    }
+};
+
+struct LocalReference {
+    JNIEnv* env;
+    jobject object;
+
+    LocalReference(JNIEnv* env, jobject object) : env(env), object(object) {}
+    LocalReference(const LocalReference&) = delete;
+    LocalReference& operator=(const LocalReference&) = delete;
+
+    ~LocalReference() {
+        if (object) env->DeleteLocalRef(object);
+    }
+};
+
+jlong getOpenArchiveHandle(JNIEnv* env, jobject archive, const char* implementation,
+                          bool requireNewWriter, jfieldID* handleFieldOut = nullptr) {
+    jclass archiveClass = env->FindClass(implementation);
+    LocalReference classReference(env, archiveClass);
+    if (!archiveClass) return 0;
+    if (!archive || !env->IsInstanceOf(archive, archiveClass)) {
+        throwIOException(env, "Unsupported 7-Zip archive implementation for XZ creation");
+        return 0;
+    }
+    jfieldID handleField = env->GetFieldID(archiveClass, "sevenZipArchiveInstance", "J");
+    if (!handleField) return 0;
+    jfieldID sessionField = env->GetFieldID(archiveClass, "jbindingSession", "J");
+    if (!sessionField) return 0;
+    jfieldID closedField = env->GetFieldID(archiveClass, "closed", "Z");
+    if (!closedField) return 0;
+    jlong handle = env->GetLongField(archive, handleField);
+    jlong session = env->GetLongField(archive, sessionField);
+    jboolean closed = env->GetBooleanField(archive, closedField);
+    if (env->ExceptionCheck()) return 0;
+    if (!handle || !session || closed) {
+        throwIOException(env, "An open 7-Zip archive is required for XZ creation");
+        return 0;
+    }
+    if (requireNewWriter) {
+        jfieldID inArchiveField = env->GetFieldID(
+                archiveClass, "inArchive", "Lnet/sf/sevenzipjbinding/IInArchive;");
+        if (!inArchiveField) return 0;
+        jobject inArchive = env->GetObjectField(archive, inArchiveField);
+        LocalReference inArchiveReference(env, inArchive);
+        if (env->ExceptionCheck()) return 0;
+        if (inArchive) {
+            throwIOException(env, "XZ creation requires a new 7-Zip writer");
+            return 0;
+        }
+    }
+    if (handleFieldOut) *handleFieldOut = handleField;
+    return handle;
+}
+
 }  // namespace
+
+extern "C" JNIEXPORT void JNICALL
+Java_me_zhanghai_android_files_provider_archive_archiver_SevenZipArchiveProperties_nativeUseXzHandler(
+        JNIEnv* env, jobject, jobject archive, jobject inputArchive) {
+    jfieldID handleField = nullptr;
+    jlong oldHandle = getOpenArchiveHandle(env, archive,
+            "net/sf/sevenzipjbinding/impl/OutArchiveBZip2Impl", true, &handleField);
+    if (!oldHandle) return;
+    jlong inputHandle = getOpenArchiveHandle(env, inputArchive,
+            "net/sf/sevenzipjbinding/impl/InArchiveImpl", false);
+    if (!inputHandle) return;
+
+    try {
+        // XzHandler.cpp implements both IInArchive and IOutArchive. Java opens the fixed empty
+        // XZ stream first; QueryInterface obtains an independently owned, correctly adjusted
+        // IOutArchive pointer without an exported CreateObject function or a new codec.
+        auto* input = reinterpret_cast<Unknown*>(static_cast<uintptr_t>(inputHandle));
+        ArchiveReference reference;
+        void* output = nullptr;
+        int32_t result = input->queryInterface(kOutArchiveId, &output);
+        reference.archive = static_cast<Unknown*>(output);
+        if (result != 0) {
+            throwResult(env, "Querying the XZ writer", result);
+            return;
+        }
+        if (!reference.archive) {
+            throwIOException(env, "7-Zip returned no XZ writer interface");
+            return;
+        }
+
+        // Keep the new writer's own JBindingSession and single-stream BZIP2 callback metadata.
+        // In the pinned CPPToJavaArchiveUpdateCallback, this format only forces IsDir=false;
+        // the IOutArchive pointer selects the actual encoder. No shared enum is modified.
+        env->SetLongField(archive, handleField,
+                static_cast<jlong>(reinterpret_cast<uintptr_t>(reference.archive)));
+        if (env->ExceptionCheck()) return;
+        reference.archive = nullptr;  // Transfer QueryInterface's reference to the Java writer.
+        reinterpret_cast<Unknown*>(static_cast<uintptr_t>(oldHandle))->release();
+
+        // Java closes the temporary reader before returning the writer. XzHandler::Close clears
+        // its input streams; this new reference keeps the handler alive. The existing writer's
+        // nativeClose later releases it and deletes the writer's independent JBindingSession.
+    } catch (...) {
+        throwIOException(env, "Unable to initialize the XZ writer");
+    }
+}
 
 extern "C" JNIEXPORT void JNICALL
 Java_me_zhanghai_android_files_provider_archive_archiver_SevenZipArchiveProperties_nativeConfigure(

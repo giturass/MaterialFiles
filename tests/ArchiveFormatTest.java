@@ -100,6 +100,10 @@ public final class ArchiveFormatTest {
                             preset, null, false, true, 0), Collections.singletonList(
                                     new Entry("payload-" + suffix + ".bin", rawEntries.get(0).file,
                                             rawEntries.get(0).bytes)));
+                    verify(new Spec("payload-" + suffix + ".bin.xz", "xz", "XZ",
+                            preset, null, false, true, 0), Collections.singletonList(
+                                    new Entry("payload-" + suffix + ".bin", rawEntries.get(0).file,
+                                            rawEntries.get(0).bytes)));
                 }
                 verify(standard("zip-plain.zip", "zip", "ZIP"), entries);
                 verify(standard("7z-plain.7z", "7z", "SEVEN_Z"), entries);
@@ -110,12 +114,17 @@ public final class ArchiveFormatTest {
                         null, false, true, 0), rawEntries);
                 verify(new Spec("payload.bin.bz2", "bzip2", "BZIP2", "STANDARD",
                         null, false, true, 0), rawEntries);
+                verify(new Spec("empty.bin.xz", "xz", "XZ", "STANDARD",
+                        null, false, true, 0), Collections.singletonList(entries.get(3)));
                 verify(new Spec("split.zip", "zip", "ZIP", "STANDARD",
                         ZIP_PASSWORD, false, false, 37), entries);
                 verify(new Spec("split.7z", "7z", "SEVEN_Z", "STANDARD",
                         PASSWORD, true, false, 37), entries);
                 verify(new Spec("split.tar", "tar", "TAR", "STANDARD",
                         null, false, false, 4093), entries);
+                verify(new Spec("split.bin.xz", "xz", "XZ", "STANDARD",
+                        null, false, true, 37), Collections.singletonList(
+                                new Entry("split.bin", rawEntries.get(0).file, rawEntries.get(0).bytes)));
                 check("new split encrypted 7z roots request a password and retry without cached metadata",
                         () -> verifySplitPasswordRetry(entries.subList(0, 5)));
                 for (String creation : new String[]{"ZIP", "SEVEN_Z", "TAR"}) {
@@ -130,8 +139,12 @@ public final class ArchiveFormatTest {
                         ArchiveFormatTest::verifyStreamOnly);
                 check("ZIP caches a stream-only source without provider cache access or double-counting progress",
                         ArchiveFormatTest::verifyZipStreamOnlySource);
+                check("XZ creates and reopens a Unicode-named archive through stream-only providers",
+                        ArchiveFormatTest::verifyXzStreamOnly);
                 check("7z reports encoded work instead of read-ahead and advances before completion",
-                        ArchiveFormatTest::verifySevenZipProgress);
+                        () -> verifyEncodingProgress("SEVEN_Z"));
+                check("XZ reports encoded work instead of read-ahead and advances before completion",
+                        () -> verifyEncodingProgress("XZ"));
                 check("a failed ZIP seek probe and source close cannot fall back or publish output",
                         ArchiveFormatTest::verifyProbeCloseFailure);
                 for (String failure : new String[]{"source-close", "output-close", "grow", "shrink",
@@ -139,8 +152,16 @@ public final class ArchiveFormatTest {
                     check("failed creation rolls back output and retains sources: " + failure,
                             () -> verifyCreationFailure(failure));
                 }
-                check("raw formats reject multiple inputs and directories",
+                for (String failure : new String[]{"source-close", "output-close", "zero-write", "cancel"}) {
+                    check("failed XZ creation rolls back output and retains sources: " + failure,
+                            () -> verifyCreationFailure("XZ", failure));
+                }
+                check("XZ propagates a native output callback failure and rolls back its destination",
+                        ArchiveFormatTest::verifyXzNativeOutputFailure);
+                check("raw formats reject missing or multiple inputs, directories and symbolic links",
                         () -> verifyRawInputsRejected(entries));
+                check("XZ rejects passwords and file-name encryption",
+                        () -> verifyXzPasswordsRejected(rawEntries));
                 check("ZIP rejects Unicode, control characters and passwords over 99 bytes",
                         () -> verifyZipPasswordsRejected(entries));
                 check("unfiltered ordinary input is rejected instead of exposed as a raw archive",
@@ -236,6 +257,12 @@ public final class ArchiveFormatTest {
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static long writeArchive(Spec spec, Path target, List<Entry> entries,
             CheckedConsumer onProgress) throws Throwable {
+        return writeArchive(spec, target, entries, onProgress, null);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static long writeArchive(Spec spec, Path target, List<Entry> entries,
+            CheckedConsumer onProgress, CheckedChannelFactory channelFactory) throws Throwable {
         List<Object> pairs = new ArrayList<>();
         Map<String, Integer> completed = new LinkedHashMap<>();
         Set<String> started = new HashSet<>();
@@ -272,9 +299,10 @@ public final class ArchiveFormatTest {
         long[] archiveSize = {-1};
         Object write = function(value -> {
             SeekableByteChannel channel = (SeekableByteChannel) value;
+            SeekableByteChannel writerChannel = channelFactory == null ? channel : channelFactory.wrap(channel);
             try (Closeable writer = (Closeable) construct(writerType.getConstructor(
                     SeekableByteChannel.class, creationType, String.class, boolean.class,
-                    presetType), channel, Enum.valueOf((Class) creationType, spec.creation),
+                    presetType), writerChannel, Enum.valueOf((Class) creationType, spec.creation),
                     spec.password, spec.encryptNames, preset)) {
                 invoke(writerType.getMethod("writeEntries", List.class, long.class, functionType,
                         functionType, functionType), writer, pairs, 0L, listener, onEntry, onComplete);
@@ -581,10 +609,13 @@ public final class ArchiveFormatTest {
         try {
             for (Spec spec : Arrays.asList(
                     new Spec("short-io.7z", "7z", "SEVEN_Z", "STANDARD", PASSWORD, true, false, 0),
-                    new Spec("short-io.zip", "zip", "ZIP", "STANDARD", ZIP_PASSWORD, false, false, 0))) {
-                Path archive = create(spec, Collections.singletonList(entry));
-                readAndCompare(spec, archive, Collections.singletonList(entry));
-                addManifest(spec, Collections.singletonList(entry));
+                    new Spec("short-io.zip", "zip", "ZIP", "STANDARD", ZIP_PASSWORD, false, false, 0),
+                    new Spec("short-io.bin.xz", "xz", "XZ", "STANDARD", null, false, true, 0))) {
+                List<Entry> selected = Collections.singletonList(spec.raw
+                        ? new Entry("short-io.bin", entry.file, entry.bytes) : entry);
+                Path archive = create(spec, selected);
+                readAndCompare(spec, archive, selected);
+                addManifest(spec, selected);
             }
         } finally {
             ArchiveVolumeTest.configureIo(filesystem, Integer.MAX_VALUE, Integer.MAX_VALUE, false, null, null);
@@ -623,11 +654,40 @@ public final class ArchiveFormatTest {
         }
     }
 
-    private static void verifySevenZipProgress() throws Throwable {
-        Entry entry = new Entry("progress.bin", new File(work, "progress-source.bin"),
+    private static void verifyXzStreamOnly() throws Throwable {
+        File directory = new File(work, "xz-stream-sources");
+        mkdir(directory);
+        try (FileSystem sourceFilesystem = ArchiveVolumeTest.newPhysicalFileSystem(directory)) {
+            byte[] random = new byte[131111];
+            new Random(0x585A57EADL).nextBytes(random);
+            Entry entry = new Entry("流式 数据.bin", new File(directory, "source.bin"), random);
+            putNew(entry.file, entry.bytes);
+            entry.providerPath = sourceFilesystem.getPath(entry.file.toString());
+            ArchiveVolumeTest.configureIo(sourceFilesystem, 19, Integer.MAX_VALUE, true, null, null);
+            ArchiveVolumeTest.configureIo(filesystem, 17, Integer.MAX_VALUE, true, null, null);
+            try {
+                Spec spec = new Spec(entry.name + ".xz", "xz", "XZ", "STANDARD", null, false, true, 0);
+                Path archive = create(spec, Collections.singletonList(entry));
+                require(ArchiveVolumeTest.openedStreamCount(sourceFilesystem) > 0,
+                        "XZ did not read its stream-only source");
+                int openedStreams = ArchiveVolumeTest.openedStreamCount(filesystem);
+                readAndCompare(spec, archive, Collections.singletonList(entry));
+                require(ArchiveVolumeTest.openedStreamCount(filesystem) > openedStreams,
+                        "XZ did not reopen its stream-only archive");
+                addManifest(spec, Collections.singletonList(entry));
+            } finally {
+                ArchiveVolumeTest.configureIo(filesystem, Integer.MAX_VALUE, Integer.MAX_VALUE, false, null, null);
+            }
+        }
+    }
+
+    private static void verifyEncodingProgress(String creation) throws Throwable {
+        boolean xz = creation.equals("XZ");
+        Entry entry = new Entry("progress.bin", new File(work, "progress-source-" + creation + ".bin"),
                 payload(8 * 1024 * 1024 + 37));
         putNew(entry.file, entry.bytes);
-        Spec spec = standard("encoding-progress.7z", "7z", "SEVEN_Z");
+        Spec spec = new Spec(xz ? "progress.bin.xz" : "encoding-progress.7z", xz ? "xz" : "7z",
+                creation, "STANDARD", null, false, xz, 0);
         AtomicLong progress = new AtomicLong();
         AtomicLong intermediateUpdates = new AtomicLong();
         AtomicBoolean checkedReadAhead = new AtomicBoolean();
@@ -637,7 +697,7 @@ public final class ArchiveFormatTest {
         ArchiveVolumeTest.afterFirstSourceRead(filesystem, () -> {
             ArchiveVolumeTest.configureIo(filesystem, 64 * 1024, Integer.MAX_VALUE, false, null, null);
             ArchiveVolumeTest.afterFirstSourceRead(filesystem, () -> {
-                require(progress.get() == 0, "7z reported buffered source bytes as encoded work");
+                require(progress.get() == 0, creation + " reported buffered source bytes as encoded work");
                 checkedReadAhead.set(true);
             });
         });
@@ -650,9 +710,9 @@ public final class ArchiveFormatTest {
                     intermediateUpdates.incrementAndGet();
                 }
             });
-            require(checkedReadAhead.get(), "7z did not exercise multiple source reads");
+            require(checkedReadAhead.get(), creation + " did not exercise multiple source reads");
             require(intermediateUpdates.get() >= 2,
-                    "7z did not report encoding progress before its final update");
+                    creation + " did not report encoding progress before its final update");
         } finally {
             ArchiveVolumeTest.afterFirstSourceRead(filesystem, null);
             ArchiveVolumeTest.configureIo(filesystem, Integer.MAX_VALUE, Integer.MAX_VALUE, false, null, null);
@@ -662,14 +722,21 @@ public final class ArchiveFormatTest {
     }
 
     private static void verifyCreationFailure(String failure) throws Throwable {
+        verifyCreationFailure("SEVEN_Z", failure);
+    }
+
+    private static void verifyCreationFailure(String creation, String failure) throws Throwable {
         Thread ownerThread = Thread.currentThread();
         AtomicLong lastProgress = new AtomicLong();
-        Entry entry = new Entry("payload.bin", new File(work, "failure-source-" + failure + ".bin"), payload(32779));
+        boolean xz = creation.equals("XZ");
+        String prefix = xz ? "xz-" : "";
+        String extension = xz ? "xz" : "7z";
+        Entry entry = new Entry("payload.bin", new File(work, "failure-source-" + prefix + failure + ".bin"), payload(32779));
         putNew(entry.file, entry.bytes);
-        File output = new File(work, "output/failure-" + failure + ".7z");
+        File output = new File(work, "output/failure-" + prefix + failure + "." + extension);
         Spec spec = failure.equals("header-zero-write")
                 ? new Spec(output.getName(), "7z", "SEVEN_Z", "STANDARD", PASSWORD, true, false, 0)
-                : standard(output.getName(), "7z", "SEVEN_Z");
+                : new Spec(output.getName(), extension, creation, "STANDARD", null, false, xz, 0);
         ArchiveVolumeTest.configureIo(filesystem, 11, failure.equals("zero-write") ? 0 : 127, false,
                 failure.equals("source-close") ? entry.file.getName() : null,
                 failure.equals("output-close") ? output.getName() : null);
@@ -696,7 +763,7 @@ public final class ArchiveFormatTest {
             if (failure.equals("cancel")) {
                 require(Thread.currentThread().isInterrupted(), "Writer swallowed cancellation");
                 require(lastProgress.get() > 0 && lastProgress.get() < entry.bytes.length,
-                        "Cancelled 7z encoding reported full completion or never exercised progress");
+                        "Cancelled archive encoding reported full completion or never exercised progress");
             }
             if (failure.equals("header-zero-write")) ArchiveTestSupport.requireEmptyCache(new File(work, "cache"));
         } finally {
@@ -705,6 +772,32 @@ public final class ArchiveFormatTest {
             ArchiveVolumeTest.failOutputProgress(filesystem, null);
             ArchiveVolumeTest.configureIo(filesystem, Integer.MAX_VALUE, Integer.MAX_VALUE, false, null, null);
         }
+    }
+
+    private static void verifyXzNativeOutputFailure() throws Throwable {
+        Entry entry = new Entry("payload.bin", new File(work, "xz-native-output-source.bin"), payload(4099));
+        putNew(entry.file, entry.bytes);
+        File output = new File(work, "output/failure-xz-native-write.xz");
+        Spec spec = new Spec(output.getName(), "xz", "XZ", "STANDARD", null, false, true, 0);
+        AtomicBoolean attemptedWrite = new AtomicBoolean();
+        try {
+            writeArchive(spec, path(output), Collections.singletonList(entry), null, channel ->
+                    (SeekableByteChannel) Proxy.newProxyInstance(SeekableByteChannel.class.getClassLoader(),
+                            new Class<?>[]{SeekableByteChannel.class}, (proxy, method, arguments) -> {
+                                if (method.getName().equals("write")) {
+                                    attemptedWrite.set(true);
+                                    throw new IOException("Injected XZ native output write failure");
+                                }
+                                return invoke(method, channel, arguments);
+                            }));
+            throw new AssertionError("XZ ignored an output callback failure");
+        } catch (IOException failure) {
+            require(attemptedWrite.get(), "XZ never reached the native output callback");
+            require(hasFailureMessage(failure, "Injected XZ native output write failure"),
+                    "XZ lost the native output callback exception: " + failure);
+        }
+        require(!output.exists(), "Failed XZ native output left a partial archive");
+        require(Arrays.equals(entry.bytes, readFile(entry.file)), "Failed XZ native output changed its source");
     }
 
     private static void verifyProbeCloseFailure() throws Throwable {
@@ -746,16 +839,41 @@ public final class ArchiveFormatTest {
     }
 
     private static void verifyRawInputsRejected(List<Entry> entries) throws Throwable {
-        for (String creation : new String[]{"GZIP", "BZIP2"}) {
-            for (List<Entry> selected : Arrays.asList(entries, Collections.singletonList(entries.get(1)))) {
-                File output = new File(work, "output/invalid-" + creation + "-" + selected.size());
-                Spec spec = standard(output.getName(), creation.toLowerCase(Locale.ROOT), creation);
-                try {
-                    writeArchive(spec, path(output), selected);
-                    throw new AssertionError("Raw compression accepted multiple files or a directory");
-                } catch (IOException | IllegalArgumentException expected) {
-                    require(!output.exists(), "Rejected raw input left an archive behind");
+        File link = new File(work, "source/raw-input-link");
+        Os.symlink("hello.txt", link.toString());
+        Entry symbolicLink = new Entry("raw-input-link", link, "hello.txt".getBytes(StandardCharsets.UTF_8),
+                "hello.txt", null);
+        ArchiveVolumeTest.usePosixAttributes(filesystem, true);
+        try {
+            for (String creation : new String[]{"GZIP", "BZIP2", "XZ"}) {
+                int index = 0;
+                for (List<Entry> selected : Arrays.asList(Collections.<Entry>emptyList(), entries,
+                        Collections.singletonList(entries.get(1)), Collections.singletonList(symbolicLink))) {
+                    File output = new File(work, "output/invalid-" + creation + "-" + index++);
+                    Spec spec = standard(output.getName(), creation.toLowerCase(Locale.ROOT), creation);
+                    try {
+                        writeArchive(spec, path(output), selected);
+                        throw new AssertionError("Raw compression accepted an input other than one regular file");
+                    } catch (IOException | IllegalArgumentException expected) {
+                        require(!output.exists(), "Rejected raw input left an archive behind");
+                    }
                 }
+            }
+        } finally {
+            ArchiveVolumeTest.usePosixAttributes(filesystem, false);
+        }
+    }
+
+    private static void verifyXzPasswordsRejected(List<Entry> entries) throws Throwable {
+        for (Spec spec : Arrays.asList(
+                new Spec("invalid-xz-password.xz", "xz", "XZ", "STANDARD", PASSWORD, false, true, 0),
+                new Spec("invalid-xz-encrypted-names.xz", "xz", "XZ", "STANDARD", null, true, true, 0))) {
+            File output = new File(work, "output/" + spec.filename);
+            try {
+                writeArchive(spec, path(output), entries);
+                throw new AssertionError("XZ accepted unsupported encryption settings");
+            } catch (IOException | IllegalArgumentException expected) {
+                require(!output.exists(), "Rejected XZ encryption left an archive behind");
             }
         }
     }
@@ -1000,4 +1118,7 @@ public final class ArchiveFormatTest {
 
     private interface CheckedRunnable { void run() throws Throwable; }
     private interface CheckedConsumer { void accept(Object value) throws Throwable; }
+    private interface CheckedChannelFactory {
+        SeekableByteChannel wrap(SeekableByteChannel channel) throws Throwable;
+    }
 }

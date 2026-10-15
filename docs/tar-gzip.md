@@ -1,7 +1,7 @@
 # TAR.GZ / TAR.BZ2
 
 创建菜单和 writer 已移除 TAR.GZ、TAR.BZ2 组合格式。
-创建支持 7z、ZIP、TAR，以及仅压缩单个常规文件的 GZIP、BZIP2。
+创建支持 7z、ZIP、TAR，以及仅压缩单个常规文件的 GZIP、BZIP2、XZ。
 
 已有 TAR.GZ、TAR.BZ2 仍由
 [7-Zip-JBinding-4Android](https://github.com/omicronapps/7-Zip-JBinding-4Android)

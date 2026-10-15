@@ -128,6 +128,12 @@ def verify_format_outputs(seven_zip, directory):
 def verify_format_output(seven_zip, directory, index, item):
     archive = directory / item["archive"]
     features = {"preset": item["preset"]}
+    if item["format"] == "xz":
+        with archive.open("rb") as source:
+            header = source.read(6)
+        if header != b"\xfd7zXZ\x00":
+            raise AssertionError(str(archive) + ": output is not an XZ stream")
+        features["xz_header"] = header.hex()
     if item["format"] in ("bzip2", "tar.bz2"):
         # 7-Zip normalizes compression levels 1/5/7 to block sizes 100/900/900 KiB.
         expected_header = b"BZh1" if item["preset"] == "SPEED" else b"BZh9"
@@ -145,6 +151,14 @@ def verify_format_output(seven_zip, directory, index, item):
     password = ["-p" + item["password"]] if item.get("password") else []
     run_7zz(seven_zip, "t", *password, archive)
     listing = run_7zz(seven_zip, "l", "-slt", *password, archive).stdout
+    if item["format"] == "xz":
+        if not re.search(r"^Type = xz$", listing, re.MULTILINE | re.IGNORECASE):
+            raise AssertionError(str(archive) + ": official 7zz did not recognize XZ")
+        methods = re.findall(r"^Method = (.+)$", listing, re.MULTILINE)
+        if any(member["size"] for member in item["members"].values()) \
+                and not any("LZMA2" in method for method in methods):
+            raise AssertionError(str(archive) + ": XZ did not use LZMA2 compression")
+        features["xz_methods"] = sorted(set(methods))
     if item["format"] == "7z" and sum(member["size"] > 0 for member in item["members"].values()) > 1:
         if not re.search(r"^Solid = \+$", listing, re.MULTILINE):
             raise AssertionError(str(archive) + ": multiple nonempty members did not use solid compression")

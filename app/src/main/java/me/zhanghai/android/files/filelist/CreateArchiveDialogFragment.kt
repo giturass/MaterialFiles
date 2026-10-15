@@ -407,7 +407,8 @@ class CreateArchiveDialogFragment : FileNameDialogFragment() {
         SEVEN_Z(R.id.sevenZRadio, R.string.file_create_archive_type_7z, ArchiveCreationFormat.SEVEN_Z),
         TAR(R.id.tarRadio, R.string.file_create_archive_type_tar, ArchiveCreationFormat.TAR),
         GZ(R.id.gzipRadio, R.string.file_create_archive_type_gz, ArchiveCreationFormat.GZIP),
-        BZ2(R.id.bzip2Radio, R.string.file_create_archive_type_bz2, ArchiveCreationFormat.BZIP2);
+        BZ2(R.id.bzip2Radio, R.string.file_create_archive_type_bz2, ArchiveCreationFormat.BZIP2),
+        XZ(R.id.xzRadio, R.string.file_create_archive_type_xz, ArchiveCreationFormat.XZ);
 
         val extension: String
             get() = format.extension

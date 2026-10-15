@@ -34,7 +34,6 @@ import me.zhanghai.android.files.provider.common.readSymbolicLinkByteString
 import me.zhanghai.android.files.provider.common.toInt
 import me.zhanghai.android.files.provider.root.isRunningAsRoot
 import me.zhanghai.android.files.provider.root.rootContext
-import net.sf.sevenzipjbinding.ArchiveFormat
 import net.sf.sevenzipjbinding.ICryptoGetTextPassword
 import net.sf.sevenzipjbinding.IInStream
 import net.sf.sevenzipjbinding.IOutCreateArchive
@@ -98,10 +97,10 @@ class ArchiveWriter @Throws(IOException::class) constructor(
             throw IOException("Single-file compression requires exactly one regular file")
         }
         val progress = Progress(
-            sources, format == ArchiveCreationFormat.SEVEN_Z, intervalMillis, listener, onEntry,
-            onEntryComplete
+            sources, format == ArchiveCreationFormat.SEVEN_Z || format == ArchiveCreationFormat.XZ,
+            intervalMillis, listener, onEntry, onEntryComplete
         )
-        create(format.nativeFormat, channel, sources, progress, ownerThread)
+        create(channel, sources, progress, ownerThread)
         checkInterrupted(ownerThread)
         // Empty entries may never receive getStream(), so validate every source again.
         sources.forEach {
@@ -112,7 +111,6 @@ class ArchiveWriter @Throws(IOException::class) constructor(
     }
 
     private fun create(
-        nativeFormat: ArchiveFormat,
         output: SeekableByteChannel,
         sources: List<Source>,
         progress: Progress?,
@@ -124,13 +122,13 @@ class ArchiveWriter @Throws(IOException::class) constructor(
         try {
             // Use typed factories so each format's supported settings are explicit and
             // a missing feature interface cannot silently skip a requested option.
-            val opened: IOutCreateArchive<*> = when (nativeFormat) {
-                ArchiveFormat.SEVEN_ZIP -> SevenZip.openOutArchive7z()
-                ArchiveFormat.ZIP -> SevenZip.openOutArchiveZip()
-                ArchiveFormat.TAR -> SevenZip.openOutArchiveTar()
-                ArchiveFormat.GZIP -> SevenZip.openOutArchiveGZip()
-                ArchiveFormat.BZIP2 -> SevenZip.openOutArchiveBZip2()
-                else -> throw IOException("Unsupported archive creation format: $nativeFormat")
+            val opened: IOutCreateArchive<*> = when (format) {
+                ArchiveCreationFormat.SEVEN_Z -> SevenZip.openOutArchive7z()
+                ArchiveCreationFormat.ZIP -> SevenZip.openOutArchiveZip()
+                ArchiveCreationFormat.TAR -> SevenZip.openOutArchiveTar()
+                ArchiveCreationFormat.GZIP -> SevenZip.openOutArchiveGZip()
+                ArchiveCreationFormat.BZIP2 -> SevenZip.openOutArchiveBZip2()
+                ArchiveCreationFormat.XZ -> SevenZipArchiveProperties.openXzArchive()
             }
             opened.use { archive ->
                 val callback = object : IOutCreateCallback<IOutItemAllFormats> {
@@ -142,10 +140,10 @@ class ArchiveWriter @Throws(IOException::class) constructor(
                         val source = sources[index]
                         // 7-Zip can omit getStream() for empty files and metadata-only items.
                         if (source.size == 0L || source.attributes.isDirectory
-                            || nativeFormat == ArchiveFormat.TAR && source.attributes.isSymbolicLink) {
+                            || format == ArchiveCreationFormat.TAR && source.attributes.isSymbolicLink) {
                             progress?.start(source)
                         }
-                        return source.newItem(outItemFactory, nativeFormat)
+                        return source.newItem(outItemFactory, format)
                     }
 
                     @Synchronized
@@ -153,7 +151,7 @@ class ArchiveWriter @Throws(IOException::class) constructor(
                         checkInterrupted(ownerThread)
                         val source = sources[index]
                         progress?.start(source)
-                        if (nativeFormat == ArchiveFormat.ZIP) {
+                        if (format == ArchiveCreationFormat.ZIP) {
                             zipInputs[index]?.let {
                                 source.verifyUnchanged()
                                 it.seek(0, ISeekableStream.SEEK_SET)
@@ -164,7 +162,7 @@ class ArchiveWriter @Throws(IOException::class) constructor(
                                 zipInputs[index] = it
                             }
                         }
-                        val input = source.open(nativeFormat) ?: return null
+                        val input = source.open(format) ?: return null
                         return SourceInput(source, input, progress, ownerThread).also { inputs += it }
                     }
 
@@ -213,6 +211,8 @@ class ArchiveWriter @Throws(IOException::class) constructor(
                         archive.createArchive(nativeOutput, sources.size, createCallback)
                     }
                     is IOutCreateArchiveBZip2 -> {
+                        // The XZ adapter shares BZip2's single-stream Java callback contract;
+                        // setLevel() and createArchive() operate on the actual native XZ handler.
                         archive.setLevel(compressionPreset.level)
                         archive.createArchive(nativeOutput, sources.size, createCallback)
                     }
@@ -286,15 +286,15 @@ class ArchiveWriter @Throws(IOException::class) constructor(
         }
 
         fun newItem(
-            factory: OutItemFactory<IOutItemAllFormats>, nativeFormat: ArchiveFormat
+            factory: OutItemFactory<IOutItemAllFormats>, format: ArchiveCreationFormat
         ): IOutItemAllFormats = factory.createOutItem().apply {
             propertyPath = name
             propertyIsDir = attributes.isDirectory
-            dataSize = if (nativeFormat == ArchiveFormat.TAR && link != null) 0 else size
+            dataSize = if (format == ArchiveCreationFormat.TAR && link != null) 0 else size
             propertyLastModificationTime = Date(attributes.lastModifiedTime().toMillis())
             propertyAttributes = ((type.mode or mode.toInt()) shl 16) or 0x8000 or
                 if (attributes.isDirectory) 0x10 else 0x20
-            if (nativeFormat == ArchiveFormat.TAR) {
+            if (format == ArchiveCreationFormat.TAR) {
                 propertyPosixAttributes = type.mode or mode.toInt()
                 propertyUser = (attributes as? PosixFileAttributes)?.owner()?.name?.toString()
                 propertyGroup = (attributes as? PosixFileAttributes)?.group()?.name?.toString()
@@ -302,9 +302,9 @@ class ArchiveWriter @Throws(IOException::class) constructor(
             }
         }
 
-        fun open(nativeFormat: ArchiveFormat): InputStream? {
+        fun open(format: ArchiveCreationFormat): InputStream? {
             verifyUnchanged()
-            if (attributes.isDirectory || nativeFormat == ArchiveFormat.TAR && link != null) {
+            if (attributes.isDirectory || format == ArchiveCreationFormat.TAR && link != null) {
                 return null
             }
             return link?.let(::ByteArrayInputStream) ?: path.newInputStream(LinkOption.NOFOLLOW_LINKS)
@@ -333,7 +333,7 @@ class ArchiveWriter @Throws(IOException::class) constructor(
             val temporary = File.createTempFile("archive-zip-source-", ".tmp", context.cacheDir)
             var input: SeekableByteChannel? = null
             try {
-                SourceInput(this, open(ArchiveFormat.ZIP)!!, progress, ownerThread).use { source ->
+                SourceInput(this, open(ArchiveCreationFormat.ZIP)!!, progress, ownerThread).use { source ->
                     temporary.outputStream().use { output ->
                         val buffer = ByteArray(64 * 1024)
                         while (true) {
@@ -634,7 +634,7 @@ class ArchiveWriter @Throws(IOException::class) constructor(
 
         @Synchronized
         fun advance(source: Source, position: Long) {
-            // LZMA2 can read entire solid blocks ahead of encoding them. For 7z, use the
+            // LZMA2 can read entire blocks ahead of encoding them. For 7z and XZ, use the
             // encoder's completed input bytes rather than its input stream's read position.
             if (useNativeProgress) return
             val previous = sourceReadUntil[source] ?: 0
