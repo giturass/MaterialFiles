@@ -21,7 +21,7 @@
 - Material Design：遵循 Material Design 规范，并且注重细节。
 - 面包屑导航栏：点击导航栏所显示路径中的任一文件夹即可快速访问。
 - Root 支持：使用 root 权限查看和管理文件。
-- 压缩文件支持：统一由 7-Zip-JBinding-4Android 浏览、提取和创建，详见[格式表与验证](docs/7z.md)。完整 RAR 支持保留上游的 unRAR 许可限制。
+- 压缩文件支持：从官方源码构建的 7-Zip 26.04 通过 JBinding 统一浏览、提取和创建，详见[格式表与验证](docs/7z.md)。完整 RAR 支持保留上游的 unRAR 许可限制。
 - NAS 支持：查看和管理 FTP、SFTP、SMB 和 WebDAV 服务器上的文件。
 - 主题：可定制的界面颜色，以及可选纯黑的夜间模式。
 - Linux 友好：类似 [Nautilus](https://wiki.gnome.org/action/show/Apps/Files)，支持符号链接、文件权限和 SELinux 上下文。

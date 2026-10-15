@@ -19,7 +19,13 @@ internal object SevenZipRuntime {
     fun ensureInitialized() {
         if (initialized) return
         try {
-            SevenZip.getSevenZipVersion()
+            System.loadLibrary("7-Zip-JBinding")
+            SevenZip.initLoadedLibraries()
+            val version = SevenZip.getSevenZipVersion()
+            if (version.major != 26 || version.minor != 4
+                || SevenZip.getSevenZipJBindingVersion() != "26.03-2.4") {
+                throw IOException("Unexpected 7-Zip engine or JBinding version")
+            }
             initialized = true
         } catch (e: Exception) {
             throw IOException("Unable to initialize 7-Zip-JBinding", e)

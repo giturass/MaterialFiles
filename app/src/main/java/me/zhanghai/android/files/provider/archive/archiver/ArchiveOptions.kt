@@ -25,6 +25,6 @@ const val MAX_ZIP_PASSWORD_LENGTH = 99
 enum class ArchiveCompressionPreset(val level: Int) {
     SPEED(1),
     STANDARD(5),
-    // JBinding has no dictionary-size setter. Level 7 keeps the 7z dictionary at 32 MiB.
+    // The native property adapter explicitly caps the 7z/XZ dictionary at 32 MiB.
     QUALITY(7)
 }

@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.6)
 
 project(MaterialFiles C CXX)
 
+add_subdirectory(../third_party/sevenzip ${CMAKE_CURRENT_BINARY_DIR}/sevenzip)
+
 add_library(hiddenapi SHARED
         src/main/jni/hiddenapi.c)
 target_compile_options(hiddenapi
@@ -35,3 +37,4 @@ target_compile_options(archive_jbinding
         -fexceptions
         -fno-rtti
         -fvisibility=hidden)
+target_link_libraries(archive_jbinding PRIVATE sevenzip_headers)

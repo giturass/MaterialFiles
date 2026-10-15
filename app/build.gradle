@@ -38,6 +38,10 @@ android {
         resValues true
         viewBinding true
     }
+    sourceSets {
+        // Build the pinned JBinding Java API together with the official 7-Zip native engine.
+        main.java.srcDir '../third_party/sevenzip/jbinding-java'
+    }
     androidResources {
         generateLocaleConfig true
         localeFilters.add('zh-rCN')
@@ -98,7 +102,6 @@ dependencies {
         exclude group: 'org.ogce', module: 'xpp3'
     }
     implementation 'com.github.chrisbanes:PhotoView:2.3.0'
-    implementation 'com.github.omicronapps:7-Zip-JBinding-4Android:Release-16.02-2.03'
     implementation 'com.github.topjohnwu.libsu:service:5.2.2'
 }
 

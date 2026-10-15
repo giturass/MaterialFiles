@@ -30,7 +30,7 @@ fun MimeType.Companion.guessFromExtension(extension: String): MimeType {
 
 // Keep the archive entry points independent of the device's MIME database. In particular,
 // some Android versions identify CHM as ChemDraw and XAR as a Xara drawing.
-// Formats: https://github.com/omicronapps/7-Zip-JBinding-4Android#release-notes
+// Bundled formats and source versions: docs/7z.md.
 // The native registry also provides XZ, PPMd, LZMA86 and Hxs outside the Java enum.
 // EXE files may be NSIS installers; they are opened as archives only on explicit request.
 internal val archiveExtensionToMimeTypeMap = mapOf(

@@ -55,6 +55,11 @@ public final class ArchiveReaderTest {
             try (FileSystem physical = ArchiveVolumeTest.newPhysicalFileSystem(fixtures)) {
                 filesystem = physical;
                 JSONArray archives = manifest.getJSONArray("archives");
+                check("reader fixtures cover the upgraded 7-Zip engine", () -> {
+                    for (String format : Arrays.asList("ZIP_ZSTANDARD", "TAR_PAX_SIZE", "TAR_GNU_LONG_RECORDS")) {
+                        find(archives, format);
+                    }
+                });
                 for (int index = 0; index < archives.length(); ++index) {
                     JSONObject archive = archives.getJSONObject(index);
                     check(archive.getString("format") + ": metadata, streams and selected batch ("
@@ -71,6 +76,8 @@ public final class ArchiveReaderTest {
                     finally { ArchiveVolumeTest.configureIo(filesystem, Integer.MAX_VALUE, Integer.MAX_VALUE, false, null, null); }
                 });
                 check("untrusted entry paths cannot escape the archive root", ArchiveReaderTest::verifyPaths);
+                check("folded GNU and PAX paths cannot escape the archive root",
+                        () -> verifyPaths("generated/unsafe-paths.tar"));
                 check("CRC failure is delivered after streamed ZIP data", ArchiveReaderTest::verifyCrcFailure);
                 check("a truncated 7z header fails without leaking source handles", () -> reject("generated/bad-header.7z"));
                 check("a missing 7z volume cannot masquerade as a raw split", () -> reject("generated/broken-volume/archive.7z.001"));
@@ -78,7 +85,10 @@ public final class ArchiveReaderTest {
                 check("cyclic TAR hard links fail", () -> reject("generated/hardlinks-cycle.tar"));
                 check("missing TAR hard-link targets fail", () -> reject("generated/hardlinks-missing.tar"));
                 check("TAR hard-link traversal cannot reference external data", () -> reject("generated/hardlinks-unsafe.tar"));
-                check("unsupported PAX size overrides fail instead of truncating output", () -> reject("generated/pax-size-mismatch.tar"));
+                check("folded GNU hard links cannot reference external data", () -> reject("generated/gnu-hardlink-unsafe.tar"));
+                check("conflicting PAX sizes fail instead of exposing padding", () -> reject("generated/pax-size-mismatch.tar"));
+                check("unsupported PAX sparse layouts cannot produce incomplete files", () -> reject("generated/pax-sparse.tar"));
+                check("unsupported PAX character encodings cannot produce wrong names", () -> reject("generated/pax-non-utf8.tar"));
                 check("reader cancellation retains the interrupt", ArchiveReaderTest::verifyCancellation);
                 check("supported extensions route correctly despite generic provider MIME", ArchiveReaderTest::verifyMime);
                 ArchiveTestSupport.requireEmptyCache(cache);
@@ -207,7 +217,11 @@ public final class ArchiveReaderTest {
     }
 
     private static void verifyPaths() throws Throwable {
-        Path physical = path("generated/traversal.zip");
+        verifyPaths("generated/traversal.zip");
+    }
+
+    private static void verifyPaths(String archiveName) throws Throwable {
+        Path physical = path(archiveName);
         Class<?> paths = Class.forName(PACKAGE + "provider.archive.PathArchiveExtensionsKt");
         Path root = (Path) invoke(paths.getMethod("createArchiveRootPath", Path.class), null, physical);
         try (FileSystem archive = root.getFileSystem()) {

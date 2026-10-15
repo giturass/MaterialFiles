@@ -39,6 +39,7 @@ import net.sf.sevenzipjbinding.IInStream
 import net.sf.sevenzipjbinding.IOutCreateArchive
 import net.sf.sevenzipjbinding.IOutCreateArchive7z
 import net.sf.sevenzipjbinding.IOutCreateArchiveBZip2
+import net.sf.sevenzipjbinding.IOutCreateArchiveXz
 import net.sf.sevenzipjbinding.IOutCreateArchiveGZip
 import net.sf.sevenzipjbinding.IOutCreateArchiveTar
 import net.sf.sevenzipjbinding.IOutCreateArchiveZip
@@ -128,7 +129,7 @@ class ArchiveWriter @Throws(IOException::class) constructor(
                 ArchiveCreationFormat.TAR -> SevenZip.openOutArchiveTar()
                 ArchiveCreationFormat.GZIP -> SevenZip.openOutArchiveGZip()
                 ArchiveCreationFormat.BZIP2 -> SevenZip.openOutArchiveBZip2()
-                ArchiveCreationFormat.XZ -> SevenZipArchiveProperties.openXzArchive()
+                ArchiveCreationFormat.XZ -> SevenZip.openOutArchiveXz()
             }
             opened.use { archive ->
                 val callback = object : IOutCreateCallback<IOutItemAllFormats> {
@@ -211,9 +212,11 @@ class ArchiveWriter @Throws(IOException::class) constructor(
                         archive.createArchive(nativeOutput, sources.size, createCallback)
                     }
                     is IOutCreateArchiveBZip2 -> {
-                        // The XZ adapter shares BZip2's single-stream Java callback contract;
-                        // setLevel() and createArchive() operate on the actual native XZ handler.
                         archive.setLevel(compressionPreset.level)
+                        archive.createArchive(nativeOutput, sources.size, createCallback)
+                    }
+                    is IOutCreateArchiveXz -> {
+                        SevenZipArchiveProperties.configure(archive, compressionPreset.level)
                         archive.createArchive(nativeOutput, sources.size, createCallback)
                     }
                     else -> throw IOException("Unsupported archive writer: ${archive.javaClass.name}")

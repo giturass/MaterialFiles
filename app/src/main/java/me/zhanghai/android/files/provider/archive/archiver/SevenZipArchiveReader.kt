@@ -25,6 +25,7 @@ import net.sf.sevenzipjbinding.IInArchive
 import net.sf.sevenzipjbinding.IInStream
 import net.sf.sevenzipjbinding.ISequentialOutStream
 import net.sf.sevenzipjbinding.PropID
+import net.sf.sevenzipjbinding.ReportExtractResultIndexType
 import net.sf.sevenzipjbinding.SevenZip
 import net.sf.sevenzipjbinding.SevenZipException
 import java.io.ByteArrayOutputStream
@@ -168,7 +169,10 @@ internal class SevenZipArchiveReader private constructor(
         resolveHardLinks(adapted, hardLinks).also { metadata = it }
     }
 
-    /** The bundled TAR handler exposes PAX records as files but does not apply their metadata. */
+    /**
+     * 7-Zip 26.04 consumes PAX records itself, but does not apply global defaults. Preserve those
+     * defaults and sub-millisecond times while checking layouts it still cannot decode safely.
+     */
     private fun applyPaxHeaders(
         opened: IInArchive,
         entries: List<ArchiveEntry>,
@@ -179,104 +183,58 @@ internal class SevenZipArchiveReader private constructor(
             (opened.getProperty(index, PropID.PACKED_SIZE) as? Number)?.toLong()
                 ?: throw IOException("The TAR entry has no packed size")
         })
-        val extended = entries.filter { headers[it.index].typeFlag in listOf('g', 'x', 'X') }
-        if (extended.isEmpty()) return entries
-        val records = mutableMapOf<Int, Map<String, String>>()
-        var buffer: ByteArrayOutputStream? = null
-        extractNative(opened, extended, object : ExtractionCallback {
-            override fun openOutput(entry: ArchiveEntry): OutputStream {
-                if (entry.size > MAX_PAX_HEADER_SIZE) {
-                    throw IOException("The PAX extended header is too large")
-                }
-                val output = ByteArrayOutputStream()
-                buffer = output
-                return object : OutputStream() {
-                    override fun write(value: Int) = write(byteArrayOf(value.toByte()), 0, 1)
-                    override fun write(bytes: ByteArray, offset: Int, length: Int) {
-                        if (length > MAX_PAX_HEADER_SIZE - output.size()) {
-                            throw IOException("The PAX extended header is too large")
-                        }
-                        output.write(bytes, offset, length)
-                    }
+        return entries.map { entry ->
+            checkInterrupted()
+            val header = headers[entry.index]
+            val values = header.properties
+            val charset = values["hdrcharset"]
+            if (!charset.isNullOrEmpty() && charset != "ISO-IR 10646 2000 UTF-8"
+                && charset != "UTF-8") {
+                throw IOException("Unsupported PAX character encoding: $charset")
+            }
+            if (values.any { (key, value) -> key.startsWith("GNU.sparse.") && value.isNotEmpty() }
+                || !values["SCHILY.realsize"].isNullOrEmpty()
+                || values["SCHILY.filetype"] == "sparse") {
+                throw IOException("The bundled 7-Zip cannot extract this PAX sparse-file variant")
+            }
+            values["size"]?.let { value ->
+                val size = PaxTarHeaders.fileSize(value)
+                // A global size or an earlier x header may not have reached the native
+                // handler. Metadata must never promise bytes the engine will not extract.
+                // Native symbolic-link size is its target length, not its TAR data length.
+                if (size != header.size || header.typeFlag != '2' && size != entry.size) {
+                    throw IOException("The native TAR handler did not apply the PAX file size")
                 }
             }
-
-            override fun onResult(entry: ArchiveEntry, failure: IOException?) {
-                if (failure != null) throw failure
-                val bytes = buffer!!.toByteArray()
-                buffer = null
-                if (bytes.size.toLong() != entry.size) throw IOException("The PAX header was truncated")
-                records[entry.index] = PaxTarHeaders.parse(bytes).filterKeys {
-                    it in PAX_METADATA_KEYS || it.startsWith("GNU.sparse.")
+            val name = values["path"]?.also {
+                if (it.isEmpty()) throw IOException("The PAX header removes the entry path")
+            } ?: entry.name
+            var symbolicLink = entry.symbolicLinkTarget
+            if (header.typeFlag == '1' || header.typeFlag == '2') {
+                values["linkpath"]?.let { target ->
+                    if (target.isEmpty()) throw IOException("The PAX header removes a link target")
+                    if (header.typeFlag == '1') hardLinks[entry.index] = target
+                    else symbolicLink = target
                 }
             }
-        })
-        val global = mutableMapOf<String, String>()
-        val local = mutableMapOf<String, String>()
-        var localPending = false
-        val result = buildList {
-            for (entry in entries) {
-                checkInterrupted()
-                val header = headers[entry.index]
-                when (header.typeFlag) {
-                    'g' -> {
-                        global.putAll(records.getValue(entry.index))
-                        continue
-                    }
-                    'x', 'X' -> {
-                        local.putAll(records.getValue(entry.index))
-                        localPending = true
-                        continue
-                    }
-                }
-                val values = global + local
-                local.clear()
-                localPending = false
-                val charset = values["hdrcharset"]
-                if (!charset.isNullOrEmpty() && charset != "ISO-IR 10646 2000 UTF-8"
-                    && charset != "UTF-8") {
-                    throw IOException("Unsupported PAX character encoding: $charset")
-                }
-                if (values.any { (key, value) -> key.startsWith("GNU.sparse.") && value.isNotEmpty() }
-                    || !values["SCHILY.realsize"].isNullOrEmpty()
-                    || values["SCHILY.filetype"] == "sparse") {
-                    throw IOException("The bundled 7-Zip cannot extract this PAX sparse-file variant")
-                }
-                values["size"]?.let { value ->
-                    val size = value.takeIf { it.isNotEmpty() && it.all { digit -> digit in '0'..'9' } }
-                        ?.toLongOrNull() ?: throw IOException("Invalid PAX file size")
-                    // Changing only provider metadata would let native extraction silently
-                    // stop at the legacy header's size. Reject unsupported layouts first.
-                    if (size != header.size || size != entry.size) {
-                        throw IOException("The bundled 7-Zip cannot extract a PAX size override")
-                    }
-                }
-                val name = values["path"]?.also {
-                    if (it.isEmpty()) throw IOException("The PAX header removes the entry path")
-                } ?: entry.name
-                var symbolicLink = entry.symbolicLinkTarget
-                if (header.typeFlag == '1' || header.typeFlag == '2') {
-                    values["linkpath"]?.let { target ->
-                        if (target.isEmpty()) throw IOException("The PAX header removes a link target")
-                        if (header.typeFlag == '1') hardLinks[entry.index] = target
-                        else symbolicLink = target
-                    }
-                }
-                val modified = if (values.containsKey("mtime")) {
-                    values.getValue("mtime").takeIf { it.isNotEmpty() }?.let(PaxTarHeaders::fileTime)
-                } else entry.lastModifiedTime
-                val accessed = if (values.containsKey("atime")) {
-                    values.getValue("atime").takeIf { it.isNotEmpty() }?.let(PaxTarHeaders::fileTime)
-                } else entry.lastAccessTime
-                add(entry.copy(
-                    name = name, symbolicLinkTarget = symbolicLink,
-                    type = if (header.typeFlag == '2') PosixFileType.SYMBOLIC_LINK else entry.type,
-                    lastModifiedTime = modified, lastAccessTime = accessed
-                ))
+            if (header.typeFlag == '1' && hardLinks[entry.index].isNullOrEmpty()) {
+                throw IOException("The TAR hard link has no target")
             }
+            val modified = if (values.containsKey("mtime")) {
+                values.getValue("mtime").takeIf { it.isNotEmpty() }?.let(PaxTarHeaders::fileTime)
+            } else entry.lastModifiedTime
+            val accessed = if (values.containsKey("atime")) {
+                values.getValue("atime").takeIf { it.isNotEmpty() }?.let(PaxTarHeaders::fileTime)
+            } else entry.lastAccessTime
+            val created = if (values.containsKey("ctime")) {
+                values.getValue("ctime").takeIf { it.isNotEmpty() }?.let(PaxTarHeaders::fileTime)
+            } else entry.creationTime
+            entry.copy(
+                name = name, symbolicLinkTarget = symbolicLink,
+                type = if (header.typeFlag == '2') PosixFileType.SYMBOLIC_LINK else entry.type,
+                lastModifiedTime = modified, lastAccessTime = accessed, creationTime = created
+            )
         }
-        if (localPending) throw IOException("The PAX extended header has no following entry")
-        return result
     }
 
     /** TAR's native extractor returns no data for hard links; resolve their archive item. */
@@ -451,16 +409,34 @@ internal class SevenZipArchiveReader private constructor(
 
                     override fun setOperationResult(result: ExtractOperationResult) = nativeCallback(operationThread) {
                         val entry = current ?: return@nativeCallback
-                        val failure = when {
-                            result == ExtractOperationResult.OK -> null
-                            result == ExtractOperationResult.WRONG_PASSWORD
-                                || entry.isEncrypted && result in listOf(
-                                    ExtractOperationResult.DATAERROR, ExtractOperationResult.CRCERROR
-                                ) -> ArchivePassphraseException(passwords.isNotEmpty())
-                            else -> IOException("Unable to extract ${entry.name}: $result")
-                        }
+                        val failure = extractionFailure(entry, result)
                         callback.onResult(entry, failure)
                         if (failure != null) throw failure
+                    }
+
+                    override fun reportExtractResult(
+                        indexType: ReportExtractResultIndexType,
+                        index: Int,
+                        result: ExtractOperationResult
+                    ) = nativeCallback(operationThread) {
+                        // Modern 7z/CAB can report a block error after all of its individual
+                        // item results. Do not let JBinding's default no-op lose that error.
+                        val entry = if (indexType == ReportExtractResultIndexType.IN_ARCHIVE_INDEX) {
+                            byIndex[index]
+                        } else current
+                        val failure = extractionFailure(entry, result)
+                        if (failure != null) throw failure
+                    }
+
+                    private fun extractionFailure(
+                        entry: ArchiveEntry?, result: ExtractOperationResult
+                    ): IOException? = when {
+                        result == ExtractOperationResult.OK -> null
+                        result == ExtractOperationResult.WRONG_PASSWORD
+                            || entry?.isEncrypted == true && result in listOf(
+                                ExtractOperationResult.DATAERROR, ExtractOperationResult.CRCERROR
+                            ) -> ArchivePassphraseException(passwords.isNotEmpty())
+                        else -> IOException("Unable to extract ${entry?.name ?: "archive data"}: $result")
                     }
 
                     override fun setTotal(total: Long) = nativeCallback(operationThread) {}
@@ -684,10 +660,10 @@ internal class SevenZipArchiveReader private constructor(
     private fun unwrapTar(): SevenZipArchiveReader? {
         val entries = entries()
         val format = archive!!.archiveFormat
-        // These additional native handlers have no corresponding Java enum value. Hxs is
+        // PPMd/LZMA86 native handlers have no corresponding Java enum value. Hxs is
         // also enum-less, but its ITOLITLS header is a container rather than a raw stream.
         val raw = format in RAW_FORMATS || format == null && (
-            source.magic.hasSignature(XZ_SIGNATURE) || source.magic.hasSignature(PPMD_SIGNATURE)
+            source.magic.hasSignature(PPMD_SIGNATURE)
                 || source.magic.firstOrNull() in listOf(0.toByte(), 1.toByte())
             )
         if (!raw || entries.size != 1 || entries[0].isDirectory) return null
@@ -735,11 +711,6 @@ internal class SevenZipArchiveReader private constructor(
 
     companion object {
         private const val MAX_SYMBOLIC_LINK_SIZE = 64 * 1024
-        private const val MAX_PAX_HEADER_SIZE = 1024 * 1024
-        private val PAX_METADATA_KEYS = setOf(
-            "path", "linkpath", "size", "mtime", "atime", "hdrcharset",
-            "SCHILY.realsize", "SCHILY.filetype"
-        )
         private val XZ_SIGNATURE = byteArrayOf(0xFD.toByte(), 0x37, 0x7A, 0x58, 0x5A, 0)
         private val PPMD_SIGNATURE = byteArrayOf(0x8F.toByte(), 0xAF.toByte(), 0xAC.toByte(), 0x84.toByte())
         private val ARCHIVE_SIGNATURES = listOf(
@@ -759,7 +730,10 @@ internal class SevenZipArchiveReader private constructor(
             "hfs", "iso", "lzh", "lha", "ntfs", "rpm", "udf", "wim", "xar", "z", "pmd", "hxs",
             "tgz", "tbz", "tbz2", "txz", "tlz", "taz"
         )
-        private val RAW_FORMATS = setOf(ArchiveFormat.GZIP, ArchiveFormat.BZIP2, ArchiveFormat.LZMA, ArchiveFormat.Z)
+        private val RAW_FORMATS = setOf(
+            ArchiveFormat.GZIP, ArchiveFormat.BZIP2, ArchiveFormat.LZMA,
+            ArchiveFormat.XZ, ArchiveFormat.Z
+        )
         private val TAR_SUFFIXES = listOf(".tgz", ".tbz", ".tbz2", ".txz", ".tlz", ".taz", ".tar.gz", ".tar.gzip", ".tar.bz2", ".tar.bzip2", ".tar.xz", ".tar.lzma", ".tar.lzma86", ".tar.pmd", ".tar.z")
 
         fun open(file: Path, passwords: List<String>): SevenZipArchiveReader {

@@ -1,64 +1,95 @@
 {
-  "project": "https://github.com/omicronapps/7-Zip-JBinding-4Android",
-  "version": "Release-16.02-2.03",
-  "commit": "875f38aac441f41e6eb693177e020e97971dca97",
-  "artifact": "com.github.omicronapps:7-Zip-JBinding-4Android:Release-16.02-2.03",
-  "license_sources": [
-    {
-      "path": "sevenzipjbinding/src/main/cpp/7zip/DOC/License.txt",
-      "url": "https://raw.githubusercontent.com/omicronapps/7-Zip-JBinding-4Android/875f38aac441f41e6eb693177e020e97971dca97/sevenzipjbinding/src/main/cpp/7zip/DOC/License.txt",
-      "sha256": "1bfd7845bd3a047ccfe9f9bdcd475e171396464cb082fa350a9e551b80da8a61"
-    },
-    {
-      "path": "LICENSE",
-      "url": "https://raw.githubusercontent.com/omicronapps/7-Zip-JBinding-4Android/875f38aac441f41e6eb693177e020e97971dca97/LICENSE",
-      "sha256": "ea20d713b1fad2f86f1051a90611858f9dc2642f873e18e467578afe943fc05d"
-    }
-  ],
-  "aar": {
-    "sha256": "88b2860ddb0fe8eac45a8fc59222cee1bee1c48b58f050f155b0b78074a147d9",
-    "size": 4068013,
-    "libraries": [
+  "engine": {
+    "project": "https://github.com/ip7z/7zip",
+    "version": "26.04",
+    "version_date": "2026-10-05",
+    "latest_checked_on": "2026-10-16",
+    "latest_source": "https://www.7-zip.org/download.html",
+    "commit": "9128b80e3a471108678e2b3ec3c985861c8d7b0f",
+    "archive": "third_party/sevenzip/7z2604-src.tar.xz",
+    "url": "https://github.com/ip7z/7zip/releases/download/26.04/7z2604-src.tar.xz",
+    "sha256": "9691944c0fe0d01bb49373a704fb983fd33bc98b1738695179dfbf99ac1734f6",
+    "size": 1560440,
+    "modifications": []
+  },
+  "binding": {
+    "project": "https://github.com/borisbrodski/sevenzipjbinding",
+    "version": "26.03-2.4",
+    "branch": "7z-26.03",
+    "commit": "7486f0dcfc602cd65c0ad7e187bbf0cc005bf6af",
+    "url": "https://codeload.github.com/borisbrodski/sevenzipjbinding/tar.gz/7486f0dcfc602cd65c0ad7e187bbf0cc005bf6af",
+    "archive_sha256": "778e0d6d061d4d857c3bea9d28a2ae0e3b9ab1b7576c08fee02f8591098e6fae",
+    "archive_size": 74667695,
+    "java_sources": "third_party/sevenzip/jbinding-java",
+    "native_sources": "third_party/sevenzip/jbinding-cpp",
+    "modifications": [
       {
-        "path": "jni/arm64-v8a/lib7-Zip-JBinding.so",
-        "size": 2676496,
-        "sha256": "7023aa7a67074339e47d902bff909004dc49684cabd96d5753ccfd046c547c45",
-        "load_alignment": [
-          16384,
-          16384,
-          16384
-        ]
+        "path": "jbinding-cpp/JBindingTools.h",
+        "change": "Use the Android JNIEnv** AttachCurrentThread signature on Android."
       },
       {
-        "path": "jni/armeabi-v7a/lib7-Zip-JBinding.so",
-        "size": 1801136,
-        "sha256": "aaec70f378e86d919cabfc43f8184c705a02750a0e63c9e678c9466a4982b8ce",
-        "load_alignment": [
-          16384,
-          16384,
-          16384
-        ]
+        "path": "jbinding-cpp/JavaToCPP/JavaToCPPSevenZip.cpp",
+        "change": "Replace generated javah declarations with explicit extern C JNI exports; initialize application-class caches on the Java entry thread before native workers run."
       },
       {
-        "path": "jni/x86/lib7-Zip-JBinding.so",
-        "size": 2633496,
-        "sha256": "9637b506cee9197c82c86ebe73266d887abe552f3f403f7ca7d6a83c38087492",
-        "load_alignment": [
-          16384,
-          16384,
-          16384
-        ]
+        "path": "jbinding-cpp/JavaToCPP/JavaToCPPInArchiveImpl.cpp",
+        "change": "Replace generated javah declarations with explicit extern C JNI exports."
       },
       {
-        "path": "jni/x86_64/lib7-Zip-JBinding.so",
-        "size": 2663640,
-        "sha256": "3b6dfaa278c0193bd1ed3efdf7bb8c2cb960f090b4c4a5ddbccce8daf1290eae",
-        "load_alignment": [
-          16384,
-          16384,
-          16384
-        ]
+        "path": "jbinding-cpp/JavaToCPP/JavaToCPPOutArchiveImpl.cpp",
+        "change": "Replace generated javah declarations with explicit extern C JNI exports; stop before UpdateItems if callback initialization fails."
+      },
+      {
+        "path": "jbinding-cpp/CPPToJava/CPPToJavaArchiveUpdateCallback.h",
+        "change": "Retain the output archive and IInStream class as global JNI references, resolve the class on the Java entry thread, check initialization, and release references in the inline constructor/destructor."
+      },
+      {
+        "path": "jbinding-cpp/CPPToJava/CPPToJavaArchiveUpdateCallback.cpp",
+        "change": "Initialize GetStream's output pointer and use the cached IInStream class instead of calling FindClass on a native worker thread."
+      },
+      {
+        "path": "jbinding-cpp/JavaStatInfos/JavaPackageSevenZip.h",
+        "change": "Correct the reportExtractResult JNI method signature to use the required object descriptor."
+      },
+      {
+        "path": "jbinding-cpp/JavaStaticInfo.h",
+        "change": "Check class-cache initialization and preserve Java lookup exceptions instead of continuing with invalid JNI identifiers."
       }
     ]
-  }
+  },
+  "build": {
+    "source_list": "third_party/sevenzip/sources.cmake",
+    "cmake": "third_party/sevenzip/CMakeLists.txt",
+    "library": "lib7-Zip-JBinding.so",
+    "property_adapter": "libarchive_jbinding.so",
+    "property_adapter_interface_version": 1,
+    "native_builder": "tools/build_archive_jbinding.py",
+    "native_verifier": "tools/verify_sevenzip_native.py",
+    "abis": [
+      "arm64-v8a",
+      "armeabi-v7a",
+      "x86",
+      "x86_64"
+    ],
+    "minimum_android_api": 23,
+    "elf_max_page_size": 16384,
+    "stl": "c++_static",
+    "virtual_destructor_in_iunknown": false,
+    "prebuilt_native_dependencies": []
+  },
+  "license_sources": [
+    {
+      "path": "DOC/License.txt",
+      "vendored_path": "third_party/sevenzip/licenses/7zip-License.txt",
+      "sha256": "9ac2b4a97ab5d523965534d8b2d5868e511b39096d51fff458ab72c38b80fccc",
+      "archive_url": "https://github.com/ip7z/7zip/releases/download/26.04/7z2604-src.tar.xz",
+      "note": "SHA-256 is for DOC/License.txt extracted from the official release archive, which preserves CRLF line endings."
+    },
+    {
+      "path": "COPYING",
+      "url": "https://raw.githubusercontent.com/borisbrodski/sevenzipjbinding/7486f0dcfc602cd65c0ad7e187bbf0cc005bf6af/COPYING",
+      "vendored_path": "third_party/sevenzip/licenses/COPYING",
+      "sha256": "ea20d713b1fad2f86f1051a90611858f9dc2642f873e18e467578afe943fc05d"
+    }
+  ]
 }

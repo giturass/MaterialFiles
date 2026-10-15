@@ -246,17 +246,17 @@
     </notice>
 
     <notice>
-        <name>7-Zip-JBinding-4Android 16.02-2.03</name>
-        <url>https://github.com/omicronapps/7-Zip-JBinding-4Android/tree/Release-16.02-2.03</url>
-        <copyright>Copyright Boris Brodski and the 7-Zip-JBinding-4Android contributors.</copyright>
+        <name>7-Zip-JBinding 26.03-2.4 (Android source build)</name>
+        <url>https://github.com/borisbrodski/sevenzipjbinding/tree/7486f0dcfc602cd65c0ad7e187bbf0cc005bf6af</url>
+        <copyright>Copyright Boris Brodski and the 7-Zip-JBinding contributors. Android integration by Material Files contributors.</copyright>
         <license>GNU Lesser General Public License 2.1</license>
     </notice>
 
     <notice>
-        <name>7-Zip 16.02 (including RAR decoder)</name>
+        <name>7-Zip 26.04 (including RAR decoder)</name>
         <url>https://www.7-zip.org/</url>
-        <copyright>Copyright 1999–2016 Igor Pavlov. RAR decompression includes code by Alexander Roshal. The unRAR sources may not be used to develop a RAR (WinRAR) compatible archiver.</copyright>
-        <license>LGPL 2.1 with unRAR restriction</license>
+        <copyright>Copyright 1999–2026 Igor Pavlov. RAR decompression includes code by Alexander Roshal. The unRAR sources may not be used to develop a RAR (WinRAR) compatible archiver. Zstandard and XXH64 include BSD-licensed code; see the full license.</copyright>
+        <license>7-Zip license (LGPL, BSD and unRAR restriction)</license>
     </notice>
 
     <notice>

@@ -23,7 +23,7 @@ Builds from this repository contain no usage tracking, advertising SDKs or autom
 - Material Design: Follows Material Design guidelines, with attention into details.
 - Breadcrumbs: Navigate in the filesystem with ease.
 - Root support: View and manage files with root access.
-- Archive support: 7-Zip-JBinding-4Android handles browsing, extraction and creation. See the [format matrix and verification](docs/7z.md). Full RAR support includes upstream's unRAR license restriction.
+- Archive support: official 7-Zip 26.04, built from source with JBinding, handles browsing, extraction and creation. See the [format matrix and verification](docs/7z.md). Full RAR support includes upstream's unRAR license restriction.
 - NAS support: View and manage files on FTP, SFTP, SMB and WebDAV servers.
 - Themes: Customizable UI colors, plus night mode with optional true black.
 - Linux-aware: Like [Nautilus](https://apps.gnome.org/Nautilus/), knows symbolic links, file permissions and SELinux context.

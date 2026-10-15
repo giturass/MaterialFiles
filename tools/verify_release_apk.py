@@ -8,10 +8,131 @@ import json
 import os
 from pathlib import Path
 import re
+import struct
 import subprocess
 import zipfile
 
 from verify_no_tracking import verify_no_tracking
+
+
+ENGINE_VERSION = "26.04"
+ENGINE_DATE = "2026-10-05"
+JBINDING_VERSION = "26.03-2.4"
+JBINDING_COMMIT = "7486f0dcfc602cd65c0ad7e187bbf0cc005bf6af"
+PROPERTY_INTERFACE_VERSION = 1
+PROPERTY_VERSION_SYMBOL = ("Java_me_zhanghai_android_files_provider_archive_archiver_"
+                           "SevenZipArchiveProperties_nativeGetInterfaceVersion")
+ENGINE_ABIS = {"arm64-v8a": (2, 183), "armeabi-v7a": (1, 40),
+               "x86": (1, 3), "x86_64": (2, 62)}
+
+
+def verify_native_library(data, abi, label, markers):
+    """Inspect a packaged ELF's architecture, load alignment and mapped version markers."""
+    expected_class, expected_machine = ENGINE_ABIS[abi]
+    if len(data) < 64 or data[:4] != b"\x7fELF" or data[4:7] != bytes((expected_class, 1, 1)):
+        raise RuntimeError("Invalid " + label + " ELF header for " + abi)
+    elf_type, machine = struct.unpack_from("<HH", data, 16)
+    if elf_type != 3 or machine != expected_machine:
+        raise RuntimeError("Packaged " + label + " has the wrong architecture for " + abi)
+    if expected_class == 2:
+        offset = struct.unpack_from("<Q", data, 32)[0]
+        entry_size, count = struct.unpack_from("<HH", data, 54)
+        entry_format = "<IIQQQQQQ"
+    else:
+        offset = struct.unpack_from("<I", data, 28)[0]
+        entry_size, count = struct.unpack_from("<HH", data, 42)
+        entry_format = "<IIIIIIII"
+    if not count or entry_size < struct.calcsize(entry_format) \
+            or offset + entry_size * count > len(data):
+        raise RuntimeError("Invalid " + label + " ELF program headers for " + abi)
+    segments = []
+    alignments = []
+    for index in range(count):
+        header = struct.unpack_from(entry_format, data, offset + index * entry_size)
+        if header[0] != 1:  # PT_LOAD
+            continue
+        if expected_class == 2:
+            _, _, start, address, _, length, _, alignment = header
+        else:
+            _, start, address, _, length, _, _, alignment = header
+        if start + length > len(data):
+            raise RuntimeError("Truncated " + label + " ELF load segment for " + abi)
+        if alignment < 16384 or alignment & (alignment - 1) \
+                or address % alignment != start % alignment:
+            raise RuntimeError("Packaged " + label + " does not support 16 KiB pages: " + abi)
+        segments.append(data[start:start + length])
+        alignments.append(alignment)
+    if not segments:
+        raise RuntimeError("Packaged " + label + " has no ELF load segments: " + abi)
+    # Search mapped bytes, so a version appearing only in debug information or
+    # an appended metadata document cannot pass the packaged-engine check.
+    for marker in markers:
+        encoded = marker.encode("ascii") + b"\0"
+        if not any(encoded in segment for segment in segments):
+            raise RuntimeError("Packaged " + label + " is missing " + repr(marker) + " for " + abi)
+    return {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data),
+            "load_alignment": alignments}
+
+
+def verify_engine_library(data, abi):
+    result = verify_native_library(data, abi, "7-Zip engine", (
+        ENGINE_VERSION, ENGINE_DATE,
+        "Java_net_sf_sevenzipjbinding_SevenZip_nativeGetVersionVersion",
+        "Java_net_sf_sevenzipjbinding_SevenZip_nativeGetVersionDate"))
+    result.update(version=ENGINE_VERSION, date=ENGINE_DATE,
+                  version_jni_symbols_and_load_strings_checked=True)
+    return result
+
+
+def exports_function(data, name):
+    """Check the dynamic symbol definition, not an undefined import or a string literal."""
+    is_64 = data[4] == 2
+    offset = struct.unpack_from("<Q" if is_64 else "<I", data, 40 if is_64 else 32)[0]
+    entry_size, count = struct.unpack_from("<HH", data, 58 if is_64 else 46)
+    section_format = "<IIQQQQIIQQ" if is_64 else "<IIIIIIIIII"
+    symbol_format = "<IBBHQQ" if is_64 else "<IIIBBH"
+    if not count or entry_size < struct.calcsize(section_format) \
+            or offset + entry_size * count > len(data):
+        raise RuntimeError("Invalid ELF section headers for JNI export verification")
+    sections = [struct.unpack_from(section_format, data, offset + index * entry_size)
+                for index in range(count)]
+    for section in sections:
+        if section[1] != 11:  # SHT_DYNSYM
+            continue
+        start, size, strings_index, width = section[4], section[5], section[6], section[9]
+        if width < struct.calcsize(symbol_format) or size % width \
+                or start + size > len(data) or strings_index >= count:
+            raise RuntimeError("Invalid ELF dynamic symbol table")
+        strings_header = sections[strings_index]
+        strings_start, strings_size = strings_header[4], strings_header[5]
+        if strings_header[1] != 3 or strings_start + strings_size > len(data):
+            raise RuntimeError("Invalid ELF dynamic string table")
+        strings = data[strings_start:strings_start + strings_size]
+        for position in range(start, start + size, width):
+            symbol = struct.unpack_from(symbol_format, data, position)
+            name_offset = symbol[0]
+            info, visibility, definition = symbol[1:4] if is_64 else symbol[3:6]
+            if info >> 4 not in (1, 2) or info & 15 != 2 \
+                    or visibility & 3 not in (0, 3) or definition == 0:
+                continue
+            if name_offset >= len(strings):
+                raise RuntimeError("Invalid ELF dynamic symbol name")
+            end = strings.find(b"\0", name_offset)
+            if end < 0:
+                raise RuntimeError("Unterminated ELF dynamic symbol name")
+            if strings[name_offset:end] == name.encode("ascii"):
+                return True
+    return False
+
+
+def verify_property_library(data, abi):
+    result = verify_native_library(data, abi, "JBinding property bridge", (PROPERTY_VERSION_SYMBOL,))
+    if not exports_function(data, PROPERTY_VERSION_SYMBOL):
+        raise RuntimeError("JBinding property bridge does not export its interface version for " + abi)
+    # The APK runtime test also calls this entry point and checks the returned version.
+    result.update(required_interface_version=PROPERTY_INTERFACE_VERSION,
+                  interface_version_jni_export_checked=True)
+    return result
 
 
 def run(*command):
@@ -58,14 +179,24 @@ def main():
         names = set(archive.namelist())
         abis = sorted({name.split("/")[1] for name in names
                        if name.startswith("lib/") and name.endswith(".so")})
-        if "arm64-v8a" not in abis:
-            raise RuntimeError("The APK is missing ARM64 native libraries")
+        if set(abis) != set(ENGINE_ABIS):
+            raise RuntimeError("The release APK must contain all four supported native ABIs: "
+                               + ", ".join(sorted(ENGINE_ABIS)))
+        engine_libraries = {}
+        property_libraries = {}
         for abi in abis:
-            if f"lib/{abi}/lib7-Zip-JBinding.so" not in names:
+            engine_name = f"lib/{abi}/lib7-Zip-JBinding.so"
+            if engine_name not in names:
                 raise RuntimeError("The APK is missing the JBinding archive engine for " + abi)
-            if f"lib/{abi}/libarchive_jbinding.so" not in names:
+            engine_libraries[abi] = verify_engine_library(archive.read(engine_name), abi)
+            property_name = f"lib/{abi}/libarchive_jbinding.so"
+            if property_name not in names:
                 raise RuntimeError("The APK is missing the JBinding archive property bridge for " + abi)
-        if any(name.rsplit("/", 1)[-1] in ("libsevenzip.so", "libarchive-jni.so")
+            property_libraries[abi] = verify_property_library(archive.read(property_name), abi)
+        if not any((JBINDING_VERSION + "\0").encode("ascii") in archive.read(name)
+                   for name in names if re.fullmatch(r"classes(?:\d+)?\.dex", name)):
+            raise RuntimeError("The APK is missing the pinned JBinding " + JBINDING_VERSION + " bridge")
+        if any(name.rsplit("/", 1)[-1] in ("libsevenzip.so", "libarchive-jni.so", "libarchive.so")
                for name in names):
             raise RuntimeError("The APK still includes a replaced archive engine")
         sources = sorted(path for path in assets.rglob("*") if path.is_file())
@@ -92,10 +223,15 @@ def main():
         "application_id": package.group(1),
         "debuggable": False,
         "abis": abis,
-        "archive_engine": "7-Zip-JBinding-4Android:Release-16.02-2.03",
+        "archive_engine": "official 7-Zip " + ENGINE_VERSION,
         "archive_engine_abis_checked": abis,
+        "archive_engine_libraries": engine_libraries,
+        "archive_binding": "borisbrodski/sevenzipjbinding:" + JBINDING_VERSION,
+        "archive_binding_source_commit": JBINDING_COMMIT,
+        "archive_binding_dex_version_checked": True,
         "archive_property_bridge": "libarchive_jbinding.so",
         "archive_property_bridge_abis_checked": abis,
+        "archive_property_bridge_libraries": property_libraries,
         "sora_activity_registered": True,
         "old_editor_activity_removed": True,
         "source_assets_verified": len(sources),

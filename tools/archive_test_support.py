@@ -112,6 +112,109 @@ def reference_members(seven_zip, archive, password=None, reference_format=None, 
     return items
 
 
+def pax_record(values):
+    records = []
+    for name, value in values.items():
+        record = (" " + name + "=" + value + "\n").encode("utf-8")
+        length = len(record) + 1
+        while len(str(length)) + len(record) != length:
+            length = len(str(length)) + len(record)
+        records.append(str(length).encode("ascii") + record)
+    return b"".join(records)
+
+
+def add_tar_data(output, name, data, type_flag=tarfile.REGTYPE):
+    entry = tarfile.TarInfo(name)
+    entry.type = type_flag
+    entry.size = len(data)
+    output.addfile(entry, io.BytesIO(data))
+
+
+def modern_reader_fixtures(seven_zip, source, payload, root):
+    """Exercise codecs and TAR metadata that the old 16.02 engine could not read correctly."""
+    archives = []
+    zstandard = source / "zip-zstandard.zip"
+    fixture = (root / "tests/fixtures/zip-zstandard.zip").read_bytes()
+    if hashlib.sha256(fixture).hexdigest() != \
+            "605fdf1af683ce52b51d612c1ffb33e4bf1101490589e3876f0398d10720c909":
+        raise AssertionError("Pinned ZIP Zstandard fixture checksum mismatch")
+    zstandard.write_bytes(fixture)
+    # 7-Zip 26.04 decodes ZIP Zstandard but has no encoder. This pinned fixture
+    # comes from Python/libzstd; keeping the bytes permits Python < 3.14 test hosts.
+    with zipfile.ZipFile(zstandard) as archive:
+        if {entry.compress_type for entry in archive.infolist()} != {93}:
+            raise AssertionError("The modern ZIP fixture must use Zstandard method 93")
+    members = reference_members(seven_zip, zstandard)
+    expected = {"文档/文件 🔐.txt": hashlib.sha256(payload).hexdigest(),
+                "empty": hashlib.sha256(b"").hexdigest()}
+    if {member["name"]: member["sha256"] for member in members} != expected:
+        raise AssertionError("Independent ZIP Zstandard decoding differs from the known source")
+    archives.append({"archive": zstandard.relative_to(source.parent).as_posix(),
+                     "format": "ZIP_ZSTANDARD", "members": members})
+
+    # Deliberately disagree with the legacy TAR size field. The physical payload
+    # follows the valid PAX size override, which a current reader must honor.
+    def raw_record(name, data, type_flag=tarfile.REGTYPE, declared_size=None):
+        entry = tarfile.TarInfo(name)
+        entry.type = type_flag
+        entry.size = len(data) if declared_size is None else declared_size
+        return entry.tobuf(format=tarfile.USTAR_FORMAT) + data + b"\0" * (-len(data) % 512)
+
+    size_override = source / "pax-size-override.tar"
+    size_override.write_bytes(
+        raw_record("size-metadata", pax_record({"size": str(len(payload))}), tarfile.XHDTYPE)
+        + raw_record("payload.bin", payload, declared_size=0) + b"\0" * 1024)
+    members = reference_members(seven_zip, size_override)
+    if len(members) != 1 or members[0]["name"] != "payload.bin" \
+            or members[0]["sha256"] != hashlib.sha256(payload).hexdigest():
+        raise AssertionError("Independent TAR decoding ignored a valid PAX size override")
+    archives.append({"archive": size_override.relative_to(source.parent).as_posix(),
+                     "format": "TAR_PAX_SIZE", "members": members, "check_size": True})
+
+    for filename, metadata in (("pax-sparse.tar", {"GNU.sparse.map": "0,4", "GNU.sparse.size": "8"}),
+                               ("pax-non-utf8.tar", {"hdrcharset": "BINARY", "path": "payload.txt"})):
+        with tarfile.open(source / filename, "w", format=tarfile.USTAR_FORMAT) as output:
+            add_tar_data(output, "arbitrary-pax-metadata", pax_record(metadata), tarfile.XHDTYPE)
+            add_tar_data(output, "payload.txt", b"data")
+
+    long_name = "文档/" + "路径" * 32 + "/文件 🔐.txt"
+    long_records = source / "gnu-long-records.tar"
+    with tarfile.open(long_records, "w", format=tarfile.USTAR_FORMAT) as output:
+        add_tar_data(output, "arbitrary-long-name", (long_name + "\0").encode(), tarfile.GNUTYPE_LONGNAME)
+        add_tar_data(output, "legacy-name.txt", payload)
+        add_tar_data(output, "arbitrary-long-link", (long_name + "\0").encode(), tarfile.GNUTYPE_LONGLINK)
+        entry = tarfile.TarInfo("link")
+        entry.type = tarfile.SYMTYPE
+        entry.linkname = "legacy-name.txt"
+        output.addfile(entry)
+    members = reference_members(seven_zip, long_records)
+    by_name = {member["name"]: member for member in members}
+    if set(by_name) != {long_name, "link"} \
+            or by_name[long_name]["sha256"] != hashlib.sha256(payload).hexdigest() \
+            or by_name["link"].get("symlink") != long_name:
+        raise AssertionError("Independent TAR decoding lost GNU long-name or long-link metadata")
+    archives.append({"archive": long_records.relative_to(source.parent).as_posix(),
+                     "format": "TAR_GNU_LONG_RECORDS", "members": members})
+
+    with tarfile.open(source / "unsafe-paths.tar", "w", format=tarfile.USTAR_FORMAT) as output:
+        for name in ("../escape.txt", "/absolute.txt", "C:/drive.txt"):
+            add_tar_data(output, "arbitrary-long-name", (name + "\0").encode(), tarfile.GNUTYPE_LONGNAME)
+            add_tar_data(output, "legacy-name.txt", b"unsafe member path")
+        for name in ("../pax-escape.txt", "/pax-absolute.txt", "D:/pax-drive.txt"):
+            add_tar_data(output, "arbitrary-pax-metadata", pax_record({"path": name}), tarfile.XHDTYPE)
+            add_tar_data(output, "legacy-name.txt", b"unsafe member path")
+        for name in ("safe\\backslash.txt", "inside/../normalized.txt", "ok.txt",
+                     "collision", "collision/child.txt"):
+            add_tar_data(output, name, b"safe fixture content")
+    with tarfile.open(source / "gnu-hardlink-unsafe.tar", "w", format=tarfile.USTAR_FORMAT) as output:
+        add_tar_data(output, "arbitrary-long-link", b"../escape\0", tarfile.GNUTYPE_LONGLINK)
+        entry = tarfile.TarInfo("alias")
+        entry.type = tarfile.LNKTYPE
+        entry.linkname = "legacy-target"
+        output.addfile(entry)
+    return archives
+
+
 def reader_fixtures(seven_zip, directory, downloads, root, official):
     """Pin upstream corpus bytes and compare sample entries against a separate official 7zz."""
     directory.mkdir()
@@ -210,22 +313,6 @@ def reader_fixtures(seven_zip, directory, downloads, root, official):
     archives.append({"archive": lookalike.relative_to(directory).as_posix(), "format": "TAR_PAX_LOOKALIKE",
                      "members": reference_members(seven_zip, lookalike)})
 
-    def pax_record(values):
-        records = []
-        for name, value in values.items():
-            record = (" " + name + "=" + value + "\n").encode("utf-8")
-            length = len(record) + 1
-            while len(str(length)) + len(record) != length:
-                length = len(str(length)) + len(record)
-            records.append(str(length).encode("ascii") + record)
-        return b"".join(records)
-
-    def add_tar_data(output, name, data, type_flag=tarfile.REGTYPE):
-        entry = tarfile.TarInfo(name)
-        entry.type = type_flag
-        entry.size = len(data)
-        output.addfile(entry, io.BytesIO(data))
-
     scoped = source / "pax-scopes.tar"
     scoped_name = "文档/PAX 文件.txt"
     with tarfile.open(scoped, "w", format=tarfile.USTAR_FORMAT) as output:
@@ -293,6 +380,7 @@ def reader_fixtures(seven_zip, directory, downloads, root, official):
         output.writestr("empty", b"")
     archives.append({"archive": zip_path.relative_to(directory).as_posix(), "format": "ZIP",
                      "members": reference_members(seven_zip, zip_path)})
+    archives.extend(modern_reader_fixtures(seven_zip, source, payload, root))
     seven_z = source / "official.7z"
     shutil.copyfile(official / "official-headers.7z", seven_z)
     archives.append({"archive": seven_z.relative_to(directory).as_posix(), "format": "SEVEN_Z",
@@ -347,6 +435,7 @@ class ApkHarness:
     def __init__(self, args, parser, root, need_fixtures=True):
         self.args = args
         self.root = root
+        self.engine_version_verified = False
         for name in ("apk", "android_jar", "app_process"):
             if not getattr(args, name).is_file():
                 parser.error("Missing --" + name.replace("_", "-") + ": " + str(getattr(args, name)))
@@ -408,6 +497,9 @@ class ApkHarness:
 
     def run(self, main_class, arguments, completion, timeout=240,
             extra_sources=()):
+        if main_class != "ArchiveEngineVersionTest" and not self.engine_version_verified:
+            self.run("ArchiveEngineVersionTest", [],
+                     r"PASS: APK JNI engine and JBinding versions match the pinned sources")
         work = self.work / main_class
         work.mkdir()
         classes = work / "classes"
@@ -446,4 +538,6 @@ class ApkHarness:
         if not re.search(completion, output):
             raise RuntimeError("Android runtime did not report test completion; see "
                                + str(work / "results.log"))
+        if main_class == "ArchiveEngineVersionTest":
+            self.engine_version_verified = True
         return output

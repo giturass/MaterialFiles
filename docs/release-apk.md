@@ -40,7 +40,7 @@ ARM64 原生库、全部语言资源及固定校验和、JCodings 运行时表�
 
 校验也会拒绝 Firebase/Crashlytics/Google Play Services 的 Manifest、配置资源和
 实际 DEX 类；AndroidX 照片选择器与 HTTP 库中的可选兼容性字符串不等于打包了这些 SDK。
-每个包含原生代码的 ABI 都必须包含 `lib7-Zip-JBinding.so` 和用于创建属性与 XZ 适配的
+每个包含原生代码的 ABI 都必须包含 `lib7-Zip-JBinding.so` 和用于创建属性设置的
 `libarchive_jbinding.so`，并且不允许遗留的
 `libsevenzip.so` 或 `libarchive-jni.so`。
 

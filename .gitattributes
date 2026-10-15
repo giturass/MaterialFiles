@@ -2,8 +2,10 @@
 app/src/main/assets/sora/** -text
 app/src/main/res/raw/license_epl_2.txt -text
 
-# Preserve the official 7-Zip bytes verified by SOURCE.json, including upstream whitespace.
-app/src/main/jni/7zip/** -text -whitespace
+# Preserve the pinned upstream JBinding sources and original official 7-Zip release archive.
+third_party/sevenzip/jbinding-*/** -text -whitespace
+third_party/sevenzip/licenses/** -text -whitespace
+third_party/sevenzip/7z2604-src.tar.xz -text
 
 # These upstream files intentionally retain their original whitespace/line endings.
 app/src/main/assets/sora/config/kotlin.json whitespace=-blank-at-eol

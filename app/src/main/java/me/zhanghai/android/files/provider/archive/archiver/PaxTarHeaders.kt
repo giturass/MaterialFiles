@@ -14,9 +14,9 @@ import java.nio.charset.CodingErrorAction
 import java.time.DateTimeException
 import java.time.Instant
 
-/** Reads only TAR headers; all archived payloads, including PAX records, use JBinding. */
+/** Supplements 7-Zip 26.04's TAR metadata; file contents are always extracted by JBinding. */
 internal object PaxTarHeaders {
-    data class Header(val typeFlag: Char, val size: Long)
+    data class Header(val typeFlag: Char, val size: Long, val properties: Map<String, String>)
 
     @Throws(IOException::class)
     fun read(channel: SeekableByteChannel, packedSizes: LongArray): List<Header> {
@@ -26,15 +26,17 @@ internal object PaxTarHeaders {
             val sourceSize = channel.size()
             val headers = ArrayList<Header>(packedSizes.size)
             var position = 0L
-            var longName = false
-            var longLink = false
+            val global = mutableMapOf<String, String>()
+            val local = mutableMapOf<String, String>()
+            var nativeLocal: Map<String, String> = emptyMap()
+            var extendedPending = false
             while (true) {
                 checkInterrupted()
                 val bytes = readBlock(channel, position, sourceSize)
                 position += BLOCK_SIZE
                 if (bytes.all { it == 0.toByte() }) {
-                    if (longName || longLink) {
-                        throw IOException("The GNU TAR extended header has no following entry")
+                    if (extendedPending) {
+                        throw IOException("The TAR extended header has no following entry")
                     }
                     if (headers.size != packedSizes.size) {
                         throw IOException("The TAR headers do not match the native entry count")
@@ -45,19 +47,47 @@ internal object PaxTarHeaders {
                 val typeFlag = (bytes[156].toInt() and 0xFF).toChar()
                 val size = readSize(bytes, 124)
                 val alignedSize = alignSize(size)
-                // The bundled handler folds only these valid GNU records into the next
-                // native item. Other L/K records remain ordinary native items.
-                if ((typeFlag == 'L' && !longName || typeFlag == 'K' && !longLink)
-                    && size <= MAX_GNU_LONG_NAME_SIZE && isGnuLongName(bytes, typeFlag)) {
+                // Since 22.00, TarIn.cpp consumes every GNU/PAX extension record by type,
+                // regardless of its name. None of these records has a native item index.
+                if (typeFlag == 'L' || typeFlag == 'K') {
                     position = advance(position, alignedSize, sourceSize)
-                    if (typeFlag == 'L') longName = true else longLink = true
+                    extendedPending = true
+                    continue
+                }
+                if (typeFlag == 'g' || typeFlag == 'x' || typeFlag == 'X') {
+                    if (size == 0L || size > MAX_PAX_HEADER_SIZE) {
+                        throw IOException("Invalid or oversized PAX extended header")
+                    }
+                    val values = parse(readBytes(channel, position, size.toInt(), sourceSize))
+                        .filterKeys { it in PAX_METADATA_KEYS || it.startsWith("GNU.sparse.") }
+                    if (typeFlag == 'g') {
+                        // Empty values also suppress the underlying ustar field; retain them
+                        // so an earlier global value or the legacy field cannot reappear.
+                        global.putAll(values)
+                    } else {
+                        local.putAll(values)
+                        // 26.04 keeps the last x/X buffer when deciding where file data ends.
+                        nativeLocal = values
+                        extendedPending = true
+                    }
+                    position = advance(position, alignedSize, sourceSize)
                     continue
                 }
                 if (typeFlag == '1' && size != 0L) {
                     throw IOException("The bundled 7-Zip cannot extract TAR hard links with data")
                 }
+                val nativeSize = nativeLocal["size"]?.let(::fileSize)
+                // Native TAR reports this as a warning and can otherwise expose padding as
+                // content. A zero legacy size is the supported PAX size-override convention.
+                if (nativeSize != null && size != 0L && nativeSize != size) {
+                    throw IOException("The PAX size conflicts with the TAR entry header")
+                }
+                if (typeFlag == '1' && nativeSize != null && nativeSize != 0L) {
+                    throw IOException("The bundled 7-Zip cannot extract TAR hard links with data")
+                }
+                val nativePackedSize = nativeSize ?: if (typeFlag == '1' || typeFlag == '5') 0L else size
                 if (headers.size >= packedSizes.size
-                    || packedSizes[headers.size] != alignedSize) {
+                    || packedSizes[headers.size] != alignSize(nativePackedSize)) {
                     throw IOException("The TAR header size does not match its native entry")
                 }
                 if (typeFlag == 'S') {
@@ -69,10 +99,12 @@ internal object PaxTarHeaders {
                         extended = sparseExtensionFlag(sparse[504])
                     }
                 }
-                position = advance(position, alignedSize, sourceSize)
-                headers += Header(typeFlag, size)
-                longName = false
-                longLink = false
+                position = advance(position, alignSize(nativePackedSize), sourceSize)
+                val effectiveSize = nativeSize ?: if (typeFlag == '1') 0L else size
+                headers += Header(typeFlag, effectiveSize, global + local)
+                local.clear()
+                nativeLocal = emptyMap()
+                extendedPending = false
             }
         } catch (e: Throwable) {
             failure = e
@@ -147,13 +179,23 @@ internal object PaxTarHeaders {
         }
     }
 
-    private fun readBlock(channel: SeekableByteChannel, position: Long, size: Long): ByteArray {
+    @Throws(IOException::class)
+    fun fileSize(value: String): Long = value
+        .takeIf { it.isNotEmpty() && it.all { digit -> digit in '0'..'9' } }
+        ?.toLongOrNull() ?: throw IOException("Invalid PAX file size")
+
+    private fun readBlock(channel: SeekableByteChannel, position: Long, size: Long): ByteArray =
+        readBytes(channel, position, BLOCK_SIZE.toInt(), size)
+
+    private fun readBytes(
+        channel: SeekableByteChannel, position: Long, length: Int, size: Long
+    ): ByteArray {
         checkInterrupted()
-        if (position < 0 || size < BLOCK_SIZE || position > size - BLOCK_SIZE) {
+        if (position < 0 || length < 0 || size < length || position > size - length) {
             throw IOException("The TAR header is truncated")
         }
         channel.position(position)
-        val bytes = ByteArray(BLOCK_SIZE.toInt())
+        val bytes = ByteArray(length)
         val buffer = ByteBuffer.wrap(bytes)
         while (buffer.hasRemaining()) {
             checkInterrupted()
@@ -234,24 +276,6 @@ internal object PaxTarHeaders {
         }
     }
 
-    private fun isGnuLongName(bytes: ByteArray, typeFlag: Char): Boolean {
-        var name = readString(bytes, 0, 100)
-        if (typeFlag != 'L' && USTAR_MAGIC.indices.all { bytes[257 + it] == USTAR_MAGIC[it] }) {
-            val prefix = readString(bytes, 345, 155)
-            if (prefix.isNotEmpty()) name = "$prefix/$name"
-        }
-        return name == "././@LongLink" || name == "@LongLink"
-    }
-
-    private fun readString(bytes: ByteArray, offset: Int, length: Int): String {
-        var end = offset
-        while (end < offset + length && bytes[end] != 0.toByte()) {
-            checkInterrupted()
-            ++end
-        }
-        return String(bytes, offset, end - offset, Charsets.ISO_8859_1)
-    }
-
     private fun sparseExtensionFlag(value: Byte): Boolean = when (value.toInt()) {
         0 -> false
         1 -> true
@@ -272,12 +296,15 @@ internal object PaxTarHeaders {
     }
 
     private const val BLOCK_SIZE = 512L
-    private const val MAX_GNU_LONG_NAME_SIZE = 16L * 1024
+    private const val MAX_PAX_HEADER_SIZE = 1024 * 1024
+    private val PAX_METADATA_KEYS = setOf(
+        "path", "linkpath", "size", "mtime", "atime", "ctime", "hdrcharset",
+        "SCHILY.realsize", "SCHILY.filetype"
+    )
     private const val SPACE: Byte = 0x20
     private const val NEWLINE: Byte = 0x0A
     private const val EQUALS: Byte = 0x3D
     private val DIGIT_BYTES = '0'.code.toByte()..'9'.code.toByte()
     private val OCTAL_BYTES = '0'.code.toByte()..'7'.code.toByte()
-    private val USTAR_MAGIC = "ustar".toByteArray(Charsets.US_ASCII)
     private val DECIMAL_SECONDS = Regex("-?(?:[0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)")
 }
