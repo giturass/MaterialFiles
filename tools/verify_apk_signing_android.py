@@ -9,6 +9,11 @@ actual APK's production DEX, including R8 builds without mapping files. That mod
 compiles only a reflection harness and needs no unminified classes or resource IDs.
 Reports distinguish these modes explicitly. None tests UI behavior, installation,
 startup, cloning, or an Android API 23 device.
+The packaged-APK run also exercises private key creation, alias reading, signing
+and Linux/root routing. --private-keys-only runs just this regression against any
+specified unminified APK, without requiring current compiled application classes.
+The isolated app_process context cannot test MediaProvider scans or the device's
+physical CE/DE lifecycle; reports record the exact media-scanner service limitation.
 
 Build the debug APK first and prepare the public fixtures/dependencies with
 tools/verify_apk_signing.py. All generated keys are disposable public test data.
@@ -20,6 +25,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import shutil
 import struct
@@ -87,6 +93,105 @@ def add_runtime_resources(dex, jars):
                         continue
                     output.writestr(name, data)
                     existing.add(name)
+
+
+def run_private_keys(args, work, commands, runtime_env, runtime_apk, report):
+    native = work / "private-key-native"
+    native.mkdir()
+    abi = {"aarch64": "arm64-v8a", "armv7l": "armeabi-v7a",
+           "x86_64": "x86_64", "i686": "x86"}.get(platform.machine())
+    if not abi:
+        raise RuntimeError("Unsupported Android CPU: " + platform.machine())
+    with zipfile.ZipFile(runtime_apk) as archive:
+        for name in archive.namelist():
+            if name.startswith(f"lib/{abi}/") and name.endswith(".so"):
+                (native / Path(name).name).write_bytes(archive.read(name))
+    for name in ("libsyscall.so", "libhiddenapi.so"):
+        if not (native / name).is_file():
+            raise RuntimeError(f"The APK lacks {name} for {abi}")
+    report["native_libraries"] = {path.name: sha256(path) for path in sorted(native.glob("*.so"))}
+    failure = None
+    try:
+        output = run([args.app_process, "-Xcheck:jni", f"-Djava.library.path={native}",
+                      "/system/bin", "ApkPrivateKeyAndroidTest", work / "private-keys",
+                      args.fixtures.resolve(), runtime_apk],
+                     work, "art-private-keys", commands, runtime_env)
+        print(output, end="", flush=True)
+    except RuntimeError as error:
+        failure = error
+        output = (work / "art-private-keys.log").read_text(encoding="utf-8")
+    cases = [json.loads(line.removeprefix("PRIVATE_KEY_CASE ")) for line in output.splitlines()
+             if line.startswith("PRIVATE_KEY_CASE ")]
+    result = {"passed": sum(case["passed"] for case in cases), "checks": len(cases), "cases": cases}
+    result["scope"] = "Actual APK private-key operations, selection ViewModel and Linux/root routing; isolated app metadata/preferences"
+    result["limitations"] = {
+        "not_tested": ["installed-app UI", "physical CE/DE lifecycle", "privileged service", "media scanning"],
+        "media_scanner_unregistered_process_exceptions": output.count(
+            "ART_SERVICE_LIMITATION media_scanner=unregistered_app_process"),
+        "diagnostics": "art-private-keys.log",
+    }
+    report.setdefault("suites", {})["private_keys"] = result
+    android = re.search(r"ANDROID_RUNTIME api=(\d+) release=(\S+) vm=(\S+)", output)
+    if android:
+        report.update(android_api=int(android[1]), android_release=android[2], vm=android[3])
+    if failure:
+        raise failure
+    summary = re.search(r"ART private key operations: (\d+)/(\d+) checks passed", output)
+    if not android or not summary or summary[1] != "30" or summary[2] != "30" \
+            or len(cases) != 30 or not all(case["passed"] for case in cases):
+        raise RuntimeError("ART did not report all thirty successful private-key regression checks")
+
+
+def run_private_keys_only(args, java, javac):
+    args.work_dir.mkdir(parents=True, exist_ok=True)
+    work = Path(tempfile.mkdtemp(prefix="private-keys-", dir=args.work_dir)).resolve()
+    print("ART validation mode: packaged APK private-key operations", flush=True)
+    print("ART validation logs:", work, flush=True)
+    test = ROOT / "tests/ApkPrivateKeyAndroidTest.java"
+    report = {
+        "mode": "packaged_apk_private_key_operations",
+        "scope": "Actual APK operations, Linux JNI and root routing with isolated app metadata/preferences; "
+                 "no UI, installation, media scanning, privileged service, or physical CE/DE lifecycle test",
+        "tests": {str(test.relative_to(ROOT)): sha256(test)},
+        "tools": {str(Path(__file__).resolve().relative_to(ROOT)): sha256(Path(__file__).resolve())},
+        "fixtures": {name: sha256(args.fixtures / name) for name in FIXTURES},
+        "status": "running",
+    }
+    commands = []
+    compile_env = os.environ.copy()
+    compile_env["TMPDIR"] = str(work)
+    try:
+        runtime_apk = work / "materialfiles-under-test.apk"
+        shutil.copyfile(args.apk, runtime_apk)
+        runtime_apk.chmod(0o400)
+        report.update(apk_source=str(args.apk.resolve()), apk_sha256=sha256(runtime_apk),
+                      apk_bytes=runtime_apk.stat().st_size)
+        classes = work / "test-classes"
+        classes.mkdir()
+        run([javac, f"-J-Djava.io.tmpdir={work}", "--release", "17", "-encoding", "UTF-8",
+             "-cp", args.android_jar, "-d", classes, test], work, "javac-harness", commands, compile_env)
+        harness = work / "private-key-tests.jar"
+        classes_jar(harness, classes)
+        dex = work / "private-key-test-dex.jar"
+        run([java, f"-Djava.io.tmpdir={work}", "-Xmx768m", "-cp", args.d8_jar,
+             "com.android.tools.r8.D8", "--min-api", "30", "--lib", args.android_jar,
+             "--output", dex, harness], work, "d8", commands, compile_env)
+        dex.chmod(0o400)
+        runtime_env = os.environ.copy()
+        runtime_env.pop("LD_LIBRARY_PATH", None)
+        runtime_env.pop("LD_PRELOAD", None)
+        runtime_env["TMPDIR"] = str(work)
+        runtime_env["CLASSPATH"] = os.pathsep.join((str(runtime_apk), str(dex)))
+        report["runtime_classpath"] = runtime_env["CLASSPATH"]
+        run_private_keys(args, work, commands, runtime_env, runtime_apk, report)
+        result = report["suites"]["private_keys"]
+        report.update(status="passed", passed=result["passed"], checks=result["checks"])
+    except BaseException as error:
+        report.update(status="failed", error=str(error))
+        raise
+    finally:
+        (work / "report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+        print("ART report:", work / "report.json", flush=True)
 
 
 def run_minified(args, java, javac):
@@ -214,6 +319,8 @@ def main():
                       help="Explicitly test source DEX instead of the built APK (preliminary)")
     mode.add_argument("--minified", action="store_true",
                       help="Verify fixtures using the actual APK's minified production code via reflection")
+    mode.add_argument("--private-keys-only", action="store_true",
+                      help="Run private-key operations/root routing against an unminified APK via reflection")
     args = parser.parse_args()
     if args.apk is None:
         if args.minified:
@@ -232,7 +339,7 @@ def main():
         args.d8_jar = args.android_jar.resolve().parents[2] / "build-tools" / version / "lib/d8.jar"
     if not args.d8_jar.is_file():
         parser.error("D8 was not found; specify --d8-jar")
-    jars = [] if args.minified else [args.dependencies / name for name in SHA256]
+    jars = [] if args.minified or args.private_keys_only else [args.dependencies / name for name in SHA256]
     for jar in jars:
         if not jar.is_file() or sha256(jar) != SHA256[jar.name]:
             parser.error(f"Missing or incorrect pinned dependency: {jar}; run verify_apk_signing.py")
@@ -243,6 +350,13 @@ def main():
             parser.error("AOSP fixture checksum mismatch: " + name)
     if args.jks and not args.jks.is_file():
         parser.error("--jks must point to the disposable host test fixture")
+    if args.private_keys_only:
+        if not args.apk.is_file():
+            parser.error("--apk must point to an existing unminified APK")
+        if args.jks:
+            parser.error("--jks is not used by --private-keys-only")
+        run_private_keys_only(args, java, javac)
+        return
     if args.minified:
         if not args.apk.is_file():
             parser.error("--apk must point to an existing APK")
@@ -258,8 +372,10 @@ def main():
     resource_ids = {}
     if not args.standalone:
         tests.append(ROOT / "tests/ApkOutputRecoveryAndroidTest.java")
+        tests.append(ROOT / "tests/ApkPrivateKeyAndroidTest.java")
         runtime_sources += [ROOT / "app/src/main/java/me/zhanghai/android/files/apk" / filename
                             for filename in ("ApkOperations.kt", "ApkOperationModels.kt")]
+        runtime_sources += [ROOT / "app/src/main/java/me/zhanghai/android/files/provider/linux/LinuxPath.kt"]
         if not args.apk.is_file():
             parser.error("Build :app:assembleDebug first, or explicitly choose --standalone")
         for source in sources:
@@ -270,7 +386,7 @@ def main():
                 parser.error("APK/core classes are missing or stale; build :app:assembleDebug first: "
                              + str(source))
         if any(args.apk.stat().st_mtime < source.stat().st_mtime for source in runtime_sources):
-            parser.error("The APK predates its signing/output-recovery sources; rebuild it first")
+            parser.error("The APK predates its signing/output-recovery/provider sources; rebuild it first")
         if not args.resource_symbols.is_file():
             parser.error("Missing runtime resource symbols; build :app:assembleDebug first")
         symbols = args.resource_symbols.read_text(encoding="utf-8")
@@ -287,7 +403,9 @@ def main():
     commands = []
     report = {
         "mode": "source_dex" if args.standalone else "packaged_apk",
-        "scope": "Android ART core signing/verification; no installation, startup, UI, cloning, or API 23 device test",
+        "scope": "Android ART core signing/verification"
+                 + ("" if args.standalone else " and private-key operations/Linux root routing")
+                 + "; no installation, startup, UI, cloning, media scanning or API 23 device test",
         "dependencies": {jar.name: sha256(jar) for jar in jars},
         "sources": {str(source.relative_to(ROOT)): sha256(source) for source in runtime_sources},
         "tests": {str(source.relative_to(ROOT)): sha256(source) for source in tests},
@@ -370,6 +488,7 @@ def main():
             if not recovered or recovered[1] != recovered[2]:
                 raise RuntimeError("ART output recovery did not report complete success")
             suites["output_recovery"] = {"passed": int(recovered[1]), "checks": int(recovered[2])}
+            run_private_keys(args, work, commands, runtime_env, runtime_apk, report)
         report.update(status="passed", passed=sum(value["passed"] for value in suites.values()),
                       checks=sum(value["checks"] for value in suites.values()))
     except BaseException as error:

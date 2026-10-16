@@ -7,7 +7,30 @@ import me.zhanghai.android.files.apk.core.ApkVerificationService
 
 data class ApkProgress(val stage: String, val completed: Long = 0, val total: Long = 0)
 
-data class ApkPrivateKey(val path: Path, val lastModified: Long)
+data class ApkPrivateKey(val path: Path, val lastModified: Long, val size: Long = 0) {
+    val displayName: String
+        get() = path.fileName.toString().replace(STORAGE_SUFFIX, "")
+
+    val format: String
+        get() = when (path.fileName.toString().substringAfterLast('.').lowercase()) {
+            "jks" -> "JKS"
+            "p12", "pfx", "pkcs12" -> "PKCS12"
+            else -> "AUTO"
+        }
+
+    private companion object {
+        val STORAGE_SUFFIX = Regex(
+            "-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?=\\.[^.]+$)"
+        )
+    }
+}
+
+data class ApkImportedKey @JvmOverloads constructor(
+    val key: ApkPrivateKey, val aliases: List<String>, val format: String, val reused: Boolean = false
+)
+
+/** A password-free snapshot. The ID binds the original entry name to its complete content. */
+data class ApkKeyImportEntry(val id: String, val name: String, val format: String, val size: Long)
 
 data class ApkInspection(
     val packageName: String,

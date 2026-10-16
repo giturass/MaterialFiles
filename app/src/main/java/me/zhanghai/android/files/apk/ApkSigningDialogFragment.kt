@@ -5,19 +5,15 @@
 
 package me.zhanghai.android.files.apk
 
-import android.app.Activity
 import android.app.Dialog
-import android.content.Intent
 import android.os.Bundle
 import android.text.TextUtils
 import android.text.format.Formatter
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
-import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.TextView
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatDialogFragment
 import androidx.core.view.isVisible
@@ -34,13 +30,9 @@ import kotlinx.parcelize.WriteWith
 import me.zhanghai.android.files.R
 import me.zhanghai.android.files.apk.core.ApkVerificationService
 import me.zhanghai.android.files.databinding.ApkSigningDialogBinding
-import me.zhanghai.android.files.databinding.ApkSigningKeyItemBinding
-import me.zhanghai.android.files.file.MimeType
 import me.zhanghai.android.files.file.asFileSize
 import me.zhanghai.android.files.file.fileProviderUri
-import me.zhanghai.android.files.filelist.FileListActivity
 import me.zhanghai.android.files.filelist.toUserFriendlyString
-import me.zhanghai.android.files.provider.archive.createArchiveRootPath
 import me.zhanghai.android.files.provider.linux.isLinuxPath
 import me.zhanghai.android.files.ui.setButtonBarEqualWidth
 import me.zhanghai.android.files.util.ParcelableArgs
@@ -48,19 +40,15 @@ import me.zhanghai.android.files.util.ParcelableParceler
 import me.zhanghai.android.files.util.ParcelableState
 import me.zhanghai.android.files.util.args
 import me.zhanghai.android.files.util.createInstallPackageIntent
-import me.zhanghai.android.files.util.createSendStreamIntent
-import me.zhanghai.android.files.util.extraPath
 import me.zhanghai.android.files.util.getColorByAttr
 import me.zhanghai.android.files.util.getColorStateListByAttr
 import me.zhanghai.android.files.util.getState
 import me.zhanghai.android.files.util.hideSoftInput
-import me.zhanghai.android.files.util.launchSafe
 import me.zhanghai.android.files.util.layoutInflater
 import me.zhanghai.android.files.util.putArgs
 import me.zhanghai.android.files.util.putState
 import me.zhanghai.android.files.util.startActivitySafe
 import me.zhanghai.android.files.util.viewModels
-import me.zhanghai.android.files.util.withChooser
 import java.text.DateFormat
 import java.util.Date
 import com.google.android.material.R as MaterialR
@@ -73,33 +61,7 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
     private var renderedAliases: List<String>? = null
     private var renderedOperation: ApkSigningOperation? = null
     private var renderedMessage: String? = null
-    private var keyPickerDialog: AlertDialog? = null
     private var detailsDialog: AlertDialog? = null
-
-    private val chooseSystemKeyStoreLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            if (result.resultCode == Activity.RESULT_OK) {
-                val intent = result.data
-                val path = runCatching { intent?.extraPath }.getOrNull()
-                if (path == null) {
-                    viewModel.showMessage(getString(R.string.apk_signing_invalid_picker_result))
-                } else {
-                    val uri = intent?.data
-                    if (uri != null && intent != null
-                        && (intent.flags and Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION) != 0) {
-                        // A system document selection grants read access to this selected file.
-                        try {
-                            requireContext().contentResolver.takePersistableUriPermission(
-                                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
-                            )
-                        } catch (_: SecurityException) {
-                            // Providers without persistable grants remain usable for this session.
-                        }
-                    }
-                    onKeyStoreSelected(path)
-                }
-            }
-        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -110,6 +72,23 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
                 ?: ApkSigningForm(args.input, coexistence = args.coexistence),
             savedForm?.wasRunning == true, savedForm?.hadInspection == true
         )
+        ApkKeyManagementDialogFragment.setResultListener(this) { result ->
+            when (result.action) {
+                ApkKeyManagementDialogFragment.Action.SELECT -> result.path?.let { path ->
+                    if (result.imported || result.created || viewModel.state.value?.form?.keyStore != path) {
+                        onKeyStoreSelected(path, result.aliases, result.format)
+                    }
+                    if (result.imported || result.created) {
+                        viewModel.showMessage(getString(if (result.created)
+                            R.string.apk_key_created_for_signing else R.string.apk_key_imported_for_signing))
+                    }
+                }
+                ApkKeyManagementDialogFragment.Action.DELETE -> result.path?.let { path ->
+                    if (viewModel.state.value?.form?.keyStore == path) clearKeyPasswords()
+                    viewModel.onPrivateKeyDeleted(path)
+                }
+            }
+        }
         // DialogFragment has no viewLifecycleOwner when its content is supplied by onCreateDialog.
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -126,17 +105,7 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
         binding.root.isSaveFromParentEnabled = false
         binding.storePasswordEdit.isSaveFromParentEnabled = false
         binding.keyPasswordEdit.isSaveFromParentEnabled = false
-        binding.newKeyConfirmPasswordEdit.isSaveFromParentEnabled = false
         binding.chooseKeyStoreButton.setOnClickListener { chooseKeyStore() }
-        binding.createKeyButton.setOnClickListener {
-            setCreatingKey(viewModel.state.value?.form?.creatingKey != true)
-        }
-        binding.newKeyAliasEdit.doAfterTextChanged {
-            binding.newKeyAliasLayout.error = null
-            if (!rendering) {
-                viewModel.updateForm { form -> form.copy(newKeyAlias = it?.toString().orEmpty()) }
-            }
-        }
         binding.keyStoreFormatEdit.setSimpleItems(
             arrayOf(getString(R.string.apk_signing_key_store_auto), "PKCS12", "JKS")
         )
@@ -191,33 +160,10 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
         }
         binding.storePasswordEdit.doAfterTextChanged {
             binding.storePasswordLayout.error = null
-            binding.newKeyConfirmPasswordLayout.error = null
         }
         binding.keyPasswordEdit.doAfterTextChanged { binding.keyPasswordLayout.error = null }
-        binding.newKeyConfirmPasswordEdit.doAfterTextChanged {
-            binding.newKeyConfirmPasswordLayout.error = null
-        }
         binding.loadAliasesButton.setOnClickListener {
             viewModel.readAliases(binding.storePasswordEdit.copyPassword())
-        }
-        binding.generateKeyButton.setOnClickListener { generateKey() }
-        binding.openButton.setOnClickListener {
-            withResult {
-                startActivitySafe(FileListActivity.createViewIntent(it.output.createArchiveRootPath()))
-            }
-        }
-        binding.installButton.setOnClickListener { withResult { installApk(it.output) } }
-        binding.shareButton.setOnClickListener {
-            withResult {
-                startActivitySafe(
-                    it.output.fileProviderUri.createSendStreamIntent(MimeType.APK).withChooser()
-                )
-            }
-        }
-        binding.directoryButton.setOnClickListener {
-            withResult { result ->
-                result.output.parent?.let { startActivitySafe(FileListActivity.createViewIntent(it)) }
-            }
         }
         val coexistence = viewModel.state.value?.form?.coexistence == true
         return builder
@@ -249,7 +195,12 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
             if (viewModel.state.value?.result != null) dismiss() else sign()
         }
         dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener {
-            if (viewModel.state.value?.operation != null) viewModel.cancel() else dismiss()
+            val state = viewModel.state.value
+            when {
+                state?.result != null -> installApk(state.result.output)
+                state?.operation != null -> viewModel.cancel()
+                else -> dismiss()
+            }
         }
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { showDetails() }
         viewModel.state.value?.let(::render)
@@ -264,8 +215,6 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
     }
 
     override fun onDestroyView() {
-        keyPickerDialog?.dismiss()
-        keyPickerDialog = null
         detailsDialog?.dismiss()
         detailsDialog = null
         clearKeyPasswords()
@@ -276,88 +225,33 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
     }
 
     private fun chooseKeyStore() {
-        keyPickerDialog?.dismiss()
-        keyPickerDialog = MaterialAlertDialogBuilder(requireContext())
-            .setTitle(R.string.apk_signing_choose_source)
-            .setItems(arrayOf(
-                getString(R.string.apk_signing_system_picker),
-                getString(R.string.apk_signing_private_keys)
-            )) { _, position ->
-                when (position) {
-                    0 -> {
-                        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
-                            .addCategory(Intent.CATEGORY_OPENABLE)
-                            .setType(MimeType.ANY.value)
-                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        chooseSystemKeyStoreLauncher.launchSafe(intent, this)
-                    }
-                    1 -> viewModel.listPrivateKeys()
-                }
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        ApkKeyManagementDialogFragment.show(viewModel.state.value?.form?.keyStore, this)
     }
 
-    private fun onKeyStoreSelected(path: Path) {
+    private fun onKeyStoreSelected(
+        path: Path, aliases: List<String> = emptyList(), format: String = "AUTO"
+    ) {
         val state = viewModel.state.value ?: return
         // A result from a picker in another window must not change an already running request.
         if (state.operation != null || state.result != null) return
         clearKeyPasswords()
         binding?.aliasLayout?.error = null
-        viewModel.selectKeyStore(path)
-    }
-
-    private fun setCreatingKey(creating: Boolean) {
-        val state = viewModel.state.value ?: return
-        if (state.operation != null || state.result != null) return
-        clearKeyPasswords()
-        binding?.newKeyAliasLayout?.error = null
-        viewModel.setCreatingKey(creating)
+        viewModel.selectKeyStore(path, aliases, format)
     }
 
     private fun clearKeyPasswords() {
         binding?.apply {
             storePasswordEdit.text?.clear()
             keyPasswordEdit.text?.clear()
-            newKeyConfirmPasswordEdit.text?.clear()
             storePasswordLayout.error = null
             keyPasswordLayout.error = null
-            newKeyConfirmPasswordLayout.error = null
         }
-    }
-
-    private fun generateKey() {
-        val binding = binding ?: return
-        val state = viewModel.state.value ?: return
-        if (state.operation != null || state.result != null || !state.form.creatingKey) return
-        val alias = state.form.newKeyAlias
-        if (alias.isBlank()) {
-            binding.newKeyAliasLayout.error = getString(R.string.apk_signing_required_new_key_alias)
-            binding.newKeyAliasEdit.requestFocus()
-            return
-        }
-        if ((binding.storePasswordEdit.text?.length ?: 0) < 8) {
-            binding.storePasswordLayout.error = getString(R.string.apk_signing_required_password)
-            binding.storePasswordEdit.requestFocus()
-            return
-        }
-        if (!TextUtils.equals(binding.storePasswordEdit.text, binding.newKeyConfirmPasswordEdit.text)) {
-            binding.newKeyConfirmPasswordLayout.error = getString(R.string.apk_signing_password_mismatch)
-            binding.newKeyConfirmPasswordEdit.requestFocus()
-            return
-        }
-        // Generated PKCS12 keys use the keystore password for the private key as well.
-        binding.keyPasswordEdit.text?.clear()
-        binding.newKeyConfirmPasswordEdit.text?.clear()
-        viewModel.generateKey(alias, binding.storePasswordEdit.copyPassword())
-        binding.root.hideSoftInput()
-        binding.root.clearFocus()
     }
 
     private fun sign() {
         val binding = binding ?: return
         val state = viewModel.state.value ?: return
-        if (state.operation != null || state.inspection == null || state.form.creatingKey
+        if (state.operation != null || state.inspection == null
             || !validateForm(state.form)) {
             return
         }
@@ -438,24 +332,13 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
             val busy = state.operation != null
             val result = state.result?.takeIf { !busy }
             renderApkInfo(state, result)
-            val hasSelectedKey = form.keyStore != null && !form.creatingKey
-            binding.noKeyStoreText.isVisible = form.keyStore == null && !form.creatingKey
+            val hasSelectedKey = form.keyStore != null
             binding.selectedKeyCard.isVisible = hasSelectedKey
-            binding.chooseKeyStoreButton.setText(if (hasSelectedKey)
-                R.string.apk_signing_replace_key_store else R.string.apk_signing_choose_key_store_short)
-            binding.createKeyButton.setText(if (form.creatingKey)
-                R.string.apk_signing_cancel_create_key else R.string.apk_signing_create_key)
             binding.keyStoreNameText.setTextIfChanged(
                 form.keyStore?.fileName?.toString() ?: getString(R.string.apk_signing_no_key_store)
             )
             binding.keyStorePathText.setTextIfChanged(form.keyStore?.toUserFriendlyString().orEmpty())
-            binding.newKeyAliasLayout.isVisible = form.creatingKey
-            binding.newKeyAliasEdit.setTextIfChanged(form.newKeyAlias)
-            binding.storePasswordLayout.isVisible = hasSelectedKey || form.creatingKey
-            binding.storePasswordLayout.hint = getString(if (form.creatingKey)
-                R.string.apk_signing_new_store_password else R.string.apk_signing_store_password)
-            binding.storePasswordLayout.helperText = if (form.creatingKey)
-                getString(R.string.apk_signing_new_password_hint) else null
+            binding.storePasswordLayout.isVisible = hasSelectedKey
             binding.aliasRow.isVisible = hasSelectedKey
             binding.loadAliasesButton.setText(when {
                 state.operation == ApkSigningOperation.ALIASES -> R.string.apk_signing_loading_aliases_short
@@ -474,10 +357,6 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
             binding.keyOptionsLayout.isVisible = hasSelectedKey && form.keyOptionsExpanded
             binding.differentKeyPasswordCheck.isChecked = form.useDifferentKeyPassword
             binding.keyPasswordLayout.isVisible = form.useDifferentKeyPassword
-            binding.newKeyConfirmPasswordLayout.isVisible = form.creatingKey
-            binding.createKeyLayout.isVisible = form.creatingKey
-            binding.generateKeyButton.setText(if (state.operation == ApkSigningOperation.GENERATE_KEY)
-                R.string.apk_signing_generating_key_short else R.string.apk_signing_generate_key)
             val formatIndex = KEY_STORE_FORMATS.indexOf(form.keyStoreFormat).coerceAtLeast(0)
             val format = if (formatIndex == 0) getString(R.string.apk_signing_key_store_auto)
                 else KEY_STORE_FORMATS[formatIndex]
@@ -516,8 +395,6 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
                 } else ""
                 state.operation == ApkSigningOperation.INSPECT -> getString(R.string.apk_signing_inspecting)
                 state.operation == ApkSigningOperation.ALIASES -> getString(R.string.apk_signing_loading_aliases)
-                state.operation == ApkSigningOperation.PRIVATE_KEYS -> getString(R.string.apk_signing_loading_private_keys)
-                state.operation == ApkSigningOperation.GENERATE_KEY -> getString(R.string.apk_signing_generating_key)
                 state.operation == ApkSigningOperation.SIGN -> getString(
                     if (form.coexistence) R.string.apk_coexistence_working
                     else R.string.apk_signing_working
@@ -528,7 +405,6 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
                 else -> state.message
             }
             binding.statusText.isVisible = !binding.statusText.text.isNullOrEmpty()
-            binding.resultLayout.isVisible = result != null
             if (renderedOperation != state.operation || renderedMessage != state.message) {
                 binding.root.post { binding.root.smoothScrollTo(0, 0) }
                 renderedOperation = state.operation
@@ -544,7 +420,7 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
                 })
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.apply {
                     setText(when {
-                        result != null -> R.string.close
+                        result != null -> android.R.string.ok
                         form.coexistence -> R.string.apk_coexistence_start
                         else -> R.string.apk_signing_start
                     })
@@ -552,12 +428,20 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
                         || (state.inspection != null && hasSelectedKey))
                 }
                 dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.apply {
-                    setText(if (busy) R.string.apk_signing_cancel else R.string.close)
-                    isVisible = result == null
+                    setText(when {
+                        result != null -> R.string.apk_signing_install
+                        busy -> R.string.apk_signing_cancel
+                        else -> R.string.close
+                    })
+                    isVisible = true
                     isEnabled = !state.canceling
                 }
                 // Full paths stay available even while metadata is loading or after cancellation.
-                dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.isEnabled = true
+                dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.apply {
+                    isVisible = result == null
+                    isEnabled = true
+                }
+                // The hidden details button takes no space; install and OK split the row equally.
             }
         } finally {
             rendering = false
@@ -568,10 +452,6 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
             if (!TextUtils.equals(dialog.findViewById<TextView>(android.R.id.message)?.text, message)) {
                 dialog.setMessage(message)
             }
-        }
-        if (state.operation == null && state.privateKeys != null) {
-            viewModel.consumePrivateKeys()
-            showPrivateKeys(state.privateKeys)
         }
     }
 
@@ -629,40 +509,6 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
             binding.apkSignatureText.backgroundTintList = context.getColorStateListByAttr(backgroundAttr)
             binding.apkSignatureText.setTextColor(context.getColorByAttr(foregroundAttr))
         }
-    }
-
-    private fun showPrivateKeys(keys: List<ApkPrivateKey>) {
-        val builder = MaterialAlertDialogBuilder(requireContext())
-            .setTitle(R.string.apk_signing_private_keys)
-            .setNegativeButton(R.string.close, null)
-        if (keys.isEmpty()) {
-            builder.setMessage(R.string.apk_signing_no_private_keys)
-                .setPositiveButton(R.string.apk_signing_create_key) { _, _ -> setCreatingKey(true) }
-        } else {
-            val selected = viewModel.state.value?.form?.keyStore
-            val dateFormat = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
-            val adapter = object : ArrayAdapter<ApkPrivateKey>(builder.context, 0, keys) {
-                override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-                    val row = convertView?.let(ApkSigningKeyItemBinding::bind)
-                        ?: ApkSigningKeyItemBinding.inflate(context.layoutInflater, parent, false)
-                    val key = keys[position]
-                    row.keyNameText.text = key.path.fileName.toString()
-                    row.keyNameText.setTextColor(context.getColorByAttr(
-                        if (key.path == selected) androidx.appcompat.R.attr.colorPrimary
-                        else MaterialR.attr.colorOnSurface
-                    ))
-                    val modified = if (key.lastModified > 0) getString(
-                        R.string.apk_signing_key_modified_format, dateFormat.format(Date(key.lastModified))
-                    ) else getString(R.string.apk_signing_key_modified_unknown)
-                    row.keySummaryText.text = if (key.path == selected)
-                        getString(R.string.apk_signing_current_key_format, modified) else modified
-                    return row.root
-                }
-            }
-            builder.setAdapter(adapter) { _, position -> onKeyStoreSelected(keys[position].path) }
-        }
-        keyPickerDialog?.dismiss()
-        keyPickerDialog = builder.show()
     }
 
     private fun showDetails() {
@@ -751,10 +597,6 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
         }
     }
 
-    private fun withResult(action: (ApkSignResult) -> Unit) {
-        viewModel.state.value?.result?.let(action)
-    }
-
     private fun installApk(path: Path) {
         startActivitySafe(path.fileProviderUri.createInstallPackageIntent())
     }
@@ -805,8 +647,6 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
         val v3: Boolean,
         val coexistence: Boolean,
         val targetPackageName: String,
-        val creatingKey: Boolean,
-        val newKeyAlias: String,
         val keyOptionsExpanded: Boolean,
         val useDifferentKeyPassword: Boolean,
         val wasRunning: Boolean,
@@ -815,7 +655,7 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
         constructor(form: ApkSigningForm, wasRunning: Boolean, hadInspection: Boolean) : this(
             form.input, form.outputName, form.keyStore, form.keyStoreFormat,
             form.alias, form.v1, form.v2, form.v3, form.coexistence,
-            form.targetPackageName, form.creatingKey, form.newKeyAlias,
+            form.targetPackageName,
             form.keyOptionsExpanded, form.useDifferentKeyPassword, wasRunning, hadInspection
         )
 
@@ -824,7 +664,6 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
             outputName = outputName, keyStore = keyStore,
             keyStoreFormat = keyStoreFormat, alias = alias,
             v1 = v1, v2 = v2, v3 = v3,
-            creatingKey = creatingKey, newKeyAlias = newKeyAlias,
             keyOptionsExpanded = keyOptionsExpanded, useDifferentKeyPassword = useDifferentKeyPassword
         )
     }

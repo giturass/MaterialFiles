@@ -86,6 +86,12 @@ internal class LinuxPath : ByteStringListPath<LinuxPath>, RootablePath {
 
     override fun isRootRequired(isAttributeAccess: Boolean): Boolean {
         val file = toFile()
+        // App-private files (including generated APK signing keys) are outside storage volumes,
+        // but are accessible to our own UID without the root service.
+        val normalizedFile = file.absoluteFile.normalize()
+        if (appDataDirectories.any { normalizedFile.startsWith(it) }) {
+            return false
+        }
         return StorageVolumeListLiveData.valueCompat.none {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && !it.isPrimaryCompat) {
                 return@none false
@@ -158,6 +164,23 @@ internal class LinuxPath : ByteStringListPath<LinuxPath>, RootablePath {
 
         private val FILE_ANDROID_DATA = File("Android/data")
         private val FILE_ANDROID_OBB = File("Android/obb")
+
+        private val appDataDirectories by lazy {
+            listOfNotNull(
+                application.dataDir,
+                application.applicationInfo.deviceProtectedDataDir?.let(::File)
+            ).flatMap { directory ->
+                val absoluteDirectory = directory.absoluteFile.normalize()
+                // /data/data and /data/user/0 may name the same directory. APK workspaces use
+                // canonical paths, while Context can return the other spelling.
+                val canonicalDirectory = try {
+                    directory.canonicalFile
+                } catch (_: IOException) {
+                    absoluteDirectory
+                }
+                listOf(absoluteDirectory, canonicalDirectory)
+            }.distinct()
+        }
 
         // IPC for checking the app op is expensive, and we'll be killed by StorageManagerService
         // when losing the app op, so let's just cache the result if it was ever allowed.

@@ -54,55 +54,35 @@ class ApkSigningViewModel : ViewModel() {
         }
     }
 
-    fun setCreatingKey(creating: Boolean) {
-        _state.update { state ->
-            if (state?.operation != null || state?.result != null) state else state?.copy(
-                form = state.form.copy(
-                    creatingKey = creating,
-                    keyOptionsExpanded = false,
-                    useDifferentKeyPassword = false
-                ),
-                message = null
-            )
-        }
-    }
-
-    fun selectKeyStore(path: Path) {
+    fun selectKeyStore(path: Path, aliases: List<String> = emptyList(), format: String = "AUTO") {
         _state.update { state ->
             if (state?.operation != null || state?.result != null) state else state?.copy(
                 form = state.form.copy(
                     keyStore = path,
-                    alias = "",
-                    keyStoreFormat = "AUTO",
-                    creatingKey = false,
+                    alias = aliases.firstOrNull().orEmpty(),
+                    keyStoreFormat = format,
                     keyOptionsExpanded = false,
                     useDifferentKeyPassword = false
                 ),
-                aliases = emptyList(),
+                aliases = aliases,
                 message = null
             )
         }
     }
 
-    fun listPrivateKeys() {
-        runOperation(
-            ApkSigningOperation.PRIVATE_KEYS, emptyList(),
-            { ApkOperations.listPrivateKeys(context) }
-        ) { keys ->
-            _state.update { it?.copy(privateKeys = keys) }
+    fun onPrivateKeyDeleted(path: Path) {
+        _state.update { state ->
+            if (state?.form?.keyStore != path) state else state.copy(
+                form = state.form.copy(keyStore = null, alias = "", keyStoreFormat = "AUTO",
+                    useDifferentKeyPassword = false, keyOptionsExpanded = false),
+                aliases = emptyList(),
+                message = context.getString(R.string.apk_key_selected_deleted)
+            )
         }
-    }
-
-    fun consumePrivateKeys() {
-        _state.update { it?.copy(privateKeys = null) }
     }
 
     fun readAliases(password: CharArray) {
         val form = checkNotNull(_state.value).form
-        if (form.creatingKey) {
-            password.fill('\u0000')
-            return
-        }
         val path = form.keyStore
         if (path == null) {
             password.fill('\u0000')
@@ -131,35 +111,11 @@ class ApkSigningViewModel : ViewModel() {
         }
     }
 
-    fun generateKey(alias: String, password: CharArray) {
-        runOperation(
-            ApkSigningOperation.GENERATE_KEY, listOf(password),
-            { ApkOperations.generateKey(context, alias, password, alias) }
-        ) { path ->
-            _state.update { state ->
-                state?.copy(
-                    form = state.form.copy(
-                        keyStore = path,
-                        keyStoreFormat = "PKCS12",
-                        alias = alias,
-                        creatingKey = false,
-                        newKeyAlias = "",
-                        keyOptionsExpanded = false,
-                        useDifferentKeyPassword = false
-                    ),
-                    aliases = listOf(alias),
-                    message = context.getString(R.string.apk_signing_key_created)
-                )
-            }
-        }
-    }
-
     fun sign(storePassword: CharArray, keyPassword: CharArray) {
         val state = checkNotNull(_state.value)
         val form = state.form
         val inspection = state.inspection
-        if (state.operation != null || state.result != null || inspection == null
-            || form.creatingKey) {
+        if (state.operation != null || state.result != null || inspection == null) {
             storePassword.fill('\u0000')
             keyPassword.fill('\u0000')
             return
@@ -310,8 +266,6 @@ data class ApkSigningForm(
     val v1: Boolean = false,
     val v2: Boolean = true,
     val v3: Boolean = true,
-    val creatingKey: Boolean = false,
-    val newKeyAlias: String = "",
     val keyOptionsExpanded: Boolean = false,
     val useDifferentKeyPassword: Boolean = false
 ) {
@@ -327,9 +281,8 @@ data class ApkSigningUiState(
     val inspection: ApkInspection? = null,
     val inspectionError: String? = null,
     val aliases: List<String> = emptyList(),
-    val privateKeys: List<ApkPrivateKey>? = null,
     val message: String? = null,
     val result: ApkSignResult? = null
 )
 
-enum class ApkSigningOperation { INSPECT, ALIASES, PRIVATE_KEYS, GENERATE_KEY, SIGN }
+enum class ApkSigningOperation { INSPECT, ALIASES, SIGN }

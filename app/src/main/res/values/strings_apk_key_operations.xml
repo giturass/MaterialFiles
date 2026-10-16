@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="apk_key_operation_no_private_keys">此密钥库没有可导入的私钥别名。</string>
+    <string name="apk_key_operation_invalid_private_path">只能管理应用私有密钥目录中的普通密钥库文件，不支持符号链接或目录。</string>
+    <string name="apk_key_operation_delete_failed">无法删除此私有密钥库，请重试。</string>
+    <string name="apk_key_operation_export_document_required">请通过系统保存界面新建一个密钥库备份文件。</string>
+    <string name="apk_key_operation_export_open_failed">无法读写所选备份文件，请选择本地存储或其他保存位置。</string>
+    <string name="apk_key_operation_export_not_empty">备份目标必须是新建的空文件，且支持读写校验。请选择其他文件名或保存位置。</string>
+    <string name="apk_key_operation_export_changed">备份文件与原密钥库不一致，导出未完成。</string>
+    <string name="apk_key_operation_invalid_store">“%1$s”不是受支持的 PKCS12 或 JKS 密钥库。</string>
+    <string name="apk_key_operation_preview_changed">导入文件内容或密码条目已变化，请重新选择文件并填写各密钥库密码。</string>
+    <string name="apk_key_operation_entry_failed">无法导入“%1$s”：%2$s。此次未保存任何新密钥。</string>
+    <string name="apk_key_operation_zip_invalid">ZIP 为空、已损坏或包含不安全、重复的条目。不支持加密 ZIP、分卷 ZIP 和 ZIP64。</string>
+    <string name="apk_key_operation_zip_entry_unsupported">ZIP 中包含不支持的文件“%1$s”；只允许 PKCS12、P12、PFX、JKS 或 KEYSTORE 密钥库。</string>
+    <string name="apk_key_operation_batch_limits">每批最多 32 个密钥库，每个不超过 16 MiB、合计不超过 64 MiB，ZIP 文件不超过 65 MiB；不支持异常高压缩率的条目。</string>
+</resources>

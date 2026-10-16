@@ -142,45 +142,29 @@
                 </com.google.android.material.textfield.TextInputLayout>
             </LinearLayout>
 
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:accessibilityHeading="true"
-                android:text="@string/apk_signing_key_section"
-                android:textAppearance="?textAppearanceTitleSmall" />
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="16dp"
+                android:baselineAligned="false"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:accessibilityHeading="true"
+                    android:text="@string/apk_signing_key_section"
+                    android:textAppearance="?textAppearanceTitleSmall" />
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/chooseKeyStoreButton"
-                    android:layout_width="0dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginEnd="4dp"
-                    android:layout_weight="1"
-                    android:contentDescription="@string/apk_signing_choose_key_store"
-                    android:text="@string/apk_signing_choose_key_store_short"
-                    style="@style/Widget.Material3.Button.TextButton" />
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/createKeyButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:layout_weight="1"
-                    android:text="@string/apk_signing_create_key"
+                    android:layout_marginStart="12dp"
+                    android:minHeight="48dp"
+                    android:text="@string/apk_signing_key_library"
                     style="@style/Widget.Material3.Button.TextButton" />
             </LinearLayout>
-            <TextView
-                android:id="@+id/noKeyStoreText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="@string/apk_signing_no_key_store_hint"
-                android:textAppearance="?textAppearanceBodySmall"
-                android:textColor="?colorOnSurfaceVariant" />
 
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/selectedKeyCard"
@@ -217,24 +201,6 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/newKeyAliasLayout"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:hint="@string/apk_signing_new_key_alias"
-                android:visibility="gone"
-                app:placeholderText="@string/apk_signing_new_key_alias_example"
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/newKeyAliasEdit"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:imeOptions="actionNext"
-                    android:importantForAutofill="no"
-                    android:inputType="textNoSuggestions"
-                    android:singleLine="true" />
-            </com.google.android.material.textfield.TextInputLayout>
 
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/storePasswordLayout"
@@ -349,47 +315,6 @@
                 </com.google.android.material.textfield.TextInputLayout>
             </LinearLayout>
 
-            <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/newKeyConfirmPasswordLayout"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:hint="@string/apk_signing_confirm_password"
-                android:saveEnabled="false"
-                android:visibility="gone"
-                app:endIconMode="password_toggle"
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/newKeyConfirmPasswordEdit"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:imeOptions="actionDone"
-                    android:importantForAutofill="noExcludeDescendants"
-                    android:inputType="textPassword"
-                    android:saveEnabled="false"
-                    android:singleLine="true" />
-            </com.google.android.material.textfield.TextInputLayout>
-            <LinearLayout
-                android:id="@+id/createKeyLayout"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:orientation="vertical"
-                android:visibility="gone">
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/apk_signing_generate_hint"
-                    android:textAppearance="?textAppearanceBodySmall"
-                    android:textColor="?colorOnSurfaceVariant" />
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/generateKeyButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="@string/apk_signing_generate_key"
-                    style="@style/Widget.Material3.Button.TextButton" />
-            </LinearLayout>
 
             <TextView
                 android:layout_width="match_parent"
@@ -442,51 +367,5 @@
             </com.google.android.material.textfield.TextInputLayout>
         </LinearLayout>
 
-        <LinearLayout
-            android:id="@+id/resultLayout"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:orientation="vertical"
-            android:visibility="gone">
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/openButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/apk_signing_open"
-                    style="@style/Widget.Material3.Button.TextButton" />
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/installButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/apk_signing_install"
-                    style="@style/Widget.Material3.Button.TextButton" />
-            </LinearLayout>
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/shareButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/share"
-                    style="@style/Widget.Material3.Button.TextButton" />
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/directoryButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/apk_signing_open_directory"
-                    style="@style/Widget.Material3.Button.TextButton" />
-            </LinearLayout>
-        </LinearLayout>
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>
