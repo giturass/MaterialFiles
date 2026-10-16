@@ -163,7 +163,7 @@
                     android:layout_weight="1"
                     android:contentDescription="@string/apk_signing_choose_key_store"
                     android:text="@string/apk_signing_choose_key_store_short"
-                    style="@style/Widget.Material3.Button.OutlinedButton" />
+                    style="@style/Widget.Material3.Button.TextButton" />
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/createKeyButton"
                     android:layout_width="0dp"
@@ -171,7 +171,7 @@
                     android:layout_marginStart="4dp"
                     android:layout_weight="1"
                     android:text="@string/apk_signing_create_key"
-                    style="@style/Widget.Material3.Button.OutlinedButton" />
+                    style="@style/Widget.Material3.Button.TextButton" />
             </LinearLayout>
             <TextView
                 android:id="@+id/noKeyStoreText"
@@ -388,7 +388,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:text="@string/apk_signing_generate_key"
-                    style="@style/Widget.Material3.Button.TonalButton" />
+                    style="@style/Widget.Material3.Button.TextButton" />
             </LinearLayout>
 
             <TextView

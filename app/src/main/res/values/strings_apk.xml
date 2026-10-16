@@ -11,7 +11,7 @@
     <string name="apk_signing_signature_status_format">%1$s · %2$s</string>
     <string name="apk_signing_original_signature">原签名</string>
     <string name="apk_signing_output_signature">输出签名</string>
-    <string name="apk_signing_signature_not_verified">未通过</string>
+    <string name="apk_signing_signature_not_verified">签名验证未通过</string>
     <string name="apk_signing_signature_reading">读取中</string>
     <string name="apk_signing_signature_not_checked">未验证</string>
     <string name="apk_signing_signature_unavailable">读取失败</string>

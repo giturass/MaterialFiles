@@ -48,6 +48,16 @@
 -keep class org.bouncycastle.jcajce.provider.** { *; }
 -keep class org.bouncycastle.jce.provider.** { *; }
 
+# apksig parses and encodes ASN.1 through runtime annotations, public no-arg constructors,
+# and annotated fields (including their generic types). R8 cannot see these reflective uses.
+-keepattributes RuntimeVisibleAnnotations,AnnotationDefault,Signature
+-keep,allowobfuscation @interface com.android.apksig.internal.asn1.Asn1Class { *; }
+-keep,allowobfuscation @interface com.android.apksig.internal.asn1.Asn1Field { *; }
+-keep,allowobfuscation @com.android.apksig.internal.asn1.Asn1Class class com.android.apksig.** {
+    public <init>();
+    @com.android.apksig.internal.asn1.Asn1Field <fields>;
+}
+
 # SMBJ
 -dontwarn javax.el.**
 -dontwarn org.ietf.jgss.**

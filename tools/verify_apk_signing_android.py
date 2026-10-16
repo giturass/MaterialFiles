@@ -4,8 +4,11 @@
 By default only the Java test harness is converted to DEX; its signing classes,
 apksig, Bouncy Castle and runtime resources come from the actual built debug APK.
 Use --standalone only for a preliminary run of freshly compiled core sources and
-the pinned libraries. Reports distinguish these modes explicitly. Neither mode
-tests UI behavior, app installation/startup, cloning, or an Android API 23 device.
+the pinned libraries. Use --minified --apk PATH for pure verification through the
+actual APK's production DEX, including R8 builds without mapping files. That mode
+compiles only a reflection harness and needs no unminified classes or resource IDs.
+Reports distinguish these modes explicitly. None tests UI behavior, installation,
+startup, cloning, or an Android API 23 device.
 
 Build the debug APK first and prepare the public fixtures/dependencies with
 tools/verify_apk_signing.py. All generated keys are disposable public test data.
@@ -19,11 +22,13 @@ import os
 from pathlib import Path
 import re
 import shutil
+import struct
 import subprocess
 import tempfile
 import zipfile
 
-from verify_apk_signing import FIXTURES, SHA256
+from apk_signing_minified_support import find_verifier
+from verify_apk_signing import FIXTURES, FIXTURE_SHA256, SHA256
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -84,6 +89,106 @@ def add_runtime_resources(dex, jars):
                     existing.add(name)
 
 
+def run_minified(args, java, javac):
+    args.work_dir.mkdir(parents=True, exist_ok=True)
+    work = Path(tempfile.mkdtemp(prefix="minified-", dir=args.work_dir)).resolve()
+    print("ART validation mode: packaged APK verification (minification compatible)", flush=True)
+    print("ART validation logs:", work, flush=True)
+    test = ROOT / "tests/ApkSigningMinifiedAndroidTest.java"
+    commands = []
+    report = {
+        "mode": "packaged_apk_reflective_verification",
+        "scope": "Production APK verification on ART; no UI, installation, startup or signing test",
+        "tests": {str(test.relative_to(ROOT)): sha256(test)},
+        "tools": {str(path.relative_to(ROOT)): sha256(path) for path in (
+            Path(__file__).resolve(), ROOT / "tools/apk_signing_minified_support.py")},
+        "fixtures": {name: sha256(args.fixtures / name) for name in FIXTURES},
+        "status": "running",
+    }
+    compile_env = os.environ.copy()
+    compile_env["TMPDIR"] = str(work)
+    try:
+        runtime_apk = work / "materialfiles-under-test.apk"
+        shutil.copyfile(args.apk, runtime_apk)
+        runtime_apk.chmod(0o400)
+        report.update(apk_source=str(args.apk.resolve()), apk_sha256=sha256(runtime_apk),
+                      apk_bytes=runtime_apk.stat().st_size)
+        entry = find_verifier(runtime_apk)
+        report["entry_point"] = entry
+        print("Production verifier:", json.dumps(entry, ensure_ascii=False), flush=True)
+
+        signed = args.fixtures / "golden-aligned-v1v2v3-out.apk"
+        tampered = work / "tampered.apk"
+        shutil.copyfile(signed, tampered)
+        with zipfile.ZipFile(signed) as archive:
+            payload = archive.getinfo("classes.dex")
+        with tampered.open("r+b") as stream:
+            stream.seek(payload.header_offset)
+            header = stream.read(30)
+            name_length, extra_length = struct.unpack_from("<HH", header, 26)
+            offset = payload.header_offset + 30 + name_length + extra_length + payload.compress_size // 2
+            stream.seek(offset)
+            value = stream.read(1)
+            if not value:
+                raise RuntimeError("The signed fixture has no DEX payload to tamper with")
+            stream.seek(offset)
+            stream.write(bytes((value[0] ^ 0x40,)))
+        malformed = work / "malformed.apk"
+        malformed.write_bytes(b"\x00\x01\x02\x03\x04\x05")
+        report["generated_fixtures"] = {
+            path.name: sha256(path) for path in (tampered, malformed)
+        }
+
+        classes = work / "test-classes"
+        classes.mkdir()
+        run([javac, f"-J-Djava.io.tmpdir={work}", "--release", "17", "-encoding", "UTF-8",
+             "-cp", args.android_jar, "-d", classes, test],
+            work, "javac-harness", commands, compile_env)
+        harness = work / "minified-verification-tests.jar"
+        classes_jar(harness, classes)
+        dex = work / "minified-verification-test-dex.jar"
+        run([java, f"-Djava.io.tmpdir={work}", "-Xmx768m", "-cp", args.d8_jar,
+             "com.android.tools.r8.D8", "--min-api", "30", "--lib", args.android_jar,
+             "--output", dex, harness], work, "d8", commands, compile_env)
+        dex.chmod(0o400)
+        runtime_env = os.environ.copy()
+        runtime_env.pop("LD_LIBRARY_PATH", None)
+        runtime_env.pop("LD_PRELOAD", None)
+        runtime_env["TMPDIR"] = str(work)
+        runtime_env["CLASSPATH"] = os.pathsep.join((str(runtime_apk), str(dex)))
+        report["runtime_classpath"] = runtime_env["CLASSPATH"]
+        failure = None
+        try:
+            output = run([args.app_process, "/system/bin", "ApkSigningMinifiedAndroidTest", work,
+                          args.fixtures.resolve(), entry["class"], entry["method"],
+                          entry["callback_class"], entry["verified_field"]],
+                         work, "art-results", commands, runtime_env, timeout=360)
+            print(output, end="", flush=True)
+        except RuntimeError as error:
+            failure = error
+            output = (work / "art-results.log").read_text(encoding="utf-8")
+        cases = [json.loads(line.removeprefix("MINIFIED_VERIFY_CASE "))
+                 for line in output.splitlines() if line.startswith("MINIFIED_VERIFY_CASE ")]
+        report["cases"] = cases
+        report.update(checks=len(cases), passed=sum(case["passed"] for case in cases))
+        android = re.search(r"ANDROID_RUNTIME api=(\d+) release=(\S+) vm=(\S+)", output)
+        if android:
+            report.update(android_api=int(android[1]), android_release=android[2], vm=android[3])
+        if failure:
+            raise failure
+        summary = re.search(r"ART minified APK verification: (\d+)/(\d+) checks passed", output)
+        if not android or not summary or summary[1] != "7" or summary[2] != "7" \
+                or len(cases) != 7 or not all(case["passed"] for case in cases):
+            raise RuntimeError("ART did not report all seven successful production verification checks")
+        report["status"] = "passed"
+    except BaseException as error:
+        report.update(status="failed", error=str(error))
+        raise
+    finally:
+        (work / "report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+        print("ART report:", work / "report.json", flush=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--work-dir", type=Path,
@@ -96,7 +201,7 @@ def main():
     parser.add_argument("--android-jar", type=Path, required=True)
     parser.add_argument("--d8-jar", type=Path)
     parser.add_argument("--apk", type=Path,
-                        default=ROOT / "app/build/outputs/apk/debug/app-debug.apk")
+                        help="APK under test; required with --minified, otherwise defaults to the debug APK")
     parser.add_argument("--app-classes", type=Path, default=ROOT /
                         "app/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes")
     parser.add_argument("--resource-symbols", type=Path, default=ROOT /
@@ -104,9 +209,16 @@ def main():
     parser.add_argument("--app-process", type=Path, default=Path("/system/bin/app_process"))
     parser.add_argument("--jks", type=Path,
                         help="Optional disposable JKS fixture produced by ApkSigningCoreTest")
-    parser.add_argument("--standalone", action="store_true",
-                        help="Explicitly test source DEX instead of the built APK (preliminary)")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--standalone", action="store_true",
+                      help="Explicitly test source DEX instead of the built APK (preliminary)")
+    mode.add_argument("--minified", action="store_true",
+                      help="Verify fixtures using the actual APK's minified production code via reflection")
     args = parser.parse_args()
+    if args.apk is None:
+        if args.minified:
+            parser.error("--minified requires an explicit --apk to identify the production artifact")
+        args.apk = ROOT / "app/build/outputs/apk/debug/app-debug.apk"
 
     java = args.java_home / "bin/java" if args.java_home else shutil.which("java")
     javac = args.java_home / "bin/javac" if args.java_home else shutil.which("javac")
@@ -120,15 +232,24 @@ def main():
         args.d8_jar = args.android_jar.resolve().parents[2] / "build-tools" / version / "lib/d8.jar"
     if not args.d8_jar.is_file():
         parser.error("D8 was not found; specify --d8-jar")
-    jars = [args.dependencies / name for name in SHA256]
+    jars = [] if args.minified else [args.dependencies / name for name in SHA256]
     for jar in jars:
         if not jar.is_file() or sha256(jar) != SHA256[jar.name]:
             parser.error(f"Missing or incorrect pinned dependency: {jar}; run verify_apk_signing.py")
     for name in FIXTURES:
         if not (args.fixtures / name).is_file():
             parser.error("Missing AOSP fixture " + name + "; run verify_apk_signing.py first")
+        if sha256(args.fixtures / name) != FIXTURE_SHA256[name]:
+            parser.error("AOSP fixture checksum mismatch: " + name)
     if args.jks and not args.jks.is_file():
         parser.error("--jks must point to the disposable host test fixture")
+    if args.minified:
+        if not args.apk.is_file():
+            parser.error("--apk must point to an existing APK")
+        if args.jks:
+            parser.error("--jks is not used by the pure-verification --minified mode")
+        run_minified(args, java, javac)
+        return
 
     sources = sorted((ROOT / "app/src/main/java" / CORE_PACKAGE).glob("*.java"))
     sources.append(ROOT / "app/src/main/java" / MANIFEST_CLASS.with_suffix(".java"))

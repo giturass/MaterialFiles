@@ -4,8 +4,8 @@
 
 ## 使用方式与范围
 
-1. 对话框直接使用文件列表选中的 APK。蓝色信息卡以文件名为主标题（最多两行），完整路径用小字号单行显示、中间省略，包名单行显示；文件大小与原签名状态并排排列。状态区分“读取中 / 未验证 / 读取失败 / 签名验证通过 / 未通过”，通过状态使用绿色背景和白字，状态框随文字收紧；操作中保留信息卡。底部按“详情 / 关闭 / 签名”顺序等宽、等距排列。“详情”支持选择复制完整路径、原始与输出 APK 信息、精确字节数、所选密钥库路径、版本、SDK 声明、验签结果、错误、证书和 SHA-256 指纹；读取中或取消后也可打开。界面不显示风险提示和验签警告。
-2. 密钥区提供“选择已有”（已选择时为“更换密钥”）和“新建密钥”（新建时为“取消新建”）两个入口；未选择时只显示入口与简短提示。密钥来源为“系统文件选择器”和“已创建的密钥”；前者导入 PKCS12/JKS，后者列表显示修改时间与“当前使用”，空列表可直接新建。选择后显示文件名、单行小字号路径、库密码和别名，读取/刷新按钮与别名同行。格式默认自动识别，格式选择及独立私钥密码收在“格式与私钥密码”中；未启用独立密码或留空时复用库密码。
+1. 对话框直接使用文件列表选中的 APK。蓝色信息卡以文件名为主标题（最多两行），完整路径用小字号单行显示、中间省略，包名单行显示；文件大小与原签名状态并排排列。状态区分“读取中 / 未验证 / 读取失败 / 签名验证通过 / 签名验证未通过”，通过状态使用绿色背景和白字，状态框随文字收紧；操作中保留信息卡。底部按“详情 / 关闭 / 签名”顺序等宽、等距排列。“详情”支持选择复制完整路径、原始与输出 APK 信息、精确字节数、所选密钥库路径、版本、SDK 声明、验签结果、错误、证书和 SHA-256 指纹；读取中或取消后也可打开。界面不显示风险提示和验签警告。
+2. 密钥区提供“选择已有”（已选择时为“更换密钥”）和“新建密钥”（新建时为“取消新建”）两个文字按钮；未选择时只显示入口与简短提示。密钥来源为“系统文件选择器”和“已创建的密钥”；前者导入 PKCS12/JKS，后者列表显示修改时间与“当前使用”，空列表可直接新建。选择后显示文件名、单行小字号路径、库密码和别名，读取/刷新按钮与别名同行。格式默认自动识别，格式选择及独立私钥密码收在“格式与私钥密码”中；未启用独立密码或留空时复用库密码。
 3. 新建使用独立的别名草稿，复用密钥库密码框并增加确认密码，密码须至少 8 个字符且两次一致。创建成功后自动选中新 PKCS12，可沿用当前窗口中的密码继续签名；取消或失败保留原先选中的密钥与别名。生成 RSA 3072 / SHA-256 自签名证书，有效期 25 年；新建 PKCS12 使用同一个密码保护密钥库和私钥。证书的 CN 使用所填别名。
 4. 选择 v1/v2/v3 签名方案，最低签名 API 自动使用待处理 APK 的声明值，不再提供手动输入项。API 23 及以下要求 v1；API 24–27 至少要求 v1 或 v2。**不会修改 APK Manifest 中的最低 API**，报告单独显示实际验签范围。
 5. 设置新的 `.apk` 文件名，输出默认保存到所选 APK 所在的当前目录，不显示输出目录及其选择按钮。签名与原文件始终分离，已存在的同名文件会被拒绝。完成后信息卡显示输出文件与输出签名状态，并提供查看 APK 内容、安装、分享和进入输出目录。
@@ -23,6 +23,8 @@ APK 使用流式复制与摘要；文件受 ZIP32 的约 4 GiB 上限约束，Ma
 签名模块已移除低版本 Android 的 `O_CLOEXEC` 常量回退、旧 ByteBuffer 调用适配、证书/私钥 API 绕行和旧系统安装 URI 分支。v1/v2/v3 选项与根据输入声明自动确定的最低签名 API 仍描述待签 APK 的签名规则，不属于本应用的旧系统适配，不会擅自修改输入的最低 SDK。
 
 应用内直接调用 `ApkSigner.Builder` / `ApkVerifier.Builder`，不执行 SDK 的 `apksigner`，也不依赖设备上的 Termux、Root 或外部签名程序。Bouncy Castle 继续使用项目已有的 `bcprov/bcpkix-jdk15to18:1.86`；生成、解密时传入独立 Provider，不替换 Android 全局加密提供者。
+
+apksig 的 ASN.1 解析与编码依赖运行时注解、模型的公开无参构造器，以及带注解字段的泛型类型。[R8 规则](../app/proguard-rules.pro) 定向保留这些成员与注解，允许重命名；缺少规则会使 Release 删掉证书解析所需的数据，导致有效的原 APK 签名被报告为“未通过”。
 
 - [ApkSigningService](../app/src/main/java/me/zhanghai/android/files/apk/core/ApkSigningService.java)：签名、ZIP 对齐、证书身份复核及失败清理。
 - [ApkVerificationService](../app/src/main/java/me/zhanghai/android/files/apk/core/ApkVerificationService.java)：实际 APK 字节验签、方案、错误和警告。无效签名中可解析的证书仅用于检查，不能据此认定可信。
@@ -64,7 +66,18 @@ python3 -B tools/verify_apk_signing_android.py \
   --java-home "$PREFIX/lib/jvm/java-21-openjdk"
 ```
 
-SDK/JDK 路径按本机环境调整。完整套件还应传入 `--jks`，指向主机脚本在 `~/tmp/materialfiles-apk-tools/test-runs/ApkSigningCoreTest-*/run-*/external keytool.jks` 生成的临时测试文件，以覆盖来自 `keytool` 的独立密钥库/私钥密码；省略时不执行该项，检查总数相应减少。可用 `--apk` 指定待测构建。默认加载该 APK 中的实际生产 DEX、apksig 和 BC，只有测试入口由 D8 单独编译；`--standalone` 仅用于预先验证源码，不能替代实际 APK 验证。
+SDK/JDK 路径按本机环境调整。完整套件还应传入 `--jks`，指向主机脚本在 `~/tmp/materialfiles-apk-tools/test-runs/ApkSigningCoreTest-*/run-*/external keytool.jks` 生成的临时测试文件，以覆盖来自 `keytool` 的独立密钥库/私钥密码；省略时不执行该项，检查总数相应减少。可用 `--apk` 指定未混淆的待测构建。默认加载该 APK 中的实际生产 DEX、apksig 和 BC，只有测试入口由 D8 单独编译；`--standalone` 仅用于预先验证源码，不能替代实际 APK 验证。
+
+经过 R8 的 Release 使用独立的 `--minified` 验签模式：
+
+```sh
+python3 -B tools/verify_apk_signing_android.py --minified \
+  --apk app/build/outputs/apk/release/app-release.apk \
+  --android-jar "$HOME/tmp/materialfiles-check/sdk/platforms/android-37.2/android.jar" \
+  --java-home "$PREFIX/lib/jvm/java-21-openjdk"
+```
+
+该模式从待测 APK 的 DEX 方法签名和诊断字符串定位生产验签入口、从结果构造器定位验证字段，不需要 mapping、未混淆类或资源 ID。只将[反射测试入口](../tests/ApkSigningMinifiedAndroidTest.java) 单独编译为 DEX；运行时的验签代码和依赖全部来自待测 APK，不替换 apksig。测试核对固定 AOSP 样本的 SHA-256，验证有效签名在多个最低 API 下的结果，并检查未签名、篡改和损坏输入；报告保存实际 APK 的 SHA-256、定位结果和逐项错误。此模式只覆盖验签，不替代密钥创建、重新签名、输出恢复或界面测试。
 
 [签名 ART 测试](../tests/ApkSigningAndroidTest.java) 覆盖真实签名、密钥库、中文/空格路径、取消、32 MiB 样本以及重新签名 Material Files 自身，并比对实际 APK 的资源 ID。[输出恢复 ART 测试](../tests/ApkOutputRecoveryAndroidTest.java) 调用实际 `OwnedOutput` 和 Android 文件系统 API，检查未完成输出清理、同 inode 改写/替换文件保护、缺失或变化的私有副本、符号链接、恢复取消及日志。脚本在 `~/tmp/materialfiles-apk-art-check/run-*` 保存命令、源码与依赖摘要、APK 摘要、系统版本和逐项结果。
 
@@ -73,6 +86,20 @@ SDK/JDK 路径按本机环境调整。完整套件还应传入 `--jks`，指向�
 标准检查为 `:app:assembleDebug :app:lintDebug`，另检查 `:app:minifyReleaseWithR8`。输出 APK 位于 `app/build/outputs/apk/debug/app-debug.apk`；ART 脚本会记录本轮实际 APK 的 SHA-256，避免将旧产物的结果用作新代码的验证。
 
 Android 11 真机、完整签名窗口/IME/旋转交互、真实磁盘耗尽和系统强杀后的端到端恢复仍需要设备验收。ART 恢复测试不等于强杀进程的端到端测试；签名通过也不等于安装成功、启动成功或应用功能正常。同时安装与功能验收的独立状态由共存测试报告记录。
+
+## Release 原签名验签修复（2026-10-16）
+
+在正式 Release `1dab9525`（SHA-256 `2f1502e138f782b64347e93cfc7aaa8430915dd832632b5defdcd84daac58fd0`）的实际 DEX 中复现：官方已签名 APK 按 API 23 检查时返回未通过，错误为 `Asn1DecodingException: ua0 is not annotated with xk`；按 API 24/28/30 检查时通过。旧 Release 的 `--minified` 回归为 6/7，同一测试对 Debug 为 7/7。
+
+补齐 ASN.1 反射模型的 R8 保留规则后，`:app:assembleRelease`（含 `lintVitalRelease`）通过；在 Android 15 / API 35 上直接运行新 Release DEX，7/7 回归通过：有效 v1/v2/v3 签名通过，未签名、篡改和损坏 APK 均被拒绝。共享对话框的两个密钥入口改用文字按钮，`:app:assembleDebug :app:lintDebug` 通过，Lint 为 0 错误、609 警告。
+
+本地 Release 验证包使用测试密钥签名，路径为 `app/build/outputs/apk/release/app-release.apk`，大小 **25,701,334 字节**，SHA-256：
+
+```text
+3404ad227fd2bad8668d2618218e49241f3f174ef480c57f31a70e659dc0b855
+```
+
+原正式包为 **20,563,742 字节**。本地工具链复用的 JNI 构建产物带调试符号，原生库压缩后比正式包增加约 5.13 MB；DEX 仅增加 6,320 字节。该本地包的大小不能直接代表正常发布包的增量。未进行本轮完整窗口的视觉与交互验收。
 
 ## 密钥界面与图标验证（2026-10-16）
 

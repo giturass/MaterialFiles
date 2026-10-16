@@ -601,7 +601,7 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
         val signatureLabel = getString(if (result == null) R.string.apk_signing_original_signature
             else R.string.apk_signing_output_signature)
         binding.apkSignatureText.setTextIfChanged(
-            if (verified == true) getString(signatureStatus)
+            if (verified != null) getString(signatureStatus)
             else getString(R.string.apk_signing_signature_status_format,
                 signatureLabel, getString(signatureStatus))
         )
