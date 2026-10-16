@@ -8,6 +8,90 @@
 <notices>
 
     <notice>
+        <name>Android apksig</name>
+        <url>https://android.googlesource.com/platform/tools/apksig/</url>
+        <copyright>Copyright The Android Open Source Project</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
+        <name>Bouncy Castle</name>
+        <url>https://www.bouncycastle.org/</url>
+        <copyright>Copyright (c) 2000-2023 The Legion of the Bouncy Castle Inc.</copyright>
+        <license>Bouncy Castle Licence</license>
+    </notice>
+
+    <notice>
+        <name>Apktool Android 1.0.0</name>
+        <url>https://github.com/anirudhmalik/apktool-android/tree/f0ed422f89f37276a55e464d208b0eeb91d1ca0b</url>
+        <copyright>Copyright Ryszard Wiśniewski, Connor Tumbleson, Anirudh Malik and the Apktool contributors</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
+        <name>Android aapt2 and framework resources</name>
+        <url>https://android.googlesource.com/platform/frameworks/base/</url>
+        <copyright>Copyright The Android Open Source Project and contributors. aapt2 includes third-party code; full notices are provided with the vendored source.</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
+        <name>smali / baksmali / dexlib2</name>
+        <url>https://github.com/iBotPeaches/smali/tree/b6365a84f40c8355af14004dcf7b8324ee050b9f</url>
+        <copyright>Copyright Ben Gruver, The Android Open Source Project and contributors</copyright>
+        <license>BSD 3-Clause License</license>
+    </notice>
+
+    <notice>
+        <name>libsepol (included in aapt2)</name>
+        <url>https://android.googlesource.com/platform/external/selinux/+/refs/tags/platform-tools-35.0.2/libsepol/</url>
+        <copyright>Copyright the SELinux contributors. The full license is included in the APK at META-INF/materialfiles-apktool/libsepol-LICENSE.txt.</copyright>
+        <license>GNU Lesser General Public License 2.1</license>
+    </notice>
+
+    <notice>
+        <name>ANTLR 3</name>
+        <url>https://www.antlr3.org/</url>
+        <copyright>Copyright Terence Parr and contributors</copyright>
+        <license>BSD 3-Clause License</license>
+    </notice>
+
+    <notice>
+        <name>StringTemplate</name>
+        <url>https://www.stringtemplate.org/</url>
+        <copyright>Copyright Terence Parr and contributors</copyright>
+        <license>BSD 3-Clause License</license>
+    </notice>
+
+    <notice>
+        <name>JCommander</name>
+        <url>https://jcommander.org/</url>
+        <copyright>Copyright Cédric Beust and contributors</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
+        <name>pngj</name>
+        <url>https://github.com/leonbloy/pngj</url>
+        <copyright>Copyright Hernán J. González</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
+        <name>Apache Commons Compress</name>
+        <url>https://commons.apache.org/proper/commons-compress/</url>
+        <copyright>Copyright The Apache Software Foundation</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
+        <name>Apache Commons Text</name>
+        <url>https://commons.apache.org/proper/commons-text/</url>
+        <copyright>Copyright The Apache Software Foundation</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
         <name>Material Files</name>
         <url>https://github.com/zhanghai/MaterialFiles</url>
         <copyright>Copyright 2018 Hai Zhang</copyright>
@@ -15,10 +99,52 @@
     </notice>
 
     <notice>
+        <name>AndroidX</name>
+        <url>https://android.googlesource.com/platform/frameworks/support/</url>
+        <copyright>Copyright The Android Open Source Project</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
+        <name>Material Components for Android</name>
+        <url>https://github.com/material-components/material-components-android</url>
+        <copyright>Copyright The Android Open Source Project</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
+        <name>Kotlin</name>
+        <url>https://github.com/JetBrains/kotlin</url>
+        <copyright>Copyright JetBrains and Kotlin contributors</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
+        <name>kotlinx.coroutines</name>
+        <url>https://github.com/Kotlin/kotlinx.coroutines</url>
+        <copyright>Copyright JetBrains and kotlinx.coroutines contributors</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
+        <name>Guava</name>
+        <url>https://github.com/google/guava</url>
+        <copyright>Copyright Google and Guava contributors</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
         <name>Sora Editor</name>
         <url>https://github.com/Rosemoe/sora-editor</url>
         <copyright>Copyright 2020-2024 Rosemoe</copyright>
         <license>GNU Lesser General Public License 2.1</license>
+    </notice>
+
+    <notice>
+        <name>Visual Studio Code themes and language resources</name>
+        <url>https://github.com/microsoft/vscode</url>
+        <copyright>Copyright (c) 2015 - present Microsoft Corporation. Individual grammars retain their original licenses; complete notices are bundled in assets/sora/licenses/.</copyright>
+        <license>MIT License</license>
     </notice>
 
     <notice>
@@ -127,6 +253,13 @@
     </notice>
 
     <notice>
+        <name>SSHJ</name>
+        <url>https://github.com/hierynomus/sshj</url>
+        <copyright>Copyright Shikhar Bhushan, Jeroen van Erp and SSHJ contributors</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
         <name>ThreeTenABP</name>
         <url>https://github.com/JakeWharton/ThreeTenABP</url>
         <copyright>Copyright 2015 Jake Wharton</copyright>
@@ -166,6 +299,13 @@
         <url>https://github.com/RikkaApps/RikkaX</url>
         <copyright>Copyright 2017 Rikka</copyright>
         <license>MIT License</license>
+    </notice>
+
+    <notice>
+        <name>PreferenceX</name>
+        <url>https://github.com/Gericop/Android-Support-Preference-V7-Fix</url>
+        <copyright>Copyright Gergely Kőrössy and contributors</copyright>
+        <license>Apache Software License 2.0</license>
     </notice>
 
     <notice>
@@ -243,6 +383,20 @@
         <url>https://mina.apache.org/ftpserver-project/index.html</url>
         <copyright>Copyright 2003 The Apache Software Foundation</copyright>
         <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
+        <name>Apache MINA</name>
+        <url>https://mina.apache.org/</url>
+        <copyright>Copyright 2004-2019 Apache MINA Project</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
+        <name>SLF4J</name>
+        <url>https://www.slf4j.org/</url>
+        <copyright>Copyright QOS.ch and SLF4J contributors</copyright>
+        <license>MIT License</license>
     </notice>
 
     <notice>

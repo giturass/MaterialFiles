@@ -1,0 +1,146 @@
+From a6db80d3555f3b188b6c7c986f432ffbe0c73f85 Mon Sep 17 00:00:00 2001
+From: Connor Tumbleson <connor.tumbleson@gmail.com>
+Date: Sun, 21 Sep 2025 06:48:38 -0400
+Subject: [PATCH] aapt2: port changes for Apktool's custom usage
+
+---
+ tools/aapt2/Android.bp                     |  8 ++++++++
+ tools/aapt2/ResourceTable.cpp              |  5 ++---
+ tools/aapt2/ResourceUtils.cpp              |  2 +-
+ tools/aapt2/cmd/Link.cpp                   | 15 ++++++++++++---
+ tools/aapt2/cmd/Link.h                     |  3 +++
+ tools/aapt2/java/JavaClassGenerator.cpp    |  3 ++-
+ tools/aapt2/link/PrivateAttributeMover.cpp |  1 -
+ 7 files changed, 28 insertions(+), 9 deletions(-)
+
+diff --git a/Android.bp b/tools/aapt2/Android.bp
+index 43d5b7165f06c..af41cafcc025a 100644
+--- a/Android.bp
++++ b/Android.bp
+@@ -203,8 +203,16 @@ cc_binary_host {
+     name: "aapt2",
+     srcs: ["Main.cpp"] + toolSources,
+     use_version_lib: true,
++    stl: "libc++_static",
++    static_executable: true,
+     static_libs: ["libaapt2"],
+     defaults: ["aapt2_defaults"],
++    compile_multilib: "both",
++    multilib: {
++        lib64: {
++            suffix: "_64",
++        },
++    },
+     dist: {
+         targets: ["aapt2_artifacts"],
+     },
+diff --git a/ResourceTable.cpp b/tools/aapt2/ResourceTable.cpp
+index db7dddc49a993..d1f5fef91b645 100644
+--- a/ResourceTable.cpp
++++ b/ResourceTable.cpp
+@@ -551,9 +551,8 @@ bool ResourceTable::AddResource(NewResource&& res, android::IDiagnostics* diag)
+   const bool validate = validation_ == Validation::kEnabled;
+   const android::Source source = res.value ? res.value->GetSource() : android::Source{};
+   if (validate && !res.allow_mangled && !IsValidResourceEntryName(res.name.entry)) {
+-    diag->Error(android::DiagMessage(source)
+-                << "resource '" << res.name << "' has invalid entry name '" << res.name.entry);
+-    return false;
++    // Apktool: Allow invalid entry names.
++    return true;
+   }
+ 
+   if (res.id.has_value() && !res.id->first.is_valid()) {
+diff --git a/ResourceUtils.cpp b/tools/aapt2/ResourceUtils.cpp
+index d358df98ada64..a9fe4f431db8c 100644
+--- a/ResourceUtils.cpp
++++ b/ResourceUtils.cpp
+@@ -217,7 +217,7 @@ bool ParseAttributeReference(StringPiece str, ResourceNameRef* out_ref) {
+     }
+ 
+     if (!type.empty() && type != "attr") {
+-      return false;
++      // Apktool: Don't die out if private resource.
+     }
+ 
+     if (entry.empty()) {
+diff --git a/cmd/Link.cpp b/tools/aapt2/cmd/Link.cpp
+index 0e18ee2509937..9a44fcdec5343 100644
+--- a/cmd/Link.cpp
++++ b/cmd/Link.cpp
+@@ -2561,10 +2561,9 @@ int LinkCommand::Action(const std::vector<std::string>& args) {
+     if (package_id_int > std::numeric_limits<uint8_t>::max()
+         || package_id_int == kFrameworkPackageId
+         || (!options_.allow_reserved_package_id && package_id_int < kAppPackageId)) {
+-      context.GetDiagnostics()->Error(
++      context.GetDiagnostics()->Warn(
+           android::DiagMessage() << StringPrintf(
+-              "invalid package ID 0x%02x. Must be in the range 0x7f-0xff.", package_id_int));
+-      return 1;
++              "invalid package ID 0x%02x. Must be in the range 0x7f-0xff. Ignoring...", package_id_int));
+     }
+     context.SetPackageId(static_cast<uint8_t>(package_id_int));
+   }
+@@ -2667,6 +2666,16 @@ int LinkCommand::Action(const std::vector<std::string>& args) {
+       ".mpg", ".mpeg", ".mp4", ".m4a", ".m4v", ".3gp", ".3gpp", ".3g2", ".3gpp2", ".wma", ".wmv",
+       ".webm", ".mkv"});
+ 
++  // Populate no compress extensions specified in the extensions file.
++  if (options_.extensions_to_not_compress_path) {
++    const std::string& path = options_.extensions_to_not_compress_path.value();
++    std::string error;
++    if (!file::AppendSetArgsFromFile(path, &options_.extensions_to_not_compress, &error)) {
++      context.GetDiagnostics()->Error(android::DiagMessage(path) << error);
++      return 1;
++    }
++  }
++
+   if (options_.no_compress_fonts) {
+     options_.extensions_to_not_compress.insert({".ttf", ".otf", ".ttc"});
+   }
+diff --git a/cmd/Link.h b/tools/aapt2/cmd/Link.h
+index 54a8c8625eb5f..6e841a2c1b1a5 100644
+--- a/cmd/Link.h
++++ b/cmd/Link.h
+@@ -78,6 +78,7 @@ struct LinkOptions {
+   bool use_sparse_encoding = false;
+   std::unordered_set<std::string> extensions_to_not_compress;
+   std::optional<std::regex> regex_to_not_compress;
++  std::optional<std::string> extensions_to_not_compress_path;
+   bool no_compress_fonts = false;
+   FeatureFlagValues feature_flag_values;
+ 
+@@ -295,6 +296,8 @@ class LinkCommand : public Command {
+                     &options_.manifest_fixer_options.rename_overlay_category);
+     AddOptionalFlagList("-0", "File suffix not to compress.",
+         &options_.extensions_to_not_compress);
++    AddOptionalFlag("-e", "File containing list of extensions not to compress.",
++        &options_.extensions_to_not_compress_path);
+     AddOptionalSwitch("--no-compress", "Do not compress any resources.",
+         &options_.do_not_compress_anything);
+     AddOptionalSwitch("--keep-raw-values", "Preserve raw attribute values in xml files.",
+diff --git a/java/JavaClassGenerator.cpp b/tools/aapt2/java/JavaClassGenerator.cpp
+index 6e73b017cce23..301c38b667ec3 100644
+--- a/java/JavaClassGenerator.cpp
++++ b/java/JavaClassGenerator.cpp
+@@ -58,7 +58,8 @@ static const std::set<StringPiece> sJavaIdentifiers = {
+     "true",       "false",        "null"};
+ 
+ static bool IsValidSymbol(StringPiece symbol) {
+-  return sJavaIdentifiers.find(symbol) == sJavaIdentifiers.end();
++  // Apktool: Everything is a valid symbol
++  return true;
+ }
+ 
+ // Java symbols can not contain . or -, but those are valid in a resource name.
+diff --git a/link/PrivateAttributeMover.cpp b/tools/aapt2/link/PrivateAttributeMover.cpp
+index 8c6c743dfff03..7a6d8ff0b93d6 100644
+--- a/link/PrivateAttributeMover.cpp
++++ b/link/PrivateAttributeMover.cpp
+@@ -82,7 +82,6 @@ bool PrivateAttributeMover::Consume(IAaptContext* context, ResourceTable* table)
+ 
+     auto attr_private_type = ResourceNamedTypeWithDefaultName(ResourceType::kAttrPrivate);
+     ResourceTableType* priv_attr_type = package->FindOrCreateType(attr_private_type);
+-    CHECK(priv_attr_type->entries.empty());
+     priv_attr_type->entries = std::move(private_attr_entries);
+   }
+   return true;

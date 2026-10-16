@@ -61,6 +61,7 @@ import java8.nio.file.Path
 import java8.nio.file.Paths
 import kotlinx.parcelize.Parcelize
 import me.zhanghai.android.files.R
+import me.zhanghai.android.files.apk.ApkSigningDialogFragment
 import me.zhanghai.android.files.app.application
 import me.zhanghai.android.files.app.clipboardManager
 import me.zhanghai.android.files.compat.checkSelfPermissionCompat
@@ -1036,6 +1037,18 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 shareFiles(viewModel.selectedFiles)
                 true
             }
+            R.id.action_sign_apk -> {
+                viewModel.selectedFiles.singleOrNull()?.takeIf { it.canSignApk }?.let {
+                    ApkSigningDialogFragment.show(it.path, this)
+                }
+                true
+            }
+            R.id.action_coexist_apk -> {
+                viewModel.selectedFiles.singleOrNull()?.takeIf { it.canSignApk }?.let {
+                    ApkSigningDialogFragment.show(it.path, this, coexistence = true)
+                }
+                true
+            }
             R.id.action_copy_path -> {
                 clipboardManager.copyText(
                     viewModel.selectedFiles.joinToString("\n") { it.path.toUserFriendlyString() },
@@ -1276,7 +1289,13 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         menu.findItem(R.id.action_add_bookmark).isVisible = singleFile?.attributes?.isDirectory == true
         menu.findItem(R.id.action_create_shortcut).isVisible = singleFile != null
         menu.findItem(R.id.action_properties).isVisible = singleFile != null
+        menu.findItem(R.id.action_sign_apk)?.isVisible = singleFile?.canSignApk == true
+        menu.findItem(R.id.action_coexist_apk)?.isVisible = singleFile?.canSignApk == true
     }
+
+    private val FileItem.canSignApk: Boolean
+        get() = attributesNoFollowLinks.isRegularFile && !path.isArchivePath
+            && name.endsWith(".apk", ignoreCase = true)
 
     private fun finishBottomToolbar() {
         // A mode change must not discard files waiting to be pasted.

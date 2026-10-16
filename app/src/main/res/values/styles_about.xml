@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<resources>
+
+    <style name="Widget.MaterialFiles.About.Card" parent="Widget.MaterialFiles.CardView">
+        <item name="cardBackgroundColor">?colorSurfaceContainerLow</item>
+        <item name="cardCornerRadius">20dp</item>
+        <item name="cardPreventCornerOverlap">false</item>
+        <item name="strokeColor">?colorOutlineVariant</item>
+    </style>
+
+    <style name="Widget.MaterialFiles.About.SectionTitle" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:paddingStart">20dp</item>
+        <item name="android:paddingTop">20dp</item>
+        <item name="android:paddingEnd">20dp</item>
+        <item name="android:paddingBottom">8dp</item>
+        <item name="android:accessibilityHeading">true</item>
+        <item name="android:textAppearance">?textAppearanceTitleSmall</item>
+        <item name="android:textColor">?colorPrimary</item>
+    </style>
+
+    <style name="Widget.MaterialFiles.About.AuthorRow" parent="">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">64dp</item>
+        <item name="android:paddingStart">20dp</item>
+        <item name="android:paddingEnd">12dp</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:orientation">horizontal</item>
+    </style>
+
+    <style name="Widget.MaterialFiles.About.AuthorName" parent="">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:paddingEnd">8dp</item>
+        <item name="android:textAppearance">?textAppearanceListItem</item>
+    </style>
+
+    <style name="Widget.MaterialFiles.About.XButton" parent="Widget.Material3.Button.IconButton">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minWidth">64dp</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="icon">@drawable/x_icon_white_24dp</item>
+        <item name="iconSize">18dp</item>
+        <item name="iconGravity">textStart</item>
+        <item name="iconTint">?colorOnSurface</item>
+    </style>
+</resources>

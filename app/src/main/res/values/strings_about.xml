@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<resources>
+
+    <string name="about_title">关于</string>
+    <string name="about_project_name" translatable="false">Material Files</string>
+    <string name="about_version_format">版本 %1$s</string>
+
+    <string name="about_project_title">项目</string>
+    <string name="about_repository_title">应用主仓库</string>
+    <string name="about_repository_summary" translatable="false">giturass/MaterialFiles</string>
+    <string name="about_upstream_title">上游项目</string>
+    <string name="about_upstream_summary" translatable="false">zhanghai/MaterialFiles</string>
+
+    <string name="about_author_title">作者</string>
+    <string name="about_author_name_title">张海</string>
+    <string name="about_author_eric_lee" translatable="false">Eric Lee</string>
+    <string name="about_author_x_description">在 X 上关注 %1$s</string>
+
+    <string name="about_recommended_apps_title">推荐应用</string>
+    <string name="about_vlc_title">VLC · 媒体播放器</string>
+    <string name="about_vlc_summary">在文件的“打开方式”中选择 VLC，播放音频和视频。</string>
+    <string name="about_rsaf_title">RSAF · 网盘连接</string>
+    <string name="about_rsaf_summary">在 RSAF 配置网盘后，通过“添加存储空间 → 外部存储空间”选择网盘目录。</string>
+
+    <string name="about_components_title">开源组件</string>
+    <string name="about_component_sora_title" translatable="false">Sora Editor</string>
+    <string name="about_component_sora_summary">代码编辑器</string>
+    <string name="about_component_textmate_title" translatable="false">TM4E / TextMate</string>
+    <string name="about_component_textmate_summary">代码语法解析与高亮</string>
+    <string name="about_component_sevenzip_title" translatable="false">7-Zip</string>
+    <string name="about_component_sevenzip_summary">压缩、浏览与提取引擎</string>
+    <string name="about_component_jbinding_title" translatable="false">7-Zip-JBinding</string>
+    <string name="about_component_jbinding_summary">连接应用与 7-Zip 原生引擎</string>
+    <string name="about_component_apksig_title" translatable="false">Android apksig</string>
+    <string name="about_component_apksig_summary">APK 签名与验证</string>
+    <string name="about_component_bouncy_castle_title" translatable="false">Bouncy Castle</string>
+    <string name="about_component_bouncy_castle_summary">签名证书、加密与密钥库</string>
+    <string name="about_component_apktool_title" translatable="false">Apktool Android</string>
+    <string name="about_component_apktool_summary">APK Manifest 解码与重建</string>
+    <string name="about_component_aapt2_title" translatable="false">AAPT2</string>
+    <string name="about_component_aapt2_summary">APK Manifest 编译</string>
+
+    <string name="about_all_licenses_title">全部组件与许可证</string>
+    <string name="about_all_licenses_summary">查看完整开源组件清单及许可声明</string>
+    <string name="about_licenses_title">开源许可证</string>
+    <string name="about_privacy_policy_title">隐私权政策</string>
+    <string name="about_privacy_policy_summary">查看隐私说明</string>
+</resources>

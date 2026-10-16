@@ -24,6 +24,22 @@ PROPERTY_VERSION_SYMBOL = ("Java_me_zhanghai_android_files_provider_archive_arch
                            "SevenZipArchiveProperties_nativeGetInterfaceVersion")
 ENGINE_ABIS = {"arm64-v8a": (2, 183), "armeabi-v7a": (1, 40),
                "x86": (1, 3), "x86_64": (2, 62)}
+# Release compatibility matches app/build.gradle; ELF inspection still recognizes every ABI.
+RELEASE_ABIS = {"arm64-v8a"}
+RELEASE_MIN_SDK = 30
+
+
+def verify_release_platform(badging, abis):
+    """Require the advertised Android 11+ ARM64 release target."""
+    sdk = re.search(r"^(?:minSdkVersion|sdkVersion):'([0-9]+)'$", badging, re.MULTILINE)
+    min_sdk = int(sdk.group(1)) if sdk else None
+    if min_sdk != RELEASE_MIN_SDK:
+        raise RuntimeError(f"The release APK must declare minSdk {RELEASE_MIN_SDK}; "
+                           f"found {min_sdk if min_sdk is not None else 'no numeric minSdk'}")
+    if set(abis) != RELEASE_ABIS:
+        raise RuntimeError("The release APK must contain only the arm64-v8a native ABI; found "
+                           + (", ".join(sorted(abis)) or "none"))
+    return min_sdk
 
 
 def verify_native_library(data, abi, label, markers):
@@ -179,9 +195,7 @@ def main():
         names = set(archive.namelist())
         abis = sorted({name.split("/")[1] for name in names
                        if name.startswith("lib/") and name.endswith(".so")})
-        if set(abis) != set(ENGINE_ABIS):
-            raise RuntimeError("The release APK must contain all four supported native ABIs: "
-                               + ", ".join(sorted(ENGINE_ABIS)))
+        min_sdk = verify_release_platform(badging, abis)
         engine_libraries = {}
         property_libraries = {}
         for abi in abis:
@@ -222,6 +236,7 @@ def main():
         "certificate_sha256": expected,
         "application_id": package.group(1),
         "debuggable": False,
+        "min_sdk": min_sdk,
         "abis": abis,
         "archive_engine": "official 7-Zip " + ENGINE_VERSION,
         "archive_engine_abis_checked": abis,

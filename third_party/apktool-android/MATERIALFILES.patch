@@ -1,0 +1,1029 @@
+--- a/brut.apktool/apktool-lib/src/main/java/brut/androlib/ApkBuilder.java
++++ b/brut.apktool/apktool-lib/src/main/java/brut/androlib/ApkBuilder.java
+@@ -1,4 +1,5 @@
+ /*
++ *  Modified for Material Files (2026); see third_party/apktool-android/README.md.
+  *  Copyright (C) 2010 Ryszard Wiśniewski <brut.alll@gmail.com>
+  *  Copyright (C) 2010 Connor Tumbleson <connor.tumbleson@gmail.com>
+  *
+@@ -63,10 +64,13 @@
+     }
+ 
+     public void build(File outApk) throws AndrolibException {
+-        if (mConfig.getJobs() > 1) {
+-            mWorker = new BackgroundWorker(mConfig.getJobs() - 1);
+-        }
+-        try {
++        OS.throwIfInterrupted();
++        File previousTempDirectory = OS.getDefaultTempDirectory();
++        OS.setDefaultTempDirectory(mConfig.getTempDirectory());
++        try {
++            if (mConfig.getJobs() > 1) {
++                mWorker = new BackgroundWorker(mConfig.getJobs() - 1);
++            }
+             mApkInfo = ApkInfo.load(mApkDir);
+             String minSdkVersion = mApkInfo.getSdkInfo().getMinSdkVersion();
+             mSmaliBuilder = new SmaliBuilder(minSdkVersion != null ? SdkInfo.parseSdkInt(minSdkVersion) : 0);
+@@ -106,6 +110,11 @@
+             if (mWorker != null) {
+                 mWorker.shutdownNow();
+             }
++            try {
++                mApkDir.close();
++            } catch (DirectoryException ignored) {
++            }
++            OS.setDefaultTempDirectory(previousTempDirectory);
+         }
+     }
+ 
+@@ -210,6 +219,10 @@
+         // Copy raw resources if possible.
+         File arscFile = new File(mApkDir, "resources.arsc");
+         if (arscFile.isFile()) {
++            // ONLY_MANIFEST leaves the resource table raw but the edited manifest is text.
++            if (!isBinaryManifest) {
++                buildManifestOnly(outDir, manifest);
++            }
+             copyResourcesRaw(outDir, arscFile);
+             return;
+         }
+--- a/brut.apktool/apktool-lib/src/main/java/brut/androlib/ApkDecoder.java
++++ b/brut.apktool/apktool-lib/src/main/java/brut/androlib/ApkDecoder.java
+@@ -1,4 +1,5 @@
+ /*
++ *  Modified for Material Files (2026); see third_party/apktool-android/README.md.
+  *  Copyright (C) 2010 Ryszard Wiśniewski <brut.alll@gmail.com>
+  *  Copyright (C) 2010 Connor Tumbleson <connor.tumbleson@gmail.com>
+  *
+@@ -64,10 +65,13 @@
+         if (!mApkFile.isFile() || !mApkFile.canRead()) {
+             throw new InFileNotFoundException(mApkFile.getPath());
+         }
+-        if (mConfig.getJobs() > 1) {
+-            mWorker = new BackgroundWorker(mConfig.getJobs() - 1);
+-        }
+-        try {
++        OS.throwIfInterrupted();
++        File previousTempDirectory = OS.getDefaultTempDirectory();
++        OS.setDefaultTempDirectory(mConfig.getTempDirectory());
++        try {
++            if (mConfig.getJobs() > 1) {
++                mWorker = new BackgroundWorker(mConfig.getJobs() - 1);
++            }
+             mApkInfo = new ApkInfo();
+             mApkInfo.setVersion(mConfig.getVersion());
+             mApkInfo.setApkFile(mApkFile);
+@@ -103,6 +107,7 @@
+                 mApkFile.close();
+             } catch (DirectoryException ignored) {
+             }
++            OS.setDefaultTempDirectory(previousTempDirectory);
+         }
+     }
+ 
+--- a/brut.apktool/apktool-lib/src/main/java/brut/androlib/Config.java
++++ b/brut.apktool/apktool-lib/src/main/java/brut/androlib/Config.java
+@@ -1,4 +1,5 @@
+ /*
++ *  Modified for Material Files (2026); see third_party/apktool-android/README.md.
+  *  Copyright (C) 2010 Ryszard Wiśniewski <brut.alll@gmail.com>
+  *  Copyright (C) 2010 Connor Tumbleson <connor.tumbleson@gmail.com>
+  *
+@@ -16,8 +17,6 @@
+  */
+ package brut.androlib;
+ 
+-import brut.util.OS;
+-
+ import java.io.File;
+ import java.util.LinkedHashMap;
+ import java.util.Map;
+@@ -131,10 +130,8 @@
+ 
+     public void setTempDirectory(File tempDirectory) {
+         mTempDirectory = tempDirectory;
+-        // Propagate to brut.util.OS so File.createTempFile sites in apktool-lib
+-        // and the brut.j.* helpers resolve to the configured directory rather
+-        // than java.io.tmpdir (which is unusable on Android).
+-        OS.setDefaultTempDirectory(tempDirectory);
++        // ApkDecoder/ApkBuilder bind this directory on their executing thread
++        // and restore the previous binding when all workers have stopped.
+     }
+ 
+     public Map<String, String[]> getLibraryFiles() {
+--- a/brut.apktool/apktool-lib/src/main/java/brut/androlib/res/AaptManager.java
++++ b/brut.apktool/apktool-lib/src/main/java/brut/androlib/res/AaptManager.java
+@@ -1,4 +1,5 @@
+ /*
++ *  Modified for Material Files (2026); see third_party/apktool-android/README.md.
+  *  Copyright (C) 2010 Ryszard Wiśniewski <brut.alll@gmail.com>
+  *  Copyright (C) 2010 Connor Tumbleson <connor.tumbleson@gmail.com>
+  *
+@@ -84,7 +85,9 @@
+         if (!binFile.isFile() || !binFile.canRead()) {
+             throw new AndrolibException("Could not read aapt binary: " + binFile.getPath());
+         }
+-        if (!binFile.setExecutable(true)) {
++        // Installed nativeLibraryDir files are executable but not app-owned;
++        // an unnecessary chmod on them can fail even though exec is allowed.
++        if (!binFile.canExecute() && !binFile.setExecutable(true)) {
+             throw new AndrolibException("Could not set aapt binary as executable: " + binFile.getPath());
+         }
+     }
+--- a/brut.apktool/apktool-lib/src/main/java/brut/androlib/res/ResDecoder.java
++++ b/brut.apktool/apktool-lib/src/main/java/brut/androlib/res/ResDecoder.java
+@@ -1,4 +1,5 @@
+ /*
++ *  Modified for Material Files (2026); see third_party/apktool-android/README.md.
+  *  Copyright (C) 2010 Ryszard Wiśniewski <brut.alll@gmail.com>
+  *  Copyright (C) 2010 Connor Tumbleson <connor.tumbleson@gmail.com>
+  *
+@@ -339,6 +340,14 @@
+             return;
+         }
+ 
++        // Resolve manifest references against the original table without decoding resource files.
++        // aapt2 later links this manifest with the original APK as an include; its resource IDs
++        // and resource-table package name remain unchanged.
++        if (!mConfig.isDecodeResourcesFull() && !mConfig.isDecodeResourcesNone()
++                && mApkInfo.hasResources()) {
++            mTable.load();
++        }
++
+         BinaryXmlResourceParser parser = new BinaryXmlResourceParser(
+             mTable, mConfig.isIgnoreRawValues(), mConfig.isDecodeResolveLazy());
+         ResXmlSerializer serial = new ResXmlSerializer(true);
+--- a/brut.apktool/apktool-lib/src/main/java/brut/androlib/res/table/ResId.java
++++ b/brut.apktool/apktool-lib/src/main/java/brut/androlib/res/table/ResId.java
+@@ -1,4 +1,5 @@
+ /*
++ *  Modified for Material Files (2026); see third_party/apktool-android/README.md.
+  *  Copyright (C) 2010 Ryszard Wiśniewski <brut.alll@gmail.com>
+  *  Copyright (C) 2010 Connor Tumbleson <connor.tumbleson@gmail.com>
+  *
+@@ -32,6 +33,15 @@
+ 
+     public static ResId of(int id) {
+         return id != 0 ? sCache.computeIfAbsent(id, ResId::new) : NULL;
++    }
++
++    /**
++     * Releases the intern pool after a complete decode/build operation.
++     * Call only after all Apktool workers have stopped, under the host's
++     * operation lock. Existing ResId values remain valid and compare by ID.
++     */
++    public static void clearCache() {
++        sCache.clear();
+     }
+ 
+     public static ResId of(int pkgId, int typeId, int entryId) {
+--- a/brut.apktool/apktool-lib/src/main/java/brut/androlib/smali/SmaliBuilder.java
++++ b/brut.apktool/apktool-lib/src/main/java/brut/androlib/smali/SmaliBuilder.java
+@@ -1,4 +1,5 @@
+ /*
++ *  Modified for Material Files (2026); see third_party/apktool-android/README.md.
+  *  Copyright (C) 2010 Ryszard Wiśniewski <brut.alll@gmail.com>
+  *  Copyright (C) 2010 Connor Tumbleson <connor.tumbleson@gmail.com>
+  *
+@@ -57,6 +58,7 @@
+             DexBuilder dexBuilder = new DexBuilder(mApiLevel > 0 ? Opcodes.forApi(mApiLevel) : Opcodes.getDefault());
+ 
+             for (String fileName : new FileDirectory(smaliDir).getFiles(true)) {
++                OS.throwIfInterrupted();
+                 File smaliFile = new File(smaliDir, fileName);
+ 
+                 if (!fileName.endsWith(".smali")) {
+@@ -91,13 +93,20 @@
+                 }
+             }
+ 
+-            dexBuilder.writeTo(new FileDataStore(dexFile));
++            OS.throwIfInterrupted();
++            FileDataStore store = new FileDataStore(dexFile);
++            try {
++                dexBuilder.writeTo(store);
++            } finally {
++                store.close();
++            }
+         } catch (DirectoryException | IOException | RuntimeException ex) {
+             throw new AndrolibException("Could not smali folder: " + smaliDir.getName(), ex);
+         }
+     }
+ 
+     private boolean buildFile(File smaliFile, DexBuilder dexBuilder) throws IOException, RecognitionException {
++        OS.throwIfInterrupted();
+         try (InputStreamReader reader = new InputStreamReader(
+                 Files.newInputStream(smaliFile.toPath()), StandardCharsets.UTF_8)) {
+             smaliFlexLexer lexer = new smaliFlexLexer(reader, mApiLevel);
+@@ -118,6 +127,7 @@
+             parser.setVerboseErrors(VERBOSE_ERRORS);
+ 
+             smaliParser.smali_file_return result = parser.smali_file();
++            OS.throwIfInterrupted();
+ 
+             if (parser.getNumberOfSyntaxErrors() > 0 || lexer.getNumberOfSyntaxErrors() > 0) {
+                 return false;
+@@ -132,6 +142,7 @@
+             treeWalker.setVerboseErrors(VERBOSE_ERRORS);
+             treeWalker.setDexBuilder(dexBuilder);
+             treeWalker.smali_file();
++            OS.throwIfInterrupted();
+ 
+             return treeWalker.getNumberOfSyntaxErrors() == 0;
+         }
+--- a/brut.apktool/apktool-lib/src/main/java/brut/androlib/smali/SmaliDecoder.java
++++ b/brut.apktool/apktool-lib/src/main/java/brut/androlib/smali/SmaliDecoder.java
+@@ -1,4 +1,5 @@
+ /*
++ *  Modified for Material Files (2026); see third_party/apktool-android/README.md.
+  *  Copyright (C) 2010 Ryszard Wiśniewski <brut.alll@gmail.com>
+  *  Copyright (C) 2010 Connor Tumbleson <connor.tumbleson@gmail.com>
+  *
+@@ -18,15 +19,27 @@
+ 
+ import brut.androlib.exceptions.AndrolibException;
+ import brut.util.OS;
+-import com.android.tools.smali.baksmali.Baksmali;
++import com.android.tools.smali.baksmali.Adaptors.ClassDefinition;
+ import com.android.tools.smali.baksmali.BaksmaliOptions;
++import com.android.tools.smali.baksmali.formatter.BaksmaliWriter;
+ import com.android.tools.smali.dexlib2.analysis.InlineMethodResolver;
+ import com.android.tools.smali.dexlib2.dexbacked.DexBackedDexFile;
+ import com.android.tools.smali.dexlib2.dexbacked.DexBackedOdexFile;
+ import com.android.tools.smali.dexlib2.dexbacked.ZipDexContainer;
++import com.android.tools.smali.dexlib2.iface.ClassDef;
++import com.android.tools.smali.util.ClassFileNameHandler;
+ 
+ import java.io.File;
++import java.io.FilterWriter;
+ import java.io.IOException;
++import java.io.InterruptedIOException;
++import java.io.Writer;
++import java.nio.charset.StandardCharsets;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.util.ArrayList;
++import java.util.Comparator;
++import java.util.List;
+ import java.util.Map;
+ import java.util.Set;
+ import java.util.TreeMap;
+@@ -34,10 +47,15 @@
+ import java.util.concurrent.atomic.AtomicInteger;
+ 
+ public class SmaliDecoder {
++    private static final int MAX_CLASS_PATH_DEPTH = 32;
++    private static final int MAX_GENERATED_NODES = 50000;
++
+     private final ZipDexContainer mDexContainer;
+     private final boolean mDebugMode;
+     private final Set<String> mDexFiles;
+     private final AtomicInteger mInferredApiLevel;
++    private final Set<String> mGeneratedDirectories = ConcurrentHashMap.newKeySet();
++    private final AtomicInteger mGeneratedNodes = new AtomicInteger();
+ 
+     public SmaliDecoder(File apkFile, boolean debugMode) throws AndrolibException {
+         mDexContainer = new ZipDexContainer(apkFile, null);
+@@ -61,6 +79,7 @@
+     }
+ 
+     public void decode(String dexName, File outDir) throws AndrolibException {
++        OS.throwIfInterrupted();
+         try {
+             // Fetch the requested dex file from the dex container.
+             ZipDexContainer.DexEntry<DexBackedDexFile> dexEntry = mDexContainer.getEntry(dexName);
+@@ -96,6 +115,7 @@
+ 
+             // Decode the dex files into separate folders.
+             for (Map.Entry<Integer, DexBackedDexFile> entry : dexFiles.entrySet()) {
++                OS.throwIfInterrupted();
+                 int dexNum = entry.getKey();
+                 DexBackedDexFile dexFile = entry.getValue();
+ 
+@@ -120,9 +140,7 @@
+         }
+     }
+ 
+-    private void decodeFile(DexBackedDexFile dexFile, File smaliDir) {
+-        int jobs = Math.min(Runtime.getRuntime().availableProcessors(), 6);
+-
++    private void decodeFile(DexBackedDexFile dexFile, File smaliDir) throws IOException {
+         BaksmaliOptions options = new BaksmaliOptions();
+         options.parameterRegisters = true;
+         options.localsDirective = true;
+@@ -141,10 +159,116 @@
+                 ((DexBackedOdexFile) dexFile).getOdexVersion());
+         }
+ 
+-        OS.mkdir(smaliDir);
+-        Baksmali.disassembleDexFile(dexFile, smaliDir, jobs, options);
++        File canonicalDirectory = smaliDir.getCanonicalFile();
++        if (!canonicalDirectory.equals(smaliDir.getAbsoluteFile())) {
++            throw new IOException("Smali output directory contains a symbolic link");
++        }
++        Path outputRoot = canonicalDirectory.toPath();
++        reserveDirectory(outputRoot.toString());
++        OS.mkdir(canonicalDirectory);
++        // Baksmali.disassembleDexFile swallows interruptions and can report
++        // failure only through a boolean that Apktool previously ignored.
++        // Write one class at a time with its public writer API. The outer
++        // Apktool pool still parallelizes different DEX files.
++        List<ClassDef> classes = new ArrayList<>(dexFile.getClasses());
++        classes.sort(Comparator.comparing(ClassDef::getType));
++        ClassFileNameHandler names = new ClassFileNameHandler(canonicalDirectory, ".smali");
++        for (ClassDef classDef : classes) {
++            OS.throwIfInterrupted();
++            String descriptor = classDef.getType();
++            // ClassFileNameHandler creates directories while resolving its
++            // collision-safe name. Validate and reserve the complete logical
++            // path before invoking it, not merely before opening the writer.
++            reserveClassPath(outputRoot, descriptor);
++            File smaliFile = names.getUniqueFilenameForClass(descriptor);
++            File canonicalFile = smaliFile.getCanonicalFile();
++            if (!canonicalFile.equals(smaliFile.getAbsoluteFile())
++                    || !canonicalFile.toPath().startsWith(outputRoot)
++                    || canonicalFile.toPath().equals(outputRoot)) {
++                throw new IOException("Smali output escapes its DEX directory");
++            }
++            Files.createDirectories(canonicalFile.getParentFile().toPath());
++            try (Writer output = new InterruptibleWriter(
++                    Files.newBufferedWriter(canonicalFile.toPath(), StandardCharsets.UTF_8));
++                 BaksmaliWriter writer = new BaksmaliWriter(output, null)) {
++                new ClassDefinition(options, classDef).writeTo(writer);
++            }
++        }
++        OS.throwIfInterrupted();
+ 
+         int apiLevel = dexFile.getOpcodes().api;
+         mInferredApiLevel.updateAndGet(cur -> (cur == 0 || cur > apiLevel) ? apiLevel : cur);
+     }
++
++    private void reserveClassPath(Path outputRoot, String descriptor) throws IOException {
++        if (descriptor == null || descriptor.length() < 3 || descriptor.charAt(0) != 'L'
++                || descriptor.charAt(descriptor.length() - 1) != ';') {
++            throw new IOException("Invalid class descriptor");
++        }
++        int depth = 1;
++        for (int i = 1; i < descriptor.length() - 1; ++i) {
++            char value = descriptor.charAt(i);
++            if (value == '/' && ++depth > MAX_CLASS_PATH_DEPTH) {
++                throw new IOException("Smali class path exceeds 32 levels");
++            }
++            if (value == '\\' || value <= 0x20 || value == 0x7F || value == ';' || value == '[') {
++                throw new IOException("Invalid character in class descriptor");
++            }
++        }
++        String[] segments = descriptor.substring(1, descriptor.length() - 1).split("/", -1);
++        Path path = outputRoot;
++        for (int i = 0; i < segments.length; ++i) {
++            String segment = segments[i];
++            if (segment.isEmpty() || segment.equals(".") || segment.equals("..")) {
++                throw new IOException("Unsafe class descriptor path");
++            }
++            if (i < segments.length - 1) {
++                path = path.resolve(segment);
++                reserveDirectory(path.toString());
++            }
++        }
++        reserveNode();
++    }
++
++    private void reserveDirectory(String directory) throws IOException {
++        if (mGeneratedDirectories.add(directory)) {
++            reserveNode();
++        }
++    }
++
++    private void reserveNode() throws IOException {
++        if (mGeneratedNodes.incrementAndGet() > MAX_GENERATED_NODES) {
++            throw new IOException("Generated smali files and directories exceed 50000 entries");
++        }
++    }
++
++    private static final class InterruptibleWriter extends FilterWriter {
++        InterruptibleWriter(Writer writer) {
++            super(writer);
++        }
++
++        private void checkInterrupted() throws InterruptedIOException {
++            if (Thread.currentThread().isInterrupted()) {
++                throw new InterruptedIOException("Smali decode cancelled");
++            }
++        }
++
++        @Override
++        public void write(int value) throws IOException {
++            checkInterrupted();
++            out.write(value);
++        }
++
++        @Override
++        public void write(char[] value, int offset, int count) throws IOException {
++            checkInterrupted();
++            out.write(value, offset, count);
++        }
++
++        @Override
++        public void write(String value, int offset, int count) throws IOException {
++            checkInterrupted();
++            out.write(value, offset, count);
++        }
++    }
+ }
+--- a/brut.j.util/src/main/java/brut/util/BackgroundWorker.java
++++ b/brut.j.util/src/main/java/brut/util/BackgroundWorker.java
+@@ -1,4 +1,5 @@
+ /*
++ *  Modified for Material Files (2026); see third_party/apktool-android/README.md.
+  *  Copyright (C) 2010 Ryszard Wiśniewski <brut.alll@gmail.com>
+  *  Copyright (C) 2010 Connor Tumbleson <connor.tumbleson@gmail.com>
+  *
+@@ -23,6 +24,7 @@
+ import java.util.concurrent.ExecutorService;
+ import java.util.concurrent.Executors;
+ import java.util.concurrent.Future;
++import java.util.concurrent.TimeUnit;
+ 
+ public class BackgroundWorker {
+     private final ExecutorService mExecutor;
+@@ -38,15 +40,20 @@
+     public void waitForFinish() {
+         checkState();
+         mSubmitAllowed = false;
+-        for (Future<?> future : mWorkerFutures) {
+-            try {
++        try {
++            for (Future<?> future : mWorkerFutures) {
+                 future.get();
+-            } catch (InterruptedException | ExecutionException ex) {
+-                throw new RuntimeException(ex);
+             }
++            mWorkerFutures.clear();
++            mSubmitAllowed = true;
++        } catch (InterruptedException ex) {
++            Thread.currentThread().interrupt();
++            shutdownNow();
++            throw new RuntimeException("Apktool operation cancelled", ex);
++        } catch (ExecutionException | RuntimeException ex) {
++            shutdownNow();
++            throw new RuntimeException(ex);
+         }
+-        mWorkerFutures.clear();
+-        mSubmitAllowed = true;
+     }
+ 
+     public void clearFutures() {
+@@ -61,7 +68,24 @@
+ 
+     public void shutdownNow() {
+         mSubmitAllowed = false;
++        for (Future<?> future : mWorkerFutures) {
++            future.cancel(true);
++        }
+         mExecutor.shutdownNow();
++        // A cancelled Future becomes done before its runnable has stopped.
++        // Do not let the caller remove a workspace that is still in use.
++        boolean interrupted = Thread.interrupted();
++        while (!mExecutor.isTerminated()) {
++            try {
++                mExecutor.awaitTermination(1, TimeUnit.SECONDS);
++            } catch (InterruptedException ex) {
++                interrupted = true;
++            }
++        }
++        mWorkerFutures.clear();
++        if (interrupted) {
++            Thread.currentThread().interrupt();
++        }
+     }
+ 
+     public ExecutorService getExecutor() {
+@@ -70,12 +94,20 @@
+ 
+     public void submit(Runnable task) {
+         checkState();
+-        mWorkerFutures.add(mExecutor.submit(task));
++        OS.throwIfInterrupted();
++        mWorkerFutures.add(mExecutor.submit(() -> {
++            OS.throwIfInterrupted();
++            task.run();
++        }));
+     }
+ 
+     public <T> Future<T> submit(Callable<T> task) {
+         checkState();
+-        Future<T> future = mExecutor.submit(task);
++        OS.throwIfInterrupted();
++        Future<T> future = mExecutor.submit(() -> {
++            OS.throwIfInterrupted();
++            return task.call();
++        });
+         mWorkerFutures.add(future);
+         return future;
+     }
+--- a/brut.j.util/src/main/java/brut/util/OS.java
++++ b/brut.j.util/src/main/java/brut/util/OS.java
+@@ -1,4 +1,5 @@
+ /*
++ *  Modified for Material Files (2026); see third_party/apktool-android/README.md.
+  *  Copyright (C) 2010 Ryszard Wiśniewski <brut.alll@gmail.com>
+  *  Copyright (C) 2010 Connor Tumbleson <connor.tumbleson@gmail.com>
+  *
+@@ -19,7 +20,7 @@
+ import brut.common.BrutException;
+ import brut.common.Log;
+ 
+-import java.io.BufferedReader;
++import java.io.Closeable;
+ import java.io.File;
+ import java.io.InputStream;
+ import java.io.InputStreamReader;
+@@ -27,15 +28,19 @@
+ import java.nio.file.Files;
+ import java.nio.file.StandardCopyOption;
+ import java.util.Arrays;
++import java.util.concurrent.CancellationException;
++import java.util.concurrent.ExecutionException;
+ import java.util.concurrent.ExecutorService;
+ import java.util.concurrent.Executors;
++import java.util.concurrent.Future;
+ import java.util.concurrent.TimeUnit;
++import java.util.concurrent.TimeoutException;
+ 
+ public final class OS {
+     private static final String TAG = "";
+ 
+     /**
+-     * Process-wide override for the directory in which transient files and
++     * Thread-scoped override for the directory in which transient files and
+      * directories are created. When {@code null}, {@link File#createTempFile}
+      * uses {@code java.io.tmpdir}.
+      *
+@@ -43,7 +48,12 @@
+      * not exist; the host must call this (or {@link brut.androlib.Config#setTempDirectory})
+      * with an app-writable location before any decode/build call.
+      */
+-    private static volatile File sDefaultTempDirectory;
++    // Decode/build bind their Config for the duration of an operation. Worker
++    // threads inherit that binding, so a subsequent task cannot redirect a
++    // previous task's temporary files into its own working directory.
++    private static final InheritableThreadLocal<File> sDefaultTempDirectory = new InheritableThreadLocal<>();
++
++    private static final long EXEC_TIMEOUT_SECONDS = 10 * 60;
+ 
+     private OS() {
+         // Private constructor for utility class.
+@@ -54,15 +64,20 @@
+             //noinspection ResultOfMethodCallIgnored
+             dir.mkdirs();
+         }
+-        sDefaultTempDirectory = dir;
++        if (dir == null) {
++            sDefaultTempDirectory.remove();
++        } else {
++            sDefaultTempDirectory.set(dir);
++        }
+     }
+ 
+     public static File getDefaultTempDirectory() {
+-        return sDefaultTempDirectory;
++        return sDefaultTempDirectory.get();
+     }
+ 
+     public static File createTempFile(String prefix, String suffix) throws IOException {
+-        File parent = sDefaultTempDirectory;
++        throwIfInterrupted();
++        File parent = getDefaultTempDirectory();
+         if (parent != null) {
+             return File.createTempFile(prefix, suffix, parent);
+         }
+@@ -166,159 +181,188 @@
+     }
+ 
+     public static void exec(String[] cmd) throws BrutException {
+-        try {
+-            ProcessBuilder builder = new ProcessBuilder(cmd);
+-            Process ps = builder.start();
+-
+-            // Capture stderr into a bounded ring buffer in addition to logging.
+-            // On Android the StreamForwarder's Log.w() writes go to logcat,
+-            // which callers can't easily inspect. Surfacing the tail of stderr
+-            // directly in the BrutException message turns "exit code = 1"
+-            // failures into actionable diagnostics for any host.
+-            StreamForwarder errF = new StreamForwarder(ps.getErrorStream(), "ERROR", true);
+-            StreamForwarder outF = new StreamForwarder(ps.getInputStream(), "OUTPUT", false);
+-            errF.start();
+-            outF.start();
+-
+-            int exitValue = ps.waitFor();
+-            // Best-effort: give forwarders a moment to drain after the child
+-            // has exited, otherwise the captured tail can be empty on fast
+-            // failures.
+-            errF.join(500);
+-            outF.join(500);
+-            if (exitValue != 0) {
+-                String tail = errF.captured();
+-                StringBuilder msg = new StringBuilder("Execution failed (exit code = ")
+-                    .append(exitValue).append("): ").append(Arrays.toString(cmd));
+-                if (!tail.isEmpty()) {
+-                    msg.append(System.lineSeparator()).append("stderr:").append(System.lineSeparator()).append(tail);
+-                }
+-                throw new BrutException(msg.toString());
+-            }
++        exec(cmd, EXEC_TIMEOUT_SECONDS, TimeUnit.SECONDS);
++    }
++
++    /** Runs a non-interactive command, always reaping it before returning. */
++    public static void exec(String[] cmd, long timeout, TimeUnit unit) throws BrutException {
++        try {
++            runProcess(cmd, timeout, unit, true);
+         } catch (IOException ex) {
+             throw new BrutException("could not exec: " + Arrays.toString(cmd), ex);
+         } catch (InterruptedException ex) {
+-            throw new BrutException("could not exec : " + Arrays.toString(cmd), ex);
++            Thread.currentThread().interrupt();
++            throw new BrutException("Execution cancelled: " + Arrays.toString(cmd), ex);
+         }
+     }
+ 
+     public static String execAndReturn(String[] cmd) {
+-        ExecutorService executor = Executors.newCachedThreadPool();
++        return execAndReturn(cmd, 15, TimeUnit.SECONDS);
++    }
++
++    public static String execAndReturn(String[] cmd, long timeout, TimeUnit unit) {
++        try {
++            return runProcess(cmd, timeout, unit, false);
++        } catch (InterruptedException ex) {
++            Thread.currentThread().interrupt();
++            return null;
++        } catch (IOException | BrutException ignored) {
++            return null;
++        }
++    }
++
++    private static String runProcess(String[] cmd, long timeout, TimeUnit unit, boolean log)
++            throws IOException, InterruptedException, BrutException {
++        if (Thread.currentThread().isInterrupted()) {
++            throw new InterruptedException("Execution cancelled before launch");
++        }
++        if (timeout <= 0) {
++            throw new IllegalArgumentException("timeout must be positive");
++        }
++        Process process = null;
++        ExecutorService executor = null;
+         try {
+             ProcessBuilder builder = new ProcessBuilder(cmd);
+-            builder.redirectErrorStream(true);
+-
+-            Process process = builder.start();
+-            StreamCollector collector = new StreamCollector(process.getInputStream());
+-            executor.execute(collector);
+-            process.waitFor(15, TimeUnit.SECONDS);
+-            executor.shutdownNow();
+-
+-            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+-                Log.w(TAG, "Stream collector did not terminate.");
+-            }
+-            return collector.get();
+-        } catch (IOException | InterruptedException ignored) {
+-            return null;
++            File tempDirectory = getDefaultTempDirectory();
++            if (tempDirectory != null) {
++                builder.environment().put("TMPDIR", tempDirectory.getAbsolutePath());
++            }
++            process = builder.start();
++            process.getOutputStream().close();
++            executor = Executors.newFixedThreadPool(2, task -> {
++                Thread thread = new Thread(task, "apktool-process-output");
++                thread.setDaemon(true);
++                return thread;
++            });
++            StreamCollector stdout = new StreamCollector(process.getInputStream(), log, false);
++            StreamCollector stderr = new StreamCollector(process.getErrorStream(), log, true);
++            Future<?> outTask = executor.submit(stdout);
++            Future<?> errTask = executor.submit(stderr);
++            if (!process.waitFor(timeout, unit)) {
++                throw new BrutException("Execution timed out: " + Arrays.toString(cmd));
++            }
++            try {
++                outTask.get(5, TimeUnit.SECONDS);
++                errTask.get(5, TimeUnit.SECONDS);
++            } catch (ExecutionException | TimeoutException ex) {
++                throw new BrutException("Could not collect process output: " + Arrays.toString(cmd), ex);
++            }
++            if (process.exitValue() != 0) {
++                throw new BrutException("Execution failed (exit code = " + process.exitValue() + "): "
++                    + Arrays.toString(cmd) + System.lineSeparator() + stderr.get());
++            }
++            return stdout.get();
++        } finally {
++            // Cancellation must not leave aapt2 running while its working
++            // directory is deleted or another clone job starts.
++            boolean interrupted = Thread.interrupted();
++            if (process != null) {
++                if (process.isAlive()) {
++                    process.destroy();
++                    try {
++                        if (!process.waitFor(1, TimeUnit.SECONDS)) {
++                            process.destroyForcibly();
++                        }
++                    } catch (InterruptedException ex) {
++                        interrupted = true;
++                        process.destroyForcibly();
++                    }
++                }
++                while (true) {
++                    try {
++                        process.waitFor();
++                        break;
++                    } catch (InterruptedException ex) {
++                        interrupted = true;
++                        process.destroyForcibly();
++                    }
++                }
++                closeQuietly(process.getOutputStream());
++                closeQuietly(process.getInputStream());
++                closeQuietly(process.getErrorStream());
++            }
++            if (executor != null) {
++                executor.shutdownNow();
++                while (!executor.isTerminated()) {
++                    try {
++                        executor.awaitTermination(1, TimeUnit.SECONDS);
++                    } catch (InterruptedException ex) {
++                        interrupted = true;
++                    }
++                }
++            }
++            if (interrupted) {
++                Thread.currentThread().interrupt();
++            }
++        }
++    }
++
++    private static void closeQuietly(Closeable stream) {
++        try {
++            stream.close();
++        } catch (IOException ignored) {
++        }
++    }
++
++    public static void throwIfInterrupted() {
++        if (Thread.currentThread().isInterrupted()) {
++            throw new CancellationException("Apktool operation cancelled");
+         }
+     }
+ 
+     public static File createTempDirectory() throws BrutException {
+-        try {
+-            File tmp = createTempFile("BRUT", null);
+-            tmp.deleteOnExit();
+-
+-            if (!tmp.delete()) {
+-                throw new BrutException("Could not delete tmp file: " + tmp.getAbsolutePath());
+-            }
+-            if (!tmp.mkdir()) {
+-                throw new BrutException("Could not create tmp dir: " + tmp.getAbsolutePath());
+-            }
+-
+-            return tmp;
++        throwIfInterrupted();
++        try {
++            File parent = getDefaultTempDirectory();
++            return (parent != null ? Files.createTempDirectory(parent.toPath(), "BRUT")
++                : Files.createTempDirectory("BRUT")).toFile();
+         } catch (IOException ex) {
+             throw new BrutException("Could not create tmp dir", ex);
+         }
+     }
+ 
+-    private static class StreamForwarder extends Thread {
+-        // Cap capture to keep memory bounded if a child subprocess goes
+-        // chatty (e.g. aapt2 on a corrupt resource table can emit thousands
+-        // of lines). 16 KB is enough for the actual error pinpoint without
+-        // turning the exception into a wall of text.
+-        private static final int CAPTURE_LIMIT_BYTES = 16 * 1024;
+-
++    private static class StreamCollector implements Runnable {
++        private static final int CAPTURE_LIMIT_CHARS = 16 * 1024;
+         private final InputStream mIn;
+-        private final String mType;
+-        private final boolean mCapture;
+-        private final StringBuilder mCaptured;
+-
+-        public StreamForwarder(InputStream in, String type) {
+-            this(in, type, false);
+-        }
+-
+-        public StreamForwarder(InputStream in, String type, boolean capture) {
++        private final boolean mLog;
++        private final boolean mError;
++        private final StringBuilder mBuffer = new StringBuilder();
++
++        StreamCollector(InputStream in, boolean log, boolean error) {
+             mIn = in;
+-            mType = type;
+-            mCapture = capture;
+-            mCaptured = capture ? new StringBuilder() : null;
+-        }
+-
+-        public String captured() {
+-            if (mCaptured == null) {
+-                return "";
+-            }
+-            synchronized (mCaptured) {
+-                return mCaptured.toString();
+-            }
++            mLog = log;
++            mError = error;
+         }
+ 
+         @Override
+         public void run() {
+-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(mIn))) {
+-                String line;
+-                while ((line = reader.readLine()) != null) {
+-                    if (mType.equals("OUTPUT")) {
+-                        Log.i(TAG, line);
+-                    } else {
+-                        Log.w(TAG, line);
+-                    }
+-                    if (mCapture) {
+-                        synchronized (mCaptured) {
+-                            if (mCaptured.length() < CAPTURE_LIMIT_BYTES) {
+-                                mCaptured.append(line).append(System.lineSeparator());
+-                            }
++            try (InputStreamReader reader = new InputStreamReader(mIn)) {
++                char[] buffer = new char[1024];
++                int count;
++                while ((count = reader.read(buffer)) != -1) {
++                    synchronized (mBuffer) {
++                        mBuffer.append(buffer, 0, count);
++                        if (mBuffer.length() > CAPTURE_LIMIT_CHARS) {
++                            mBuffer.delete(0, mBuffer.length() - CAPTURE_LIMIT_CHARS);
+                         }
+                     }
+-                }
+-            } catch (IOException ex) {
+-                ex.printStackTrace();
+-            }
+-        }
+-    }
+-
+-    private static class StreamCollector implements Runnable {
+-        private final InputStream mIn;
+-        private final StringBuilder mBuffer;
+-
+-        public StreamCollector(InputStream in) {
+-            mIn = in;
+-            mBuffer = new StringBuilder();
+-        }
+-
+-        @Override
+-        public void run() {
+-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(mIn))) {
+-                String line;
+-                while ((line = reader.readLine()) != null) {
+-                    mBuffer.append(line).append('\n');
++                    if (mLog) {
++                        String text = new String(buffer, 0, count);
++                        if (mError) {
++                            Log.w(TAG, text);
++                        } else {
++                            Log.i(TAG, text);
++                        }
++                    }
+                 }
+             } catch (IOException ignored) {
+             }
+         }
+ 
+         public String get() {
+-            return mBuffer.toString();
++            synchronized (mBuffer) {
++                return mBuffer.toString();
++            }
+         }
+     }
+ }
+--- a/brut.j.xml/src/main/java/brut/xml/XmlUtils.java
++++ b/brut.j.xml/src/main/java/brut/xml/XmlUtils.java
+@@ -1,4 +1,5 @@
+ /*
++ *  Modified for Material Files (2026); see third_party/apktool-android/README.md.
+  *  Copyright (C) 2010 Ryszard Wiśniewski <brut.alll@gmail.com>
+  *  Copyright (C) 2010 Connor Tumbleson <connor.tumbleson@gmail.com>
+  *
+@@ -17,11 +18,15 @@
+ package brut.xml;
+ 
+ import brut.common.Log;
++import brut.util.OS;
+ import org.w3c.dom.Document;
+ import org.w3c.dom.Node;
+ import org.w3c.dom.NodeList;
+ import org.xml.sax.InputSource;
+ import org.xml.sax.SAXException;
++import org.xmlpull.v1.XmlPullParser;
++import org.xmlpull.v1.XmlPullParserException;
++import org.xmlpull.v1.XmlPullParserFactory;
+ 
+ import javax.xml.XMLConstants;
+ import javax.xml.namespace.NamespaceContext;
+@@ -45,6 +50,8 @@
+ import java.io.OutputStream;
+ import java.io.StringReader;
+ import java.nio.charset.StandardCharsets;
++import java.nio.channels.Channels;
++import java.nio.channels.SeekableByteChannel;
+ import java.nio.file.Files;
+ import java.util.Collections;
+ import java.util.Iterator;
+@@ -71,18 +78,58 @@
+             throws SAXException, ParserConfigurationException {
+         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+         factory.setNamespaceAware(nsAware);
+-        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+-        factory.setFeature(FEATURE_DISALLOW_DOCTYPE_DECL, true);
+-        factory.setFeature(FEATURE_LOAD_EXTERNAL_DTD, false);
++        factory.setExpandEntityReferences(false);
++        // Android's DOM implementation does not implement the Xerces feature
++        // names. DOCTYPE rejection below is mandatory on every platform;
++        // these optional features provide additional protection on the JVM.
++        setFeatureIfSupported(factory, XMLConstants.FEATURE_SECURE_PROCESSING, true);
++        setFeatureIfSupported(factory, FEATURE_DISALLOW_DOCTYPE_DECL, true);
++        setFeatureIfSupported(factory, FEATURE_LOAD_EXTERNAL_DTD, false);
+ 
+         try {
+-            factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+-            factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
++            // Standard JAXP 1.5 property names; the constants themselves are
++            // absent from Android's javax.xml.XMLConstants.
++            factory.setAttribute("http://javax.xml.XMLConstants/property/accessExternalDTD", "");
++            factory.setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "");
+         } catch (IllegalArgumentException ignored) {
+             Log.w(TAG, "JAXP 1.5 Support is required to validate XML");
+         }
+ 
+-        return factory.newDocumentBuilder();
++        DocumentBuilder builder = factory.newDocumentBuilder();
++        builder.setEntityResolver((publicId, systemId) -> {
++            throw new SAXException("External XML entities are not supported");
++        });
++        return builder;
++    }
++
++    private static void setFeatureIfSupported(DocumentBuilderFactory factory, String name, boolean value) {
++        try {
++            factory.setFeature(name, value);
++        } catch (ParserConfigurationException ignored) {
++            // All XML input passes rejectDoctype before reaching DOM.
++        }
++    }
++
++    private static void rejectDoctype(InputSource source) throws IOException, SAXException {
++        try {
++            XmlPullParser parser = XmlPullParserFactory.newInstance().newPullParser();
++            parser.setFeature(XmlPullParser.FEATURE_PROCESS_DOCDECL, false);
++            if (source.getCharacterStream() != null) {
++                parser.setInput(source.getCharacterStream());
++            } else {
++                parser.setInput(source.getByteStream(), source.getEncoding());
++            }
++            int event;
++            do {
++                OS.throwIfInterrupted();
++                event = parser.nextToken();
++                if (event == XmlPullParser.DOCDECL) {
++                    throw new SAXException("XML document types are not supported");
++                }
++            } while (event != XmlPullParser.END_DOCUMENT);
++        } catch (XmlPullParserException ex) {
++            throw new SAXException("Invalid XML", ex);
++        }
+     }
+ 
+     public static Document newDocument() throws SAXException, ParserConfigurationException {
+@@ -100,6 +147,7 @@
+     public static Document parseDocument(String xml, boolean nsAware)
+             throws IOException, SAXException, ParserConfigurationException {
+         DocumentBuilder builder = newDocumentBuilder(nsAware);
++        rejectDoctype(new InputSource(new StringReader(xml)));
+         StringReader reader = new StringReader(xml);
+         return builder.parse(new InputSource(reader));
+     }
+@@ -113,7 +161,12 @@
+         DocumentBuilder builder = newDocumentBuilder(nsAware);
+         // Not using the parse(File) method on purpose, so that we can control when to close it.
+         // Somehow parse(File) does not seem to close the file in all cases.
+-        try (InputStream in = Files.newInputStream(file.toPath())) {
++        // Rewind the same file handle after validation, rather than opening
++        // the path a second time and potentially reading a different file.
++        try (SeekableByteChannel channel = Files.newByteChannel(file.toPath())) {
++            InputStream in = Channels.newInputStream(channel);
++            rejectDoctype(new InputSource(in));
++            channel.position(0);
+             return builder.parse(new InputSource(in));
+         }
+     }

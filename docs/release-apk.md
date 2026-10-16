@@ -1,6 +1,7 @@
 # GitHub Actions Release APK
 
-GitHub Actions 仅构建签名的 Release APK。
+GitHub Actions 仅构建签名的 Release APK。当前产物支持 Android 11（API 30）及以上，
+只包含 ARM64（`arm64-v8a`）原生库。
 
 推送 `master` 或手动运行 [Release APK](https://github.com/giturass/MaterialFiles/actions/workflows/android.yml)
 工作流，会在 Ubuntu 上使用 JDK 21、SDK 37.2、Build Tools 37.0.0、NDK
@@ -34,8 +35,9 @@ APK 使用与 [MDTerm 发布构建](https://github.com/giturass/MDTerm/actions/r
 - 对应的 `.sha256`、`.verification.json` 和 `.signature.txt`
 
 [`tools/verify_release_apk.py`](../tools/verify_release_apk.py) 在上传前核验 APK 签名，
-要求签名证书与上述指纹一致；同时检查包名、不可调试状态、Sora 编辑入口、
-ARM64 原生库、全部语言资源及固定校验和、JCodings 运行时表。校验失败不会
+要求签名证书与上述指纹一致；同时检查包名、不可调试状态、最低 API 必须为 30、
+原生 ABI 集合必须仅为 `arm64-v8a`、Sora 编辑入口、全部语法资源及固定校验和、
+JCodings 运行时表。验证报告记录 `min_sdk` 和实际 ABI 集合。校验失败不会
 上传 APK。Lint 和 R8 报告另存为 `materialfiles-build-reports-<提交 SHA>` artifact。
 
 校验也会拒绝 Firebase/Crashlytics/Google Play Services 的 Manifest、配置资源和

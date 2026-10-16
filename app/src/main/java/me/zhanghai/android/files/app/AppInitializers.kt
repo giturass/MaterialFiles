@@ -10,6 +10,7 @@ import android.os.Build
 import android.webkit.WebView
 import jcifs.context.SingletonContext
 import me.zhanghai.android.files.BuildConfig
+import me.zhanghai.android.files.apk.ApkOperations
 import me.zhanghai.android.files.coil.initializeCoil
 import me.zhanghai.android.files.filejob.fileJobNotificationTemplate
 import me.zhanghai.android.files.ftpserver.ftpServerServiceNotificationTemplate
@@ -34,6 +35,7 @@ val appInitializers = listOf(
     ::initializeWebViewDebugging,
     ::initializeCoil,
     ::initializeFileSystemProviders,
+    ::cleanInterruptedApkTasks,
     ::upgradeApp,
     ::initializeLiveDataObjects,
     ::initializeCustomTheme,
@@ -73,6 +75,10 @@ private fun initializeLiveDataObjects() {
     // Force initialization of LiveData objects so that it won't happen on a background thread.
     StorageVolumeListLiveData.value
     Settings.FILE_LIST_DEFAULT_DIRECTORY.value
+}
+
+private fun cleanInterruptedApkTasks() {
+    AsyncTask.THREAD_POOL_EXECUTOR.execute { ApkOperations.cleanInterruptedTasks(application) }
 }
 
 private fun initializeCustomTheme() {

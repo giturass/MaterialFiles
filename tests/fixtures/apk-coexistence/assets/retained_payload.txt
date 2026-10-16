@@ -1,0 +1,3 @@
+This opaque fixture payload must remain byte-for-byte unchanged.
+com.example.materialfiles.coexistence.fixture
+content://com.example.materialfiles.coexistence.fixture.provider/data

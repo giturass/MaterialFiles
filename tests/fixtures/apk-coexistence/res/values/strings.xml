@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">共存验证夹具</string>
+    <string name="fixture_message">单体 APK 资源与组件验证</string>
+    <string name="fixture_authority">com.example.materialfiles.coexistence.fixture.provider</string>
+    <string name="status_format">自检：%1$s</string>
+</resources>

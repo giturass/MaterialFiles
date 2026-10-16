@@ -16,7 +16,10 @@ android {
     ndkVersion '30.0.16248370'
     defaultConfig {
         applicationId 'me.zhanghai.android.files'
-        minSdk 23
+        minSdk 30
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
         // Not supporting the ACCESS_LOCAL_NETWORK runtime permission yet.
         //noinspection OldTargetApi
         targetSdk 36
@@ -41,6 +44,14 @@ android {
     sourceSets {
         // Build the pinned JBinding Java API together with the official 7-Zip native engine.
         main.java.srcDir '../third_party/sevenzip/jbinding-java'
+        // Compile the pinned Android Apktool sources without a fat JAR or duplicate dependencies.
+        def apktoolDir = '../third_party/apktool-android'
+        ['brut.j.common', 'brut.j.util', 'brut.j.dir', 'brut.j.xml', 'brut.j.yaml',
+         'brut.apktool/apktool-lib', 'brut.apktool/apktool-android'].each { module ->
+            main.java.srcDir "$apktoolDir/$module/src/main/java"
+        }
+        main.resources.srcDir "$apktoolDir/brut.apktool/apktool-lib/src/main/resources"
+        main.jniLibs.srcDir "$apktoolDir/brut.apktool/apktool-android/src/main/jniLibs"
     }
     androidResources {
         generateLocaleConfig true
@@ -72,12 +83,16 @@ android {
     packagingOptions {
         jniLibs {
             useLegacyPackaging true
+            // This is an executable, already stripped by upstream, launched from nativeLibraryDir.
+            keepDebugSymbols += ['**/libaapt2.so']
         }
         resources {
             excludes += [
                     // https://github.com/kotlin/kotlinx.coroutines#avoiding-including-the-debug-infrastructure-in-the-resulting-apk
                     '/DebugProbesKt.bin',
                     '/META-INF/DEPENDENCIES',
+                    // Only Android aapt2 binaries are useful on the device.
+                    '/prebuilt/linux/**', '/prebuilt/macosx/**', '/prebuilt/windows/**',
             ]
         }
     }
@@ -107,6 +122,23 @@ dependencies {
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
+
+    // Use the same published apksig release as AGP, through its in-process Java API.
+    implementation 'com.android.tools.build:apksig:9.4.1'
+
+    // Apktool Android v1.0.0 / f0ed422f89f37276a55e464d208b0eeb91d1ca0b.
+    // smali is pinned to upstream's b6365a84f40c8355af14004dcf7b8324ee050b9f.
+    ['smali', 'smali-baksmali', 'smali-dexlib2', 'smali-util'].each { artifact ->
+        implementation("com.github.iBotPeaches.smali:$artifact:b6365a84f4") {
+            exclude group: 'com.google.guava', module: 'guava'
+            exclude group: 'xmlpull', module: 'xmlpull'
+            exclude group: 'org.slf4j'
+        }
+    }
+    implementation 'org.apache.commons:commons-compress:1.27.1'
+    implementation 'commons-io:commons-io:2.21.0'
+    implementation 'org.apache.commons:commons-text:1.15.0'
+    implementation 'ar.com.hjg:pngj:2.1.0'
 
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 

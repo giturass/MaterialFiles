@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="apk_operation_copy">正在将输入复制到私有临时目录…</string>
+    <string name="apk_operation_align">正在对齐 APK 条目…</string>
+    <string name="apk_operation_sign">正在签名 APK…</string>
+    <string name="apk_operation_verify">正在验证 APK 签名…</string>
+    <string name="apk_operation_save">正在保存并复核输出 APK…</string>
+    <string name="apk_operation_recover">正在清理上次中断的 APK 任务…</string>
+    <string name="apk_operation_analyze">正在检查输入 APK…</string>
+    <string name="apk_operation_coexistence_too_large">共存暂支持不超过 512 MiB 的普通单体 APK。</string>
+    <string name="apk_operation_decode">正在读取应用清单…</string>
+    <string name="apk_operation_rewrite">正在修改包名…</string>
+    <string name="apk_operation_rebuild">正在重建共存 APK…</string>
+    <string name="apk_operation_key_save_failed">无法保存私有密钥库。</string>
+    <string name="apk_operation_metadata_changed">签名后 APK 的应用信息发生变化，未保存输出。</string>
+    <string name="apk_operation_split_unsupported">目前仅支持完整的单体 APK。此文件是拆分 APK 或依赖其他拆分包，无法单独处理 APKS、XAPK、APKM 和动态功能包。</string>
+    <string name="apk_operation_invalid_package">Android 无法读取此 APK 的应用信息，文件可能已损坏或不兼容。</string>
+    <string name="apk_operation_local_output_required">当前目录不支持保存 APK，请将输入 APK 放到本地目录后重试。</string>
+    <string name="apk_operation_output_exists">输出文件已存在：%1$s。请选择其他文件名。</string>
+    <string name="apk_operation_invalid_input">请选择不超过 4 GiB 的普通 APK，或不超过 16 MiB 的密钥库；不支持符号链接或大小未知的文件。</string>
+    <string name="apk_operation_input_changed">读取期间输入文件发生了变化，请等待文件停止修改后重试。</string>
+    <string name="apk_operation_output_create_failed">无法在 %1$s 创建新输出：%2$s</string>
+    <string name="apk_operation_output_changed">保存后的 APK 与已验证的输出不一致，未将任务报告为成功。</string>
+    <string name="apk_operation_no_space">可用空间不足。处理 APK 需要在私有存储中保存临时副本，并为输出文件预留空间。</string>
+</resources>

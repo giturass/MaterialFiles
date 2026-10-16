@@ -64,3 +64,10 @@
 -keep class * implements net.sf.sevenzipjbinding.IOutCreateCallback { *; }
 -keep class * implements net.sf.sevenzipjbinding.ISequentialInStream { *; }
 -keep class * implements net.sf.sevenzipjbinding.ISequentialOutStream { *; }
+
+# Apktool's generated smali grammars and their ANTLR runtime use reflective members.
+-keep class com.android.tools.smali.** { *; }
+-keep class org.antlr.runtime.** { *; }
+-keep class brut.androlib.meta.** { *; }
+# Class-relative resource lookups must retain the framework resource path.
+-keepnames class brut.androlib.res.Framework

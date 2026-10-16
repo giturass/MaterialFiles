@@ -67,6 +67,20 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/action_sign_apk"
+        android:orderInCategory="200"
+        android:title="@string/apk_signing_title"
+        android:visible="false"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_coexist_apk"
+        android:orderInCategory="200"
+        android:title="@string/apk_coexistence_title"
+        android:visible="false"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_copy_path"
         android:orderInCategory="200"
         android:title="@string/file_item_action_copy_path"

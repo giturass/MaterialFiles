@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.materialfiles.coexistence.fixture"
+    android:versionCode="17"
+    android:versionName="1.0-fixture">
+    <uses-sdk android:minSdkVersion="30" android:targetSdkVersion="36" />
+    <permission
+        android:name="com.example.materialfiles.coexistence.fixture.permission.FIXTURE"
+        android:protectionLevel="normal" />
+    <uses-permission android:name="com.example.materialfiles.coexistence.fixture.permission.FIXTURE" />
+    <queries>
+        <!-- Query declarations do not register authorities and must retain the original target. -->
+        <provider android:authorities="com.example.materialfiles.coexistence.fixture.provider" />
+    </queries>
+    <application
+        android:allowBackup="false"
+        android:extractNativeLibs="true"
+        android:icon="@drawable/ic_fixture"
+        android:label="@string/app_name"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <activity android:name=".FixtureActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.example.materialfiles.coexistence.fixture.action.SELF_TEST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <!-- This disposable fixture exposes only fixed test data to adb's content command. -->
+        <provider
+            android:name=".FixtureProvider"
+            android:authorities="com.example.materialfiles.coexistence.fixture.provider"
+            android:exported="true" />
+        <provider
+            android:name=".MultiAuthorityFixtureProvider"
+            android:authorities="com.example.materialfiles.coexistence.fixture.files;com.example.materialfiles.coexistence.fixture.cache;com.example.materialfiles.coexistence.shared.documents"
+            android:exported="false" />
+        <provider
+            android:name=".FixedAuthorityFixtureProvider"
+            android:authorities="org.example.materialfiles.coexistence.fixed"
+            android:exported="false" />
+    </application>
+</manifest>

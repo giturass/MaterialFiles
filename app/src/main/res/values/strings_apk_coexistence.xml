@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="apk_coexistence_title">制作共存版</string>
+    <string name="apk_coexistence_target_package">目标包名</string>
+    <string name="apk_coexistence_target_package_hint">例如 com.example.app.clone，须与原包名不同</string>
+    <string name="apk_coexistence_invalid_package">请输入有效包名：至少两段，以英文句点分隔；每段以英文字母开头，只能包含英文字母、数字和下划线，最多 255 个字符。</string>
+    <string name="apk_coexistence_same_package">目标包名必须与原 APK 的包名不同。</string>
+    <string name="apk_coexistence_start">确定</string>
+    <string name="apk_coexistence_working">正在制作共存 APK…</string>
+    <string name="apk_coexistence_result">共存 APK 已生成</string>
+    <string name="apk_coexistence_report_format">修改结果：\n%1$s</string>
+</resources>

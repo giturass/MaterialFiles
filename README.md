@@ -4,7 +4,7 @@
 
 [![Android CI status](https://github.com/zhanghai/MaterialFiles/workflows/Android%20CI/badge.svg)](https://github.com/zhanghai/MaterialFiles/actions) [![GitHub release](https://img.shields.io/github/v/release/zhanghai/MaterialFiles)](https://github.com/zhanghai/MaterialFiles/releases) [![License](https://img.shields.io/github/license/zhanghai/MaterialFiles?color=blue)](LICENSE)
 
-An open source Material Design file manager, for Android 6.0+.
+An open source Material Design file manager, for Android 11+ (arm64-v8a).
 
 Builds from this repository contain no usage tracking, advertising SDKs or automatic crash reporting. Both debug and release builds use the same tracking-free source, without source preprocessing or service credentials. See the [privacy policy](PRIVACY.md), also available offline from the app's About screen.
 
@@ -24,6 +24,8 @@ Builds from this repository contain no usage tracking, advertising SDKs or autom
 - Breadcrumbs: Navigate in the filesystem with ease.
 - Root support: View and manage files with root access.
 - Archive support: official 7-Zip 26.04, built from source with JBinding, handles browsing, extraction and creation. See the [format matrix and verification](docs/7z.md). Full RAR support includes upstream's unRAR license restriction.
+- APK signing: inspect signatures, import JKS/PKCS12 keys or create a private key, and save a separately verified APK. See [signing and its limits](docs/apk-signing.md).
+- APK coexistence: change a standalone APK's application ID, sign it and save a separate copy. See [scope and verification](docs/apk-coexistence.md).
 - NAS support: View and manage files on FTP, SFTP, SMB and WebDAV servers.
 - Themes: Customizable UI colors, plus night mode with optional true black.
 - Linux-aware: Like [Nautilus](https://apps.gnome.org/Nautilus/), knows symbolic links, file permissions and SELinux context.

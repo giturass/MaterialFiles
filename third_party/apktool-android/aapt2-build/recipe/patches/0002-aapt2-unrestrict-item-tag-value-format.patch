@@ -1,0 +1,42 @@
+From a6d241f261b565303987ca59c6080c0c28879991 Mon Sep 17 00:00:00 2001
+From: Igor Eisberg <8811086+IgorEisberg@users.noreply.github.com>
+Date: Thu, 26 Feb 2026 16:19:07 +0200
+Subject: [PATCH] aapt2: unrestrict value format for item tags
+
+Re-rooted from frameworks/base/tools/aapt2/ResourceParser.cpp to
+submodules/base/tools/aapt2/ResourceParser.cpp so it applies inside
+ReVanced/aapt2's recipe layout. iBotPeaches PR #3130, exported from
+the apktool-3.0.x branch (commit a6d241f).
+
+Without this, aapt2 rejects modern Play-Store APKs whose layouts.xml
+contains `<item type="layout" format="...">non-reference</item>` rows
+with `error: invalid value for type 'layout'. Expected a reference.`
+
+---
+ submodules/base/tools/aapt2/ResourceParser.cpp | 14 ++++++++++----
+ 1 file changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/submodules/base/tools/aapt2/ResourceParser.cpp b/submodules/base/tools/aapt2/ResourceParser.cpp
+--- a/submodules/base/tools/aapt2/ResourceParser.cpp
++++ b/submodules/base/tools/aapt2/ResourceParser.cpp
+@@ -710,10 +710,16 @@ bool ResourceParser::ParseResource(xml::XmlPullParser* parser,
+ 
+       out_resource->name.type = parsed_type->ToResourceNamedType();
+       out_resource->name.entry = std::string(maybe_name.value());
+-      out_resource->value = ParseXml(parser, android::ResTable_map::TYPE_REFERENCE, kNoRawString);
+-      if (!out_resource->value) {
+-        diag_->Error(android::DiagMessage(out_resource->source)
+-                     << "invalid value for type '" << *parsed_type << "'. Expected a reference");
++
++      // Only enforce a reference when there is no explicit format.
++      if (resource_format == 0u) {
++        out_resource->value = ParseXml(parser, android::ResTable_map::TYPE_REFERENCE, kNoRawString);
++        if (!out_resource->value) {
++          diag_->Error(android::DiagMessage(out_resource->source)
++                       << "invalid value for type '" << *parsed_type << "'. Expected a reference");
++          return false;
++        }
++      } else if (!ParseItem(parser, out_resource, resource_format)) {
+         return false;
+       }
+       return true;
