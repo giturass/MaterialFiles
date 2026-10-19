@@ -12,6 +12,9 @@ import java.io.IOException
 
 interface RootablePath {
     fun isRootRequired(isAttributeAccess: Boolean): Boolean
+
+    // Scoped-storage restrictions also apply when the general root strategy is NEVER.
+    fun isRootRequiredInNormalMode(isAttributeAccess: Boolean): Boolean = false
 }
 
 private val rootStrategy: RootStrategy
@@ -25,6 +28,9 @@ fun <T, R> callRootable(
     rootObject: T, block: T.() -> R
 ): R {
     path as? RootablePath ?: throw IllegalArgumentException("$path is not a RootablePath")
+    if (!isRunningAsRoot && path.isRootRequiredInNormalMode(isAttributeAccess)) {
+        return rootObject.block()
+    }
     return when (rootStrategy) {
         RootStrategy.NEVER -> localObject.block()
         RootStrategy.AUTOMATIC ->
@@ -48,6 +54,10 @@ fun <T, R> callRootable(
 ): R {
     path1 as? RootablePath ?: throw IllegalArgumentException("$path1 is not a RootablePath")
     path2 as? RootablePath ?: throw IllegalArgumentException("$path2 is not a RootablePath")
+    if (!isRunningAsRoot && (path1.isRootRequiredInNormalMode(isAttributeAccess)
+            || path2.isRootRequiredInNormalMode(isAttributeAccess))) {
+        return rootObject.block()
+    }
     return when (rootStrategy) {
         RootStrategy.NEVER ->
             localObject.block()

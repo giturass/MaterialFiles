@@ -18,6 +18,7 @@ import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import me.zhanghai.android.files.file.FileItem
+import me.zhanghai.android.files.file.androidDirectory
 import me.zhanghai.android.files.provider.common.newDirectoryStream
 import java.io.InterruptedIOException
 
@@ -37,6 +38,8 @@ internal class DirectoryItemCountLoader(
 
     fun getCount(file: FileItem): Count? {
         val path = file.path
+        // Only opening these directories should request root/Shizuku permission.
+        if (path.androidDirectory?.isRoot == true) return Count(null)
         val entry = entries[path] ?: Entry(file).also { entries.put(path, it) }
         entry.update(file, SystemClock.elapsedRealtime())
         if (entry.needsReload && entry.job == null) {

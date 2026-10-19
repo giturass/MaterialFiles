@@ -488,8 +488,6 @@
     <string name="storage_list_title">存储空间</string>
     <string name="storage_list_empty">无存储空间</string>
     <string name="storage_add_storage_title">添加存储空间</string>
-    <string name="storage_add_storage_android_data" translatable="false">Android/data</string>
-    <string name="storage_add_storage_android_obb" translatable="false">Android/obb</string>
     <string name="storage_add_storage_document_tree">外部存储空间</string>
     <string name="storage_add_storage_ftp_server">FTP 服务器</string>
     <string name="storage_add_storage_sftp_server">SFTP 服务器</string>

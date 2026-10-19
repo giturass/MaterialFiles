@@ -47,6 +47,7 @@ object ShizukuFileServiceLauncher {
                                     requestCode: Int,
                                     grantResult: Int
                                 ) {
+                                    if (requestCode != hashCode()) return
                                     Shizuku.removeRequestPermissionResultListener(this)
                                     val granted = grantResult == PackageManager.PERMISSION_GRANTED
                                     continuation.resume(granted)

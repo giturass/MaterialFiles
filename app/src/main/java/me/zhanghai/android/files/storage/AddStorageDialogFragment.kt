@@ -11,8 +11,6 @@ import android.os.Bundle
 import androidx.appcompat.app.AppCompatDialogFragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import me.zhanghai.android.files.R
-import me.zhanghai.android.files.file.asExternalStorageUri
-import me.zhanghai.android.files.provider.document.resolver.ExternalStorageProviderHacks
 import me.zhanghai.android.files.util.createIntent
 import me.zhanghai.android.files.util.finish
 import me.zhanghai.android.files.util.putArgs
@@ -39,22 +37,6 @@ class AddStorageDialogFragment : AppCompatDialogFragment() {
 
     companion object {
         private val STORAGE_TYPES = listOf(
-            R.string.storage_add_storage_android_data to
-                AddExternalStorageShortcutActivity ::class.createIntent().putArgs(
-                    AddExternalStorageShortcutFragment.Args(
-                        R.string.storage_add_storage_android_data,
-                        ExternalStorageProviderHacks.DOCUMENT_URI_ANDROID_DATA
-                            .asExternalStorageUri()
-                    )
-                ),
-            R.string.storage_add_storage_android_obb to
-                AddExternalStorageShortcutActivity ::class.createIntent().putArgs(
-                    AddExternalStorageShortcutFragment.Args(
-                        R.string.storage_add_storage_android_obb,
-                        ExternalStorageProviderHacks.DOCUMENT_URI_ANDROID_OBB
-                            .asExternalStorageUri()
-                    )
-                ),
             R.string.storage_add_storage_document_tree to
                 AddDocumentTreeActivity::class.createIntent(),
             R.string.storage_add_storage_ftp_server to

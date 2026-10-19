@@ -24,6 +24,7 @@ import me.zhanghai.android.files.compat.AppOpsManagerCompat
 import me.zhanghai.android.files.compat.checkOpRawNoThrowCompat
 import me.zhanghai.android.files.compat.opPackageNameCompat
 import me.zhanghai.android.files.compat.pathFileCompat
+import me.zhanghai.android.files.file.androidDirectory
 import me.zhanghai.android.files.provider.common.ByteString
 import me.zhanghai.android.files.provider.common.ByteStringListPath
 import me.zhanghai.android.files.provider.root.RootablePath
@@ -81,6 +82,9 @@ internal class LinuxPath : ByteStringListPath<LinuxPath>, RootablePath {
         }
         return watcher.register(this, events, *modifiers)
     }
+
+    override fun isRootRequiredInNormalMode(isAttributeAccess: Boolean): Boolean =
+        androidDirectory?.requiresPrivilege(isAttributeAccess, application.packageName) == true
 
     override fun isRootRequired(isAttributeAccess: Boolean): Boolean {
         val file = toFile()

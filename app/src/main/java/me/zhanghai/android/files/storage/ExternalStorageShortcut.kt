@@ -10,7 +10,9 @@ import android.content.Intent
 import java8.nio.file.Path
 import kotlinx.parcelize.Parcelize
 import me.zhanghai.android.files.file.ExternalStorageUri
+import me.zhanghai.android.files.file.androidDirectoryPath
 import me.zhanghai.android.files.file.displayName
+import me.zhanghai.android.files.filelist.FileListActivity
 import me.zhanghai.android.files.util.createDocumentsUiViewDirectoryIntent
 import me.zhanghai.android.files.util.createIntent
 import me.zhanghai.android.files.util.putArgs
@@ -36,7 +38,9 @@ data class ExternalStorageShortcut(
     override val path: Path?
         get() = null
 
-    override fun createIntent(): Intent = uri.value.createDocumentsUiViewDirectoryIntent()
+    override fun createIntent(): Intent = uri.androidDirectoryPath?.let {
+        FileListActivity.createViewIntent(it)
+    } ?: uri.value.createDocumentsUiViewDirectoryIntent()
 
     override fun createEditIntent(): Intent =
         EditExternalStorageShortcutDialogActivity::class.createIntent()

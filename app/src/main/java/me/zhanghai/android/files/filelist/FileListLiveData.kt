@@ -11,6 +11,7 @@ import android.os.Looper
 import java8.nio.file.DirectoryIteratorException
 import java8.nio.file.Path
 import me.zhanghai.android.files.file.FileItem
+import me.zhanghai.android.files.file.androidDirectory
 import me.zhanghai.android.files.file.loadFileItem
 import me.zhanghai.android.files.provider.common.newDirectoryStream
 import me.zhanghai.android.files.util.CloseableLiveData
@@ -31,13 +32,15 @@ class FileListLiveData(private val path: Path) : CloseableLiveData<Stateful<List
     private var reloadAfterLoading = false
     private var isClosed = false
 
-    private val observer: PathObserver
+    private var observer: PathObserver? = null
 
     private var isChangedWhileInactive = false
 
     init {
         loadValue()
-        observer = PathObserver(path) { onChangeObserved() }
+        if (path.androidDirectory == null) {
+            observer = PathObserver(path) { onChangeObserved() }
+        }
     }
 
     fun loadValue() = loadValue(true)
@@ -64,17 +67,21 @@ class FileListLiveData(private val path: Path) : CloseableLiveData<Stateful<List
                         try {
                             fileList.add(path.loadFileItem())
                         } catch (e: DirectoryIteratorException) {
+                            if (e.withAndroidDirectoryFallback(this.path)
+                                is AndroidDirectoryAccessException) throw e
                             // TODO: Ignoring such a file can be misleading and we need to support
                             //  files without information.
                             e.printStackTrace()
                         } catch (e: IOException) {
+                            if (e.withAndroidDirectoryFallback(this.path)
+                                is AndroidDirectoryAccessException) throw e
                             e.printStackTrace()
                         }
                     }
                     Success(fileList as List<FileItem>)
                 }
             } catch (e: Exception) {
-                Failure(previousValue, e)
+                Failure(previousValue, e.withAndroidDirectoryFallback(path))
             }
             mainHandler.post {
                 // A cancelled provider operation can still finish. Do not let it overwrite a
@@ -83,6 +90,10 @@ class FileListLiveData(private val path: Path) : CloseableLiveData<Stateful<List
                     return@post
                 }
                 future = null
+                // Do not race directory loading with a second root/Shizuku permission request.
+                if (result is Success && observer == null) {
+                    observer = PathObserver(path) { onChangeObserved() }
+                }
                 val loadAgain = reloadAfterLoading
                 reloadAfterLoading = false
                 value = result
@@ -122,7 +133,7 @@ class FileListLiveData(private val path: Path) : CloseableLiveData<Stateful<List
     override fun close() {
         isClosed = true
         ++loadGeneration
-        observer.close()
+        observer?.close()
         future?.cancel(true)
         future = null
         mainHandler.removeCallbacksAndMessages(null)

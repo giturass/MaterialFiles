@@ -64,6 +64,7 @@ import me.zhanghai.android.files.R
 import me.zhanghai.android.files.apk.ApkSigningDialogFragment
 import me.zhanghai.android.files.app.application
 import me.zhanghai.android.files.app.clipboardManager
+import me.zhanghai.android.files.compat.DocumentsContractCompat
 import me.zhanghai.android.files.compat.checkSelfPermissionCompat
 import me.zhanghai.android.files.compat.setGroupDividerEnabledCompat
 import me.zhanghai.android.files.databinding.FileListFragmentAppBarIncludeBinding
@@ -124,6 +125,7 @@ import me.zhanghai.android.files.util.asFileNameOrNull
 import me.zhanghai.android.files.util.checkSelfPermission
 import me.zhanghai.android.files.util.copyText
 import me.zhanghai.android.files.util.create
+import me.zhanghai.android.files.util.createDocumentsUiViewDirectoryIntent
 import me.zhanghai.android.files.util.createInstallPackageIntent
 import me.zhanghai.android.files.util.createIntent
 import me.zhanghai.android.files.util.createManageAppAllFilesAccessPermissionIntent
@@ -497,6 +499,9 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             ensureNotificationPermission()
         }
         requestFileListUserAction((viewModel.fileListLiveData.value as? Failure)?.throwable)
+        openAndroidDirectoryInDocumentsUi(
+            (viewModel.fileListLiveData.value as? Failure)?.throwable
+        )
     }
 
     override fun onPause() {
@@ -734,6 +739,16 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
     }
 
     private fun onFileListChanged(stateful: Stateful<List<FileItem>>) {
+        val accessException = (stateful as? Failure)?.throwable as? AndroidDirectoryAccessException
+        if (accessException != null) {
+            binding.swipeRefreshLayout.isRefreshing = false
+            binding.progress.fadeToVisibilityUnsafe(false)
+            binding.errorText.fadeToVisibilityUnsafe(false)
+            binding.emptyView.fadeToVisibilityUnsafe(false)
+            adapter.clear()
+            openAndroidDirectoryInDocumentsUi(accessException)
+            return
+        }
         val files = stateful.value
         val isSearching = viewModel.searchState.isSearching
         val hasFiles = !files.isNullOrEmpty()
@@ -768,6 +783,27 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             viewModel.pendingState?.let { layoutManager.onRestoreInstanceState(it) }
         }
         requestFileListUserAction(throwable)
+    }
+
+    private fun openAndroidDirectoryInDocumentsUi(throwable: Throwable?) {
+        if (!isResumed || throwable !is AndroidDirectoryAccessException) return
+        val directory = throwable.directory
+        // Leave the failed location before launching so returning/rotation cannot reopen it.
+        navigateTo(directory.parentPath)
+        val packageName = DocumentsContractCompat.getDocumentsUiPackage()
+        if (packageName == null) {
+            showToast(R.string.activity_not_found)
+            return
+        }
+        try {
+            val intent = directory.uri.value.createDocumentsUiViewDirectoryIntent()
+                .setPackage(packageName)
+                // DocumentsUI owns this URI; we have no URI permission to grant it.
+                .setFlags(0)
+            startActivitySafe(intent)
+        } catch (e: SecurityException) {
+            showToast(R.string.activity_not_found)
+        }
     }
 
     private fun requestFileListUserAction(throwable: Throwable?) {
