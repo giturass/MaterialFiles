@@ -7,8 +7,6 @@ package me.zhanghai.android.files.filejob
 
 import android.app.PendingIntent
 import android.content.Intent
-import android.net.Uri
-import android.os.Build
 import android.os.Environment
 import android.widget.Toast
 import androidx.annotation.AnyRes
@@ -32,7 +30,6 @@ import java8.nio.file.Path
 import java8.nio.file.Paths
 import java8.nio.file.SimpleFileVisitor
 import java8.nio.file.StandardCopyOption
-import java8.nio.file.StandardOpenOption
 import java8.nio.file.attribute.BasicFileAttributes
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
@@ -76,14 +73,12 @@ import me.zhanghai.android.files.provider.common.createDirectories
 import me.zhanghai.android.files.provider.common.createDirectory
 import me.zhanghai.android.files.provider.common.createFile
 import me.zhanghai.android.files.provider.common.delete
-import me.zhanghai.android.files.provider.common.deleteIfExists
 import me.zhanghai.android.files.provider.common.exists
 import me.zhanghai.android.files.provider.common.getFileStore
 import me.zhanghai.android.files.provider.common.getMode
 import me.zhanghai.android.files.provider.common.getPath
 import me.zhanghai.android.files.provider.common.isDirectory
 import me.zhanghai.android.files.provider.common.moveTo
-import me.zhanghai.android.files.provider.common.newByteChannel
 import me.zhanghai.android.files.provider.common.newDirectoryStream
 import me.zhanghai.android.files.provider.common.newOutputStream
 import me.zhanghai.android.files.provider.common.readAttributes
@@ -1723,12 +1718,7 @@ class InstallApkJob(private val file: Path) : FileJob() {
             file, R.string.file_install_apk_from_background_title_format,
             R.string.file_install_apk_from_background_text
         ) { file ->
-            val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                file.fileProviderUri
-            } else {
-                // PackageInstaller only supports file URI before N.
-                Uri.fromFile(file.toFile())
-            }
+            val uri = file.fileProviderUri
             uri.createInstallPackageIntent()
         }
     }

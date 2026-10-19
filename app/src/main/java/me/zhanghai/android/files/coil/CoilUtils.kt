@@ -6,7 +6,6 @@
 package me.zhanghai.android.files.coil
 
 import android.graphics.Bitmap
-import android.os.Build
 import coil.decode.DataSource
 import coil.size.Dimension
 import coil.size.Scale
@@ -17,7 +16,7 @@ import java8.nio.file.Path
 import me.zhanghai.android.files.filelist.isRemotePath
 
 val Bitmap.Config.isHardware: Boolean
-    get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && this == Bitmap.Config.HARDWARE
+    get() = this == Bitmap.Config.HARDWARE
 
 fun Bitmap.Config.toSoftware(): Bitmap.Config = if (isHardware) Bitmap.Config.ARGB_8888 else this
 

@@ -6,7 +6,6 @@
 package me.zhanghai.android.files.navigation
 
 import android.content.Context
-import android.os.Build
 import android.os.Environment
 import android.os.storage.StorageVolume
 import androidx.annotation.DrawableRes
@@ -241,28 +240,11 @@ val standardDirectories: List<StandardDirectory>
 private const val relativePathSeparator = ":"
 
 private val defaultStandardDirectories: List<StandardDirectory>
-    // HACK: Show QQ, TIM and WeChat standard directories based on whether the directory exists.
-    get() =
-        DEFAULT_STANDARD_DIRECTORIES.mapNotNull {
-            when (it.iconRes) {
-                R.drawable.qq_icon_white_24dp, R.drawable.tim_icon_white_24dp,
-                R.drawable.wechat_icon_white_24dp -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        // Direct access to Android/data is blocked since Android 11.
-                        null
-                    } else {
-                        for (relativePath in it.relativePath.split(relativePathSeparator)) {
-                            val path = getExternalStorageDirectory(relativePath)
-                            if (JavaFile.isDirectory(path)) {
-                                return@mapNotNull it.copy(relativePath = relativePath)
-                            }
-                        }
-                        null
-                    }
-                }
-                else -> it
-            }
-        }
+    // Direct access to these apps' Android/data directories is blocked since Android 11.
+    get() = DEFAULT_STANDARD_DIRECTORIES.filterNot {
+        it.iconRes == R.drawable.qq_icon_white_24dp || it.iconRes == R.drawable.tim_icon_white_24dp ||
+            it.iconRes == R.drawable.wechat_icon_white_24dp
+    }
 
 // @see android.os.Environment#STANDARD_DIRECTORIES
 private val DEFAULT_STANDARD_DIRECTORIES = listOf(

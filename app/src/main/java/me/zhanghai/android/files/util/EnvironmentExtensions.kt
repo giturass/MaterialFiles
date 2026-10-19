@@ -21,9 +21,7 @@ import kotlin.reflect.KClass
 fun KClass<Environment>.supportsExternalStorageManager(): Boolean =
     when {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> true
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ->
-            isManageAppAllFilesAccessPermissionIntentResolved
-        else -> false
+        else -> isManageAppAllFilesAccessPermissionIntentResolved
     }
 
 @RequiresApi(Build.VERSION_CODES.R)

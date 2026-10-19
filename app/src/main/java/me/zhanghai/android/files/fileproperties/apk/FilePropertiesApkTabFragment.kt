@@ -5,7 +5,6 @@
 
 package me.zhanghai.android.files.fileproperties.apk
 
-import android.os.Build
 import java8.nio.file.Path
 import kotlinx.parcelize.Parcelize
 import kotlinx.parcelize.WriteWith
@@ -50,14 +49,10 @@ class FilePropertiesApkTabFragment : FilePropertiesTabFragment() {
                 )
             )
             val applicationInfo = packageInfo.applicationInfo!!
-            // PackageParser didn't return minSdkVersion before N, so it's hard to implement a
-            // compat version.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                addItemView(
-                    R.string.file_properties_apk_min_sdk_version,
-                    getSdkVersionText(applicationInfo.minSdkVersion)
-                )
-            }
+            addItemView(
+                R.string.file_properties_apk_min_sdk_version,
+                getSdkVersionText(applicationInfo.minSdkVersion)
+            )
             addItemView(
                 R.string.file_properties_apk_target_sdk_version,
                 getSdkVersionText(applicationInfo.targetSdkVersion)

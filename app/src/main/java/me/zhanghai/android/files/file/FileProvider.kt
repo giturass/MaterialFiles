@@ -14,7 +14,6 @@ import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
 import android.os.Binder
-import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.ParcelFileDescriptor
@@ -146,8 +145,7 @@ class FileProvider : ContentProvider() {
     }
 
     private fun getDefaultProjection(): Array<String> =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
-            && Binder.getCallingUid() == Process.SYSTEM_UID) {
+        if (Binder.getCallingUid() == Process.SYSTEM_UID) {
             // com.android.internal.app.ChooserActivity.queryResolver() in Q queries with a null
             // projection (meaning all columns) on main thread but only actually needs the display
             // name (and document flags). However if we do return all the columns, we may perform

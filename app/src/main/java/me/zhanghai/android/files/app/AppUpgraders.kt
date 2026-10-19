@@ -525,27 +525,6 @@ private fun migrateSftpServersSetting1_5_0() {
     defaultSharedPreferences.edit { putString(key, newBytes?.toBase64()?.value) }
 }
 
-internal fun upgradeAppTo1_6_0() {
-    addViewTypePathSetting1_6_0()
-}
-
-private fun addViewTypePathSetting1_6_0() {
-    val keys = pathSharedPreferences.all.keys.toSet()
-    val sortOptionsKey = application.getString(R.string.pref_key_file_list_sort_options)
-    val viewTypeKey = application.getString(R.string.pref_key_file_list_view_type)
-    val defaultViewType = application.getString(R.string.pref_default_value_file_list_view_type)
-    for (key in keys) {
-        if (!key.startsWith(sortOptionsKey)) {
-            continue
-        }
-        val newKey = key.replaceFirst(sortOptionsKey, viewTypeKey)
-        if (newKey in keys) {
-            continue
-        }
-        pathSharedPreferences.edit { putString(newKey, defaultViewType) }
-    }
-}
-
 internal fun upgradeAppTo1_7_2() {
     migrateDocumentManagerShortcutSetting1_7_2()
 }

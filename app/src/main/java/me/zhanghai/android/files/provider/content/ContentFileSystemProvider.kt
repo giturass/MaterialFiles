@@ -6,7 +6,6 @@
 package me.zhanghai.android.files.provider.content
 
 import android.content.ContentResolver
-import android.os.Build
 import java8.nio.channels.FileChannel
 import java8.nio.channels.SeekableByteChannel
 import java8.nio.file.AccessDeniedException
@@ -224,10 +223,8 @@ object ContentFileSystemProvider : FileSystemProvider(), PathObservableProvider 
         }
         if (accessModes.write) {
             try {
-                // Before Android 10, ParcelFileDescriptor.parseMode() parses "w" as "wt", and we would
-                // truncate the file to empty. So work around that with "wa" on older platforms.
-                val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) "w" else "wa"
-                Resolver.openOutputStream(uri, mode).use {}
+                // Check write access without truncating the file.
+                Resolver.openOutputStream(uri, "w").use {}
             } catch (e: ResolverException) {
                 throw e.toFileSystemException(path.toString())
             }

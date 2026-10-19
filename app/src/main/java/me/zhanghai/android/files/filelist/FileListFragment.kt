@@ -1430,12 +1430,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
 
     override fun installApk(file: FileItem) {
         val path = file.path
-        val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            if (!path.isArchivePath) path.fileProviderUri else null
-        } else {
-            // PackageInstaller only supports file URI before N.
-            if (path.isLinuxPath) Uri.fromFile(path.toFile()) else null
-        }
+        val uri = if (!path.isArchivePath) path.fileProviderUri else null
         if (uri != null) {
             startActivitySafe(uri.createInstallPackageIntent())
         } else {
@@ -1605,9 +1600,6 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             )
             .build()
         ShortcutManagerCompat.requestPinShortcut(context, shortcutInfo, null)
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            showToast(R.string.shortcut_created)
-        }
     }
 
     override fun showPropertiesDialog(file: FileItem) {

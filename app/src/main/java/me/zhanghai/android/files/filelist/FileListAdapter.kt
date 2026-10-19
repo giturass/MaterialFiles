@@ -263,8 +263,7 @@ class FileListAdapter(
                 } else {
                     null
                 },
-                Settings.READ_REMOTE_FILES_FOR_THUMBNAIL.valueCompat,
-                Settings.SHOW_PDF_THUMBNAIL_PRE_28.valueCompat
+                Settings.READ_REMOTE_FILES_FOR_THUMBNAIL.valueCompat
             )
         } else {
             null

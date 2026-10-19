@@ -7,13 +7,7 @@
 
 <resources>
 
-    <color name="system_window_scrim">@color/system_window_scrim_dark</color>
-
-    <color name="color_primary_dark_black">@color/system_window_scrim_dark_black</color>
-
     <color name="color_primary">@color/color_primary_dark</color>
-
-    <color name="color_surface">@color/color_surface_dark</color>
 
     <color name="activity_icon_tint">@color/secondary_text_default_material_dark</color>
 

@@ -16,7 +16,6 @@ private const val VERSION_CODE_1_2_0 = 22
 private const val VERSION_CODE_1_3_0 = 24
 private const val VERSION_CODE_1_4_0 = 26
 private const val VERSION_CODE_1_5_0 = 29
-private const val VERSION_CODE_1_6_0 = 32
 private const val VERSION_CODE_1_7_2 = 37
 private const val VERSION_CODE_LATEST = BuildConfig.VERSION_CODE
 
@@ -53,9 +52,6 @@ private fun upgradeAppFrom(lastVersionCode: Int) {
     }
     if (lastVersionCode < VERSION_CODE_1_5_0) {
         upgradeAppTo1_5_0()
-    }
-    if (lastVersionCode < VERSION_CODE_1_6_0) {
-        upgradeAppTo1_6_0()
     }
     if (lastVersionCode < VERSION_CODE_1_7_2) {
         upgradeAppTo1_7_2()

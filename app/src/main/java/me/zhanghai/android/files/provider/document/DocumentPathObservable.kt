@@ -8,8 +8,6 @@ package me.zhanghai.android.files.provider.document
 import android.database.ContentObserver
 import android.database.Cursor
 import android.net.Uri
-import android.os.Build
-import me.zhanghai.android.files.file.MimeType
 import me.zhanghai.android.files.provider.common.AbstractPathObservable
 import me.zhanghai.android.files.provider.content.resolver.ResolverException
 import me.zhanghai.android.files.provider.document.resolver.DocumentResolver
@@ -49,17 +47,5 @@ internal class DocumentPathObservable(
 
     private val DocumentPath.observableUri: Uri
         @Throws(ResolverException::class)
-        get() {
-            // Querying children for a regular file is fine for non-directory since API 29, but for
-            // older APIs we'll have to work around by observing all children of its parent.
-            // @see com.android.internal.content.FileSystemProvider#queryChildDocuments(String,
-            //      String[], String)
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                val mimeType = DocumentResolver.getMimeType(this)
-                if (mimeType != MimeType.DIRECTORY.value) {
-                    parent?.let { return DocumentResolver.getDocumentChildrenUri(it) }
-                }
-            }
-            return DocumentResolver.getDocumentChildrenUri(this)
-        }
+        get() = DocumentResolver.getDocumentChildrenUri(this)
 }

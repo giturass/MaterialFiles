@@ -9,7 +9,6 @@ import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Rect
-import android.os.Build
 import android.util.AttributeSet
 import android.view.View
 import androidx.annotation.AttrRes
@@ -78,14 +77,6 @@ class CoordinatorAppBarLayout : FitsSystemWindowsAppBarLayout {
     private fun updateFirstChildClipBounds() {
         val firstChild = getChildAt(0) ?: return
         tempClipBounds.set(0, -offset, firstChild.width, firstChild.height)
-        // Work around a bug before Android N that an empty clip bounds doesn't clip.
-        // Making the clip bounds somewhere outside view bounds doesn't work, so as a hack we just
-        // assume that the first child won't draw anything in its top-left pixel.
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
-            if (tempClipBounds.isEmpty) {
-                tempClipBounds.set(0, 0, 1, 1)
-            }
-        }
         firstChild.clipBounds = tempClipBounds
     }
 }

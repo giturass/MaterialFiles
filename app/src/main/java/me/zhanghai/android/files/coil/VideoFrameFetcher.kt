@@ -7,7 +7,6 @@ package me.zhanghai.android.files.coil
 
 import android.graphics.Paint
 import android.media.MediaMetadataRetriever
-import android.os.Build
 import androidx.core.graphics.applyCanvas
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.toDrawable
@@ -68,13 +67,9 @@ class VideoFrameFetcher(
             )
             val frameOption = options.parameters.videoFrameOption()
                 ?: MediaMetadataRetriever.OPTION_CLOSEST_SYNC
-            val bitmapParams = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val bitmapParams =
                 MediaMetadataRetriever.BitmapParams().apply { preferredConfig = options.config }
-            } else {
-                null
-            }
-            val outBitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1
-                && srcWidth > 0 && srcHeight > 0) {
+            val outBitmap = if (srcWidth > 0 && srcHeight > 0) {
                 val dstWidth = options.size.widthPx(options.scale) { srcWidth }
                 val dstHeight = options.size.heightPx(options.scale) { srcHeight }
                 val rawScale = DecodeUtils.computeSizeMultiplier(

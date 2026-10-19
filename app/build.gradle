@@ -121,8 +121,6 @@ dependencies {
 }
 
 dependencies {
-    implementation fileTree(dir: 'libs', include: ['*.jar'])
-
     // Use the same published apksig release as AGP, through its in-process Java API.
     implementation 'com.android.tools.build:apksig:9.4.1'
 

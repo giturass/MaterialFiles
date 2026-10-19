@@ -6,7 +6,6 @@
 package me.zhanghai.android.files.filelist
 
 import android.content.Context
-import android.os.Build
 import java8.nio.file.Path
 import java8.nio.file.attribute.BasicFileAttributes
 import java8.nio.file.attribute.FileTime
@@ -72,9 +71,7 @@ val FileItem.supportsThumbnail: Boolean
             mimeType.isApk && path.isGetPackageArchiveInfoCompatible -> true
             mimeType.isImage -> true
             mimeType.isMedia && path.isMediaMetadataRetrieverCompatible -> true
-            mimeType.isPdf && (path.isLinuxPath || path.isDocumentPath) ->
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
-                    || Settings.SHOW_PDF_THUMBNAIL_PRE_28.valueCompat
+            mimeType.isPdf && (path.isLinuxPath || path.isDocumentPath) -> true
             else -> false
         }
     }

@@ -14,7 +14,6 @@ import android.graphics.Paint
 import android.graphics.Shader
 import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.Drawable
-import android.os.Build
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.toDrawable
 import coil.ImageLoader
@@ -51,7 +50,7 @@ class ApkIconFetcher(
         val canvas = Canvas(layers)
         // Give transparent legacy icons a circular backing, as adaptive icon wrappers do.
         canvas.drawColor(Color.WHITE)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && drawable is AdaptiveIconDrawable) {
+        if (drawable is AdaptiveIconDrawable) {
             // Setting the adaptive icon bounds also sets the documented extra inset on each
             // layer. Draw those layers directly so the device's icon mask is not baked in.
             drawable.setBounds(0, 0, iconSize, iconSize)

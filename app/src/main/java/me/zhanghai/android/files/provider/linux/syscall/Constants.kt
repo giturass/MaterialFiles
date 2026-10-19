@@ -5,7 +5,6 @@
 
 package me.zhanghai.android.files.provider.linux.syscall
 
-import android.os.Build
 import android.system.OsConstants
 
 object Constants {
@@ -75,8 +74,7 @@ object Constants {
     const val MS_MGC_VAL = 0xC0ED0000L
     const val MS_MGC_MSK = 0xffff0000L
 
-    val O_DSYNC =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) OsConstants.O_DSYNC else 0x1000
+    val O_DSYNC = OsConstants.O_DSYNC
 
     /* @see android.os.SELinux#SELINUX_ANDROID_RESTORECON_NOCHANGE */
     const val SELINUX_ANDROID_RESTORECON_NOCHANGE = 1

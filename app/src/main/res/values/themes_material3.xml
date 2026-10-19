@@ -7,11 +7,14 @@
 
 <resources>
 
-    <style name="Platform.V23.Theme.MaterialFiles.Material3" parent="Theme.Material3.DynamicColors.DayNight.NoActionBar">
-        <item name="colorPrimaryDark">@color/system_window_scrim_material3</item>
+    <style name="Platform.Theme.MaterialFiles.Material3" parent="Theme.Material3.DynamicColors.DayNight.NoActionBar">
+        <item name="colorPrimaryDark">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">?isLightTheme</item>
+        <item name="android:navigationBarColor">?colorPrimaryDark</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">always</item>
+        <item name="android:windowLightNavigationBar">?isLightTheme</item>
+        <item name="android:forceDarkAllowed">false</item>
     </style>
-    <style name="Platform.Theme.MaterialFiles.Material3" parent="Platform.V23.Theme.MaterialFiles.Material3" />
     <style name="Base.Theme.MaterialFiles.Material3" parent="Platform.Theme.MaterialFiles.Material3">
 
         <item name="actionBarTheme">@style/ThemeOverlay.MaterialFiles.ActionBar</item>
@@ -44,11 +47,10 @@
     </style>
     <style name="Theme.MaterialFiles.Material3" parent="Base.Theme.MaterialFiles.Material3" />
 
-    <style name="Platform.V23.Theme.MaterialFiles.Material3.Translucent" parent="Theme.MaterialFiles.Material3">
+    <style name="Platform.Theme.MaterialFiles.Material3.Translucent" parent="Theme.MaterialFiles.Material3">
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
     </style>
-    <style name="Platform.Theme.MaterialFiles.Material3.Translucent" parent="Platform.V23.Theme.MaterialFiles.Material3.Translucent" />
     <style name="Base.Theme.MaterialFiles.Material3.Translucent" parent="Platform.Theme.MaterialFiles.Material3.Translucent">
         <item name="android:colorBackgroundCacheHint">@null</item>
         <item name="android:windowAnimationStyle">@null</item>
@@ -60,12 +62,12 @@
     </style>
     <style name="Theme.MaterialFiles.Material3.Translucent" parent="Base.Theme.MaterialFiles.Material3.Translucent" />
 
-    <style name="Platform.V23.Theme.MaterialFiles.Material3.Immersive" parent="Theme.Material3.DynamicColors.Dark.NoActionBar">
+    <style name="Platform.Theme.MaterialFiles.Material3.Immersive" parent="Theme.Material3.DynamicColors.Dark.NoActionBar">
         <item name="android:navigationBarColor">?colorPrimaryDark</item>
-
-        <item name="colorPrimaryDark">@color/dark_50_percent</item>
+        <item name="colorPrimaryDark">@android:color/transparent</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">always</item>
+        <item name="android:forceDarkAllowed">false</item>
     </style>
-    <style name="Platform.Theme.MaterialFiles.Material3.Immersive" parent="Platform.V23.Theme.MaterialFiles.Material3.Immersive" />
     <style name="Base.Theme.MaterialFiles.Material3.Immersive" parent="Platform.Theme.MaterialFiles.Material3.Immersive">
 
         <item name="actionBarTheme">@style/ThemeOverlay.MaterialFiles.ActionBar</item>

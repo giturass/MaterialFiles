@@ -7,7 +7,6 @@ package me.zhanghai.android.files.ui
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.os.Build
 import android.util.AttributeSet
 import android.view.View
 import android.view.ViewGroup
@@ -46,9 +45,7 @@ class CoordinatorScrollingLinearLayout : LinearLayout, AttachedBehavior {
     init {
         orientation = VERTICAL
         fitsSystemWindows = true
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            layoutInNavigation = true
-        }
+        layoutInNavigation = true
     }
 
     override fun onApplyWindowInsets(insets: WindowInsets): WindowInsets {

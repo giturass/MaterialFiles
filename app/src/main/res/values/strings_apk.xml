@@ -20,12 +20,7 @@
     <string name="apk_signing_key_library">密钥库</string>
     <string name="apk_signing_key_store">签名密钥库</string>
     <string name="apk_signing_no_key_store">尚未选择密钥库</string>
-    <string name="apk_signing_no_key_store_hint">选择 PKCS12 / JKS 密钥库，或新建签名密钥。</string>
-    <string name="apk_signing_choose_key_store">选择已有密钥库</string>
-    <string name="apk_signing_choose_key_store_short">选择已有</string>
-    <string name="apk_signing_replace_key_store">更换密钥</string>
     <string name="apk_signing_create_key">新建密钥</string>
-    <string name="apk_signing_cancel_create_key">取消新建</string>
     <string name="apk_signing_new_key_alias">新密钥别名</string>
     <string name="apk_signing_new_key_alias_example">例如 release</string>
     <string name="apk_signing_new_store_password">设置密钥库密码</string>
@@ -38,10 +33,6 @@
     <string name="apk_signing_different_key_password">使用不同的私钥密码</string>
     <string name="apk_signing_key_store_format">密钥库格式</string>
     <string name="apk_signing_key_store_auto">自动识别</string>
-    <string name="apk_signing_choose_source">选择密钥来源</string>
-    <string name="apk_signing_system_picker">系统文件选择器</string>
-    <string name="apk_signing_private_keys">已创建的密钥</string>
-    <string name="apk_signing_no_private_keys">尚未创建密钥，可以直接新建一个。</string>
     <string name="apk_signing_key_modified_format">修改于 %1$s</string>
     <string name="apk_signing_key_modified_unknown">修改时间未知</string>
     <string name="apk_signing_current_key_format">当前使用 · %1$s</string>
@@ -57,7 +48,6 @@
     <string name="apk_signing_loading_aliases_short">读取中</string>
     <string name="apk_signing_generate_key">创建并使用</string>
     <string name="apk_signing_generating_key_short">创建中…</string>
-    <string name="apk_signing_generate_hint">创建后自动选中，可直接用于签名。</string>
     <string name="apk_signing_output_name">输出文件名</string>
     <string name="apk_signing_schemes">签名方案</string>
     <string name="apk_signing_v1">v1</string>
@@ -72,9 +62,7 @@
     <string name="apk_signing_canceling">正在取消并清理未完成的输出…</string>
     <string name="apk_signing_canceled">任务已取消。</string>
     <string name="apk_signing_result">已签名的 APK</string>
-    <string name="apk_signing_open">打开 APK</string>
     <string name="apk_signing_install">安装</string>
-    <string name="apk_signing_open_directory">输出目录</string>
     <string name="apk_signing_required_key_store">请先选择密钥库或创建签名密钥。</string>
     <string name="apk_signing_required_alias">请输入或选择私钥别名。</string>
     <string name="apk_signing_required_new_key_alias">请输入新密钥的别名。</string>

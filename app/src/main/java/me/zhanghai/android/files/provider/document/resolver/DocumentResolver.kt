@@ -81,8 +81,7 @@ object DocumentResolver {
         intervalMillis: Long,
         listener: ((Long) -> Unit)?
     ): Uri {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
-            && sourcePath.hasSameAuthority(targetPath) && !sourcePath.isCopyUnsupported) {
+        return if (sourcePath.hasSameAuthority(targetPath) && !sourcePath.isCopyUnsupported) {
             copyApi24(sourcePath, targetPath, intervalMillis, listener)
         } else {
             copyManually(sourcePath, targetPath, intervalMillis, listener)
@@ -276,8 +275,7 @@ object DocumentResolver {
         if (sourceParentPath == targetParentPath) {
             return rename(sourcePath, targetPath.displayName!!)
         }
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
-            && sourcePath.hasSameAuthority(targetPath) && !sourcePath.isMoveUnsupported) {
+        return if (sourcePath.hasSameAuthority(targetPath) && !sourcePath.isMoveUnsupported) {
             moveApi24(sourcePath, targetPath, moveOnly, intervalMillis, listener)
         } else {
             if (moveOnly) {
@@ -433,7 +431,7 @@ object DocumentResolver {
 
     @Throws(ResolverException::class)
     fun remove(path: Path) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !isRemoveUnsupported(path)) {
+        if (!isRemoveUnsupported(path)) {
             removeApi24(path)
         } else {
             @Suppress("DEPRECATION")
@@ -443,7 +441,7 @@ object DocumentResolver {
 
     @Throws(ResolverException::class)
     fun remove(uri: Uri, parentUri: Uri) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !isRemoveUnsupported(uri)) {
+        if (!isRemoveUnsupported(uri)) {
             removeApi24(uri, parentUri)
         } else {
             delete(uri)

@@ -9,7 +9,6 @@ import android.annotation.SuppressLint
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.content.pm.SigningInfo
-import android.os.Build
 import me.zhanghai.android.files.util.andInv
 import me.zhanghai.android.files.util.hasBits
 
@@ -24,11 +23,7 @@ fun PackageManager.getPackageArchiveInfoCompat(archiveFilePath: String, flags: I
     if (packageInfo == null) {
         val flagsWithoutGetSigningInfo = flags.andInv(
             @Suppress("DEPRECATION")
-            PackageManager.GET_SIGNATURES or if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                PackageManager.GET_SIGNING_CERTIFICATES
-            } else {
-                0
-            }
+            PackageManager.GET_SIGNATURES or PackageManager.GET_SIGNING_CERTIFICATES
         )
         if (flags != flagsWithoutGetSigningInfo) {
             packageInfo = getPackageArchiveInfo(archiveFilePath, flagsWithoutGetSigningInfo)
@@ -37,8 +32,7 @@ fun PackageManager.getPackageArchiveInfoCompat(archiveFilePath: String, flags: I
                     if (flags.hasBits(PackageManager.GET_SIGNATURES)) {
                         signatures = emptyArray()
                     }
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
-                        && flags.hasBits(PackageManager.GET_SIGNING_CERTIFICATES)) {
+                    if (flags.hasBits(PackageManager.GET_SIGNING_CERTIFICATES)) {
                         signingInfo = SigningInfo()
                     }
                 }

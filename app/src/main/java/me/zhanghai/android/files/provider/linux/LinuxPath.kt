@@ -6,7 +6,6 @@
 package me.zhanghai.android.files.provider.linux
 
 import android.app.AppOpsManager
-import android.os.Build
 import android.os.Parcel
 import android.os.Parcelable
 import android.os.Process
@@ -23,7 +22,6 @@ import me.zhanghai.android.files.app.appOpsManager
 import me.zhanghai.android.files.app.application
 import me.zhanghai.android.files.compat.AppOpsManagerCompat
 import me.zhanghai.android.files.compat.checkOpRawNoThrowCompat
-import me.zhanghai.android.files.compat.isPrimaryCompat
 import me.zhanghai.android.files.compat.opPackageNameCompat
 import me.zhanghai.android.files.compat.pathFileCompat
 import me.zhanghai.android.files.provider.common.ByteString
@@ -93,9 +91,6 @@ internal class LinuxPath : ByteStringListPath<LinuxPath>, RootablePath {
             return false
         }
         return StorageVolumeListLiveData.valueCompat.none {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && !it.isPrimaryCompat) {
-                return@none false
-            }
             val storageVolumeDirectory = it.pathFileCompat
             if (!file.startsWith(storageVolumeDirectory)) {
                 return@none false
@@ -108,38 +103,36 @@ internal class LinuxPath : ByteStringListPath<LinuxPath>, RootablePath {
         storageVolumeDirectory: File,
         isAttributeAccess: Boolean
     ): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val parentDirectory = parentFile
-            val androidDataDirectory = storageVolumeDirectory.resolve(FILE_ANDROID_DATA)
-            val isInAndroidDataDirectory = if (isAttributeAccess && parentDirectory != null) {
-                parentDirectory.startsWith(androidDataDirectory)
-            } else {
-                startsWith(androidDataDirectory)
+        val parentDirectory = parentFile
+        val androidDataDirectory = storageVolumeDirectory.resolve(FILE_ANDROID_DATA)
+        val isInAndroidDataDirectory = if (isAttributeAccess && parentDirectory != null) {
+            parentDirectory.startsWith(androidDataDirectory)
+        } else {
+            startsWith(androidDataDirectory)
+        }
+        val appPackageName = application.packageName
+        if (isInAndroidDataDirectory) {
+            val appDataDirectory = androidDataDirectory.resolve(appPackageName)
+            return startsWith(appDataDirectory)
+        }
+        val androidObbDirectory = storageVolumeDirectory.resolve(FILE_ANDROID_OBB)
+        val isInAndroidObbDirectory = if (isAttributeAccess && parentDirectory != null) {
+            parentDirectory.startsWith(androidObbDirectory)
+        } else {
+            startsWith(androidObbDirectory)
+        }
+        if (isInAndroidObbDirectory) {
+            // Note that StorageManagerService won't automatically kill and restart our process
+            // when we are granted REQUEST_INSTALL_PACKAGES for us to get access to Android/obb
+            // immediately since S, similar to it not automatically killing and restarting our
+            // process when we are granted MANAGE_EXTERNAL_STORAGE for us to get access to
+            // external storage volumes immediately. But we aren't handling the latter anyway,
+            // so let's not handle the former here either.
+            if (isRequestInstallPackagesAllowed()) {
+                return true
             }
-            val appPackageName = application.packageName
-            if (isInAndroidDataDirectory) {
-                val appDataDirectory = androidDataDirectory.resolve(appPackageName)
-                return startsWith(appDataDirectory)
-            }
-            val androidObbDirectory = storageVolumeDirectory.resolve(FILE_ANDROID_OBB)
-            val isInAndroidObbDirectory = if (isAttributeAccess && parentDirectory != null) {
-                parentDirectory.startsWith(androidObbDirectory)
-            } else {
-                startsWith(androidObbDirectory)
-            }
-            if (isInAndroidObbDirectory) {
-                // Note that StorageManagerService won't automatically kill and restart our process
-                // when we are granted REQUEST_INSTALL_PACKAGES for us to get access to Android/obb
-                // immediately since S, similar to it not automatically killing and restarting our
-                // process when we are granted MANAGE_EXTERNAL_STORAGE for us to get access to
-                // external storage volumes immediately. But we aren't handling the latter anyway,
-                // so let's not handle the former here either.
-                if (isRequestInstallPackagesAllowed()) {
-                    return true
-                }
-                val appObbDirectory = androidObbDirectory.resolve(appPackageName)
-                return startsWith(appObbDirectory)
-            }
+            val appObbDirectory = androidObbDirectory.resolve(appPackageName)
+            return startsWith(appObbDirectory)
         }
         return true
     }

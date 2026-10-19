@@ -15,8 +15,6 @@
     <bool name="pref_default_value_file_list_persistent_drawer_open">true</bool>
     <string name="pref_key_file_list_show_hidden_files">key_file_list_show_hidden_files</string>
     <bool name="pref_default_value_file_list_show_hidden_files">false</bool>
-    <string name="pref_key_file_list_view_type">key_file_list_view_type</string>
-    <string name="pref_default_value_file_list_view_type">0</string>
     <string name="pref_key_file_list_sort_options">key_file_list_sort_options</string>
     <string name="pref_key_create_archive_type">key_create_archive_type</string>
 
@@ -69,9 +67,6 @@
         <item>1</item>
         <item>2</item>
     </string-array>
-    <string name="pref_key_show_pdf_thumbnail_pre_28">key_show_pdf_thumbnail_pre_28</string>
-    <bool name="pref_default_value_show_pdf_thumbnail_pre_28">false</bool>
-    <bool name="pref_visible_show_pdf_thumbnail_pre_28">true</bool>
     <string name="pref_key_read_remote_files_for_thumbnail">key_read_remote_files_for_thumbnail</string>
     <bool name="pref_default_value_read_remote_files_for_thumbnail">true</bool>
 </resources>

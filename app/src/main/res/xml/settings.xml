@@ -68,12 +68,6 @@
             android:entryValues="@array/pref_entry_values_open_apk_default_action"
             app:useSimpleSummaryProvider="true" />
 
-        <SwitchPreferenceCompat
-            android:key="@string/pref_key_show_pdf_thumbnail_pre_28"
-            android:title="@string/settings_show_pdf_thumbnail_pre_28_title"
-            android:defaultValue="@bool/pref_default_value_show_pdf_thumbnail_pre_28"
-            android:summary="@string/settings_show_pdf_thumbnail_pre_28_summary"
-            app:isPreferenceVisible="@bool/pref_visible_show_pdf_thumbnail_pre_28" />
 
         <SwitchPreferenceCompat
             android:key="@string/pref_key_read_remote_files_for_thumbnail"

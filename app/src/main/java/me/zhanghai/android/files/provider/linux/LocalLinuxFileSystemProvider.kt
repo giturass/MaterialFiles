@@ -188,7 +188,7 @@ class LocalLinuxFileSystemProvider(provider: LinuxFileSystemProvider) : FileSyst
         } catch (e: SyscallException) {
             throw e.toFileSystemException(pathBytes.toString())
         }
-        MediaScanner.scan(path.toFile(), true)
+        MediaScanner.scan(path.toFile())
     }
 
     @Throws(IOException::class)

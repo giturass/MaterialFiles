@@ -145,11 +145,7 @@ object StableUriParceler : Parceler<Uri?> {
         }
 
     private fun Parcel.readUriString(): String? =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            parcelReadString8Method.invoke(this) as String?
-        } else {
-            readString()
-        }
+        parcelReadString8Method.invoke(this) as String?
 
     override fun Uri?.write(parcel: Parcel, flags: Int) {
         parcel.writeString(this?.toString())

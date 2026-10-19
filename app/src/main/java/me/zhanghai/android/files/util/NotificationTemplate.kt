@@ -72,8 +72,6 @@ class NotificationChannelTemplate(
             this@NotificationChannelTemplate.vibrationPattern?.let { vibrationPattern = it }
             bypassDnd?.let { setBypassDnd(it) }
             this@NotificationChannelTemplate.lockscreenVisibility?.let { lockscreenVisibility = it }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                allowBubbles?.let { setAllowBubbles(it) }
-            }
+            allowBubbles?.let { setAllowBubbles(it) }
         }
 }

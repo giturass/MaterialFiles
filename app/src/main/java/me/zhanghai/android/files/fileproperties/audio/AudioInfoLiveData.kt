@@ -7,7 +7,6 @@ package me.zhanghai.android.files.fileproperties.audio
 
 import android.media.MediaMetadataRetriever
 import android.os.AsyncTask
-import android.os.Build
 import java.time.Duration
 import java8.nio.file.Path
 import me.zhanghai.android.files.compat.METADATA_KEY_SAMPLERATE
@@ -66,13 +65,9 @@ class AudioInfoLiveData(path: Path) : PathObserverLiveData<Stateful<AudioInfo>>(
                     val bitRate = retriever.extractMetadataNotBlank(
                         MediaMetadataRetriever.METADATA_KEY_BITRATE
                     )?.toIntOrNull()
-                    val sampleRate = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        retriever.extractMetadataNotBlank(
-                            MediaMetadataRetriever::class.METADATA_KEY_SAMPLERATE
-                        )?.toIntOrNull()
-                    } else {
-                        null
-                    }
+                    val sampleRate = retriever.extractMetadataNotBlank(
+                        MediaMetadataRetriever::class.METADATA_KEY_SAMPLERATE
+                    )?.toIntOrNull()
                     AudioInfo(
                         title, artist, album, albumArtist, composer, discNumber, trackNumber, year,
                         genre, duration, bitRate, sampleRate

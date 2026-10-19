@@ -14,7 +14,6 @@ import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
-import android.os.Build
 import android.view.View
 import android.view.ViewTreeObserver
 import android.view.animation.LinearInterpolator
@@ -157,8 +156,7 @@ class FabProgressRing(
     }
 
     private fun updateAnimation() {
-        val animationsEnabled = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
-            ValueAnimator.areAnimatorsEnabled()
+        val animationsEnabled = ValueAnimator.areAnimatorsEnabled()
         val shouldAnimate = !disposed && drawable.active && drawable.indeterminate &&
             lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) && fab.isAttachedToWindow &&
             fab.isShown && fab.windowVisibility == View.VISIBLE && animationsEnabled

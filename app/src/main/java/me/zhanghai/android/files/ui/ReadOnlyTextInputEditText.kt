@@ -9,7 +9,6 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.RippleDrawable
-import android.os.Build
 import android.text.method.MovementMethod
 import android.util.AttributeSet
 import android.view.View
@@ -41,9 +40,7 @@ class ReadOnlyTextInputEditText : TextInputEditText {
         super.setTextIsSelectable(selectable)
 
         if (selectable) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                focusable = View.FOCUSABLE_AUTO
-            }
+            focusable = View.FOCUSABLE_AUTO
         } else {
             isClickable = false
             isFocusable = false

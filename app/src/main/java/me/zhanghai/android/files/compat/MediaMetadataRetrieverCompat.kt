@@ -23,7 +23,7 @@ fun MediaMetadataRetriever.getFrameAtTimeCompat(
     option: Int,
     params: MediaMetadataRetriever.BitmapParams?
 ): Bitmap? =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && params != null) {
+    if (params != null) {
         getFrameAtTime(timeUs, option, params)
     } else {
         getFrameAtTime(timeUs, option)
@@ -37,7 +37,7 @@ fun MediaMetadataRetriever.getScaledFrameAtTimeCompat(
     dstHeight: Int,
     params: MediaMetadataRetriever.BitmapParams?
 ): Bitmap? =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && params != null) {
+    if (params != null) {
         getScaledFrameAtTime(timeUs, option, dstWidth, dstHeight, params)
     } else {
         getScaledFrameAtTime(timeUs, option, dstWidth, dstHeight)
@@ -48,10 +48,6 @@ inline fun <R> MediaMetadataRetriever.use(block: (MediaMetadataRetriever) -> R):
     contract {
         callsInPlace(block, InvocationKind.EXACTLY_ONCE)
     }
-    val autoCloseable: AutoCloseable = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        this
-    } else {
-        AutoCloseable { release() }
-    }
+    val autoCloseable: AutoCloseable = this
     return autoCloseable.use { block(this) }
 }
