@@ -12,12 +12,15 @@ internal object HttpServerPageAssets {
         }
         * { box-sizing: border-box; }
         [hidden] { display: none !important; }
-        body { margin: 0; }
+        body { margin: 0; padding-bottom: calc(175px + env(safe-area-inset-bottom)); }
         button, input, select { font: inherit; }
         button, .button, select { min-height: 38px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--text); }
         button, .button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 13px; cursor: pointer; text-decoration: none; white-space: nowrap; }
         button:hover, .button:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
         button:disabled { opacity: .5; cursor: default; }
+        button:disabled:hover { background: var(--surface); color: var(--text); border-color: var(--line); }
+        input[type="checkbox"] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; vertical-align: middle; }
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
         a { color: var(--accent); text-decoration: none; }
         a:hover { text-decoration: underline; }
         button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, pre:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
@@ -27,7 +30,7 @@ internal object HttpServerPageAssets {
         .danger { background: var(--danger); border-color: var(--danger); color: white; }
         .danger:hover { background: var(--danger); color: white; }
         .danger-quiet, .error { color: var(--danger); }
-        .topbar { height: 84px; padding: 0 max(28px, calc((100vw - 1440px) / 2)); display: flex; align-items: center; justify-content: space-between; gap: 20px; background: var(--surface); border-bottom: 1px solid var(--line); }
+        .topbar { height: 68px; padding: 0 max(28px, calc((100vw - 1440px) / 2)); display: flex; align-items: center; justify-content: space-between; gap: 20px; background: var(--surface); border-bottom: 1px solid var(--line); }
         .brand { display: flex; align-items: center; gap: 12px; font-size: 18px; font-weight: 700; letter-spacing: -.3px; }
         .brand-icon { display: grid; place-items: center; width: 42px; height: 42px; background: var(--accent); color: white; border-radius: 13px; }
         .brand-icon svg { width: 27px; height: 27px; }
@@ -36,55 +39,58 @@ internal object HttpServerPageAssets {
         .connection-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
         .mode, .badge { border: 1px solid var(--line); border-radius: 6px; padding: 3px 7px; font-size: 12px; }
         .mode { margin-left: 12px; }
-        main { max-width: 1496px; padding: 38px 28px 20px; margin: auto; }
+        main { max-width: 1496px; padding: 24px 28px 20px; margin: auto; }
         h1, h2, p { margin-top: 0; }
-        h1 { font-size: 30px; margin-bottom: 10px; letter-spacing: -.7px; }
+        h1 { font-size: 24px; margin-bottom: 0; letter-spacing: -.7px; }
         h2 { font-size: 16px; margin-bottom: 0; }
-        .intro { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 30px; }
-        .eyebrow { color: var(--accent); font-size: 12px; letter-spacing: 2px; margin-bottom: 9px; }
-        .subtitle { color: var(--muted); margin-bottom: 0; line-height: 1.7; }
+        .intro { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
         .main-actions { display: flex; gap: 10px; }
-        .main-actions button { padding: 11px 17px; }
+        .main-actions button { padding: 8px 13px; }
         .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 22px; align-items: start; }
         .panel { border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
         .files-panel { min-height: 430px; }
-        .toolbar { display: flex; align-items: center; gap: 10px; padding: 20px; border-bottom: 1px solid var(--line); }
+        .toolbar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
         .search { flex: 1; min-width: 0; display: flex; align-items: center; gap: 9px; border-radius: 9px; padding: 0 12px; border: 1px solid var(--line); background: var(--soft); color: var(--muted); }
         .search input { width: 100%; min-width: 0; padding: 10px 0; border: 0; background: transparent; color: var(--text); outline-offset: 0; }
         input::placeholder { color: var(--muted); }
         select { padding: 8px; max-width: 150px; }
-        .location-bar { display: flex; align-items: start; justify-content: space-between; gap: 12px; padding: 20px 20px 12px; }
+        .location-bar { display: flex; align-items: start; justify-content: space-between; gap: 12px; padding: 12px 16px 8px; }
         .breadcrumbs { display: flex; flex-wrap: wrap; gap: 7px; min-width: 0; line-height: 1.7; }
         .breadcrumbs a { color: var(--muted); overflow-wrap: anywhere; }
         .breadcrumbs a:last-child { color: var(--text); font-weight: 600; }
         .breadcrumbs span { color: var(--muted); opacity: .5; }
         .parent-link { flex: none; font-size: 12px; padding: 3px 0; }
-        .list-summary { color: var(--muted); font-size: 12px; display: flex; gap: 12px; padding: 0 20px 18px; }
+        .list-summary { color: var(--muted); font-size: 12px; display: flex; gap: 12px; padding: 0 16px 10px; }
         .table-wrap { overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; text-align: left; table-layout: fixed; }
-        th { padding: 11px 12px; background: var(--soft); border-block: 1px solid var(--line); color: var(--muted); font-size: 11px; font-weight: 500; }
-        th:first-child { padding-left: 20px; }
-        th:nth-child(2) { width: 90px; }
-        th:nth-child(3) { width: 130px; }
-        th:last-child { width: 228px; }
-        td { padding: 14px 12px; border-bottom: 1px solid var(--line); }
+        th { padding: 9px 8px; background: var(--soft); border-block: 1px solid var(--line); color: var(--muted); font-size: 11px; font-weight: 500; }
+        th.select-cell { width: 44px; }
+        th.size-cell { width: 90px; }
+        th.date-cell { width: 148px; }
+        td { padding: 6px 8px; border-bottom: 1px solid var(--line); height: 44px; }
         tr:last-child td { border-bottom: 0; }
         .file-row:hover { background: var(--soft); }
-        .file-cell { padding-left: 20px; }
-        .file-icon { display: inline-grid; place-items: center; width: 38px; height: 42px; border-radius: 10px; background: var(--soft); color: var(--muted); vertical-align: middle; }
+        .file-row.is-selected, .file-row.is-selected:hover { background: var(--accent-soft); }
+        .file-row.is-cut .file-cell { opacity: .5; }
+        td.select-cell { padding: 0 4px 0 14px; cursor: pointer; }
+        .file-cell { padding-left: 0; }
+        .file-icon { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; background: var(--soft); color: var(--muted); vertical-align: middle; }
+        .file-icon svg { width: 18px; height: 18px; }
         .file-icon.folder { background: #fff5db; color: #b78a24; }
         .file-icon.image { background: #e7f6f0; color: #288769; }
         .file-icon.text { background: var(--accent-soft); color: var(--accent); }
-        .file-label { display: inline-block; vertical-align: middle; width: calc(100% - 51px); margin-left: 9px; }
-        .entry-link { color: var(--text); font-weight: 500; overflow-wrap: anywhere; line-height: 1.6; }
-        .file-label small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+        .file-label { display: inline-block; vertical-align: middle; width: calc(100% - 40px); margin-left: 6px; }
+        .entry-link { display: block; color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.6; }
         .size-cell, .date-cell { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
-        .actions { padding-right: 15px; }
-        .actions > div { display: flex; justify-content: flex-end; gap: 3px; }
-        .actions button, .actions .button { font-size: 11px; padding: 7px 6px; border-color: transparent; background: transparent; min-height: 34px; }
-        .actions button:hover, .actions .button:hover { background: var(--accent-soft); }
-        body[data-writable="false"] th:last-child { width: 112px; }
-        .actions-heading { text-align: right; padding-right: 22px; }
+        .action-bar { position: fixed; z-index: 20; bottom: max(16px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); width: min(1440px, calc(100% - 48px)); display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: 0 4px 28px #13213d26; }
+        .selection-info { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 12px; }
+        .select-all-label { display: flex; align-items: center; gap: 8px; cursor: pointer; min-height: 32px; }
+        #selection-count { color: var(--muted); }
+        #selection-clear, #clipboard-clear { border: 0; background: transparent; font-size: 12px; padding: 5px; min-height: 32px; }
+        .selection-actions { display: flex; gap: 6px; margin-left: auto; }
+        .selection-actions button { font-size: 12px; padding: 8px 10px; }
+        .clipboard-panel { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 12px; color: var(--accent); }
+        #clipboard-status { overflow-wrap: anywhere; }
         .empty { padding: 65px 20px; text-align: center; color: var(--muted); display: grid; justify-items: center; gap: 10px; }
         .empty svg { width: 46px; height: 46px; margin-bottom: 6px; color: var(--accent); opacity: .5; }
         .empty strong { color: var(--text); font-weight: 500; }
@@ -118,7 +124,7 @@ internal object HttpServerPageAssets {
         .read-only-panel { padding: 24px; line-height: 1.8; }
         .read-only-panel h2 { margin: 12px 0; }
         .read-only-panel p { color: var(--muted); }
-        .notice { padding: 13px 16px; margin-bottom: 20px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); overflow-wrap: anywhere; }
+        .notice { position: sticky; top: 8px; z-index: 21; max-height: 30dvh; overflow: auto; padding: 13px 16px; margin-bottom: 14px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); overflow-wrap: anywhere; }
         .notice.error { color: var(--danger); }
         footer { padding-top: 28px; color: var(--muted); font-size: 11px; text-align: center; }
         footer span { padding: 0 8px; }
@@ -149,15 +155,20 @@ internal object HttpServerPageAssets {
           .file-icon.image { background: #233e37; color: #78ccb0; }
           .dropzone { border-color: #52678f; }
         }
-        @media (max-width: 1250px) { .date-cell { display: none; } th:last-child { width: 225px; } }
+        @media (max-width: 1250px) { .date-cell { display: none; } .selection-actions button { flex-direction: column; gap: 3px; min-width: 54px; padding: 5px 7px; } }
         @media (max-width: 1000px) { .workspace { grid-template-columns: minmax(0, 1fr); } .queue-list { max-height: 320px; } .dropzone { min-height: 135px; } .date-cell { display: table-cell; } }
         @media (max-width: 680px) {
           .topbar { height: 70px; padding: 0 18px; } .brand { font-size: 16px; } .brand-icon { width: 37px; height: 37px; } .connection { gap: 5px; } .mode { margin-left: 4px; }
-          main { padding: 26px 14px 20px; } h1 { font-size: 26px; } .intro { align-items: stretch; flex-direction: column; gap: 20px; margin-bottom: 22px; } .main-actions button { flex: 1; } .subtitle { font-size: 12px; }
-          .toolbar { padding: 14px; flex-wrap: wrap; gap: 8px; } .search { flex-basis: calc(100% - 50px); } #sort { order: 3; max-width: none; width: 100%; } #refresh { padding: 8px; }
-          .location-bar { padding: 16px 14px 10px; } .list-summary { padding: 0 14px 14px; } .table-wrap { overflow: visible; }
-          table, tbody { display: block; } thead { display: none; } .file-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; border-top: 1px solid var(--line); padding: 12px 14px 8px; }
-          td { padding: 0; border: 0; } .file-cell { padding-left: 0; } .size-cell { padding: 12px 0 0 8px; } .date-cell { display: none; } .actions { grid-column: 1 / -1; padding: 6px 0 0 46px; } .actions > div { justify-content: flex-start; flex-wrap: wrap; gap: 8px; } .actions button, .actions .button { min-height: 36px; font-size: 12px; }
+          main { padding: 18px 12px 20px; } h1 { font-size: 22px; } .intro { align-items: stretch; flex-direction: column; gap: 12px; margin-bottom: 16px; } .main-actions button { flex: 1; }
+          .toolbar { padding: 10px 12px; flex-wrap: wrap; gap: 8px; } .search { flex-basis: calc(100% - 50px); } #sort { order: 3; max-width: none; width: 100%; } #refresh { padding: 8px; }
+          .location-bar { padding: 12px 12px 8px; } .list-summary { padding: 0 12px 10px; } .table-wrap { overflow: visible; }
+          table, tbody { display: block; } thead { display: none; } .file-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) 72px; align-items: center; border-top: 1px solid var(--line); padding: 2px 12px 2px 4px; min-height: 46px; }
+          td { padding: 0; border: 0; height: auto; } td.select-cell { padding: 12px 8px; } .file-cell { padding-left: 0; min-width: 0; } .size-cell { padding-left: 8px; text-align: right; } .date-cell { display: none; }
+          .action-bar { bottom: 0; left: 0; transform: none; width: 100%; border-radius: 14px 14px 0 0; padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); gap: 6px; }
+          .selection-info { width: 100%; gap: 10px; padding: 0 4px; } #selection-clear { margin-left: auto; }
+          .selection-actions { width: 100%; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+          .selection-actions button { min-width: 0; padding: 7px 1px; border-color: transparent; border-radius: 7px; font-size: 11px; }
+          body[data-writable="false"] .selection-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .preview-heading, .preview-footer { padding: 16px; } .preview-content { padding: 15px; } .preview-footer { align-items: start; } .empty { padding: 45px 18px; }
         }
         @media (prefers-reduced-motion: no-preference) { button, .button { transition: background .15s, border-color .15s; } }
@@ -168,12 +179,17 @@ internal object HttpServerPageAssets {
         const byId = id => document.getElementById(id);
         const writable = document.body.dataset.writable === 'true';
         const queue = [];
+        const selection = new Map();
+        let clipboard;
+        let batchRunning = false;
+        let batchProgress = '';
         let uploading = false;
         let navigation = 0;
         let navigationController;
         let noticeTimer;
         const collator = new Intl.Collator('zh-CN', {numeric: true, sensitivity: 'base'});
         const currentPath = () => byId('browser').dataset.path;
+        const fileRows = () => Array.from(document.querySelectorAll('.file-row'));
         const activeTasks = () => queue.some(item => item.state === 'waiting' || item.state === 'uploading');
 
         function notify(message, error = false) {
@@ -192,7 +208,7 @@ internal object HttpServerPageAssets {
         function applyFilter() {
           const query = byId('search').value.toLocaleLowerCase();
           const sort = byId('sort').value;
-          const rows = Array.from(document.querySelectorAll('.file-row'));
+          const rows = fileRows();
           rows.sort((a, b) => {
             const directory = Number(b.dataset.directory === 'true') - Number(a.dataset.directory === 'true');
             if (directory) return directory;
@@ -209,6 +225,11 @@ internal object HttpServerPageAssets {
           byId('empty').hidden = rows.length !== 0;
           byId('no-results').hidden = !rows.length || visible !== 0;
           byId('filter-count').textContent = query ? '找到 ' + visible + ' 项' : '';
+          // Only visible, still-existing entries remain selected after filtering or refresh.
+          const visibleUrls = new Set(rows.filter(row => !row.hidden).map(row => row.dataset.url));
+          for (const url of selection.keys()) if (!visibleUrls.has(url)) selection.delete(url);
+          for (const row of rows) if (selection.has(row.dataset.url)) selection.set(row.dataset.url, {...row.dataset});
+          updateSelection();
           for (const time of document.querySelectorAll('[data-time]')) {
             const date = new Date(Number(time.dataset.time));
             if (Number(time.dataset.time) > 0 && !isNaN(date.getTime())) {
@@ -216,6 +237,93 @@ internal object HttpServerPageAssets {
               time.dateTime = date.toISOString();
               time.title = date.toLocaleString();
             }
+          }
+        }
+        function canPaste() {
+          return clipboard && clipboard.entries.length && currentPath() !== clipboard.parent &&
+            !clipboard.entries.some(entry => entry.directory === 'true' && currentPath().startsWith(entry.url));
+        }
+        function updateSelection() {
+          const busy = batchRunning || managing;
+          const rows = fileRows();
+          const visible = rows.filter(row => !row.hidden);
+          const cutUrls = new Set(clipboard && clipboard.action === 'move' ? clipboard.entries.map(entry => entry.url) : []);
+          for (const row of rows) {
+            const checked = selection.has(row.dataset.url);
+            const checkbox = row.querySelector('.entry-select');
+            checkbox.checked = checked;
+            checkbox.disabled = busy;
+            row.classList.toggle('is-selected', checked);
+            row.classList.toggle('is-cut', cutUrls.has(row.dataset.url));
+          }
+          const entries = Array.from(selection.values());
+          const singleFile = entries.length === 1 && entries[0].directory !== 'true';
+          byId('select-all').checked = visible.length > 0 && entries.length === visible.length;
+          byId('select-all').indeterminate = entries.length > 0 && entries.length < visible.length;
+          byId('select-all').disabled = busy || !visible.length;
+          byId('selection-count').textContent = batchProgress || (entries.length ? '已选 ' + entries.length + ' 项' : '未选择');
+          byId('selection-clear').disabled = busy || !entries.length;
+          byId('selection-download').disabled = busy || !singleFile;
+          byId('selection-preview').disabled = busy || !singleFile || !entries[0].preview;
+          byId('selection-preview').title = '选择一个文本或图片文件后预览';
+          byId('selection-download').title = '选择一个文件后下载';
+          if (writable) {
+            for (const action of ['copy', 'cut', 'delete']) byId('selection-' + action).disabled = busy || !entries.length;
+            byId('selection-rename').disabled = busy || entries.length !== 1;
+            byId('selection-rename').title = '选择一个项目后重命名';
+            byId('selection-paste').disabled = busy || !canPaste();
+            byId('selection-paste').title = canPaste() ? '粘贴到当前文件夹' : '复制或剪切后，进入其他目标文件夹粘贴';
+            byId('clipboard-panel').hidden = !clipboard;
+            byId('clipboard-clear').disabled = busy;
+            if (clipboard) byId('clipboard-status').textContent = (clipboard.action === 'move' ? '待剪切 ' : '待复制 ') + clipboard.entries.length + ' 项 · ' + (canPaste() ? '粘贴到当前文件夹' : '进入其他目标文件夹后粘贴');
+          }
+        }
+        function toggleSelection(row, checked = !selection.has(row.dataset.url)) {
+          if (batchRunning || managing) return;
+          if (checked) selection.set(row.dataset.url, {...row.dataset});
+          else selection.delete(row.dataset.url);
+          updateSelection();
+        }
+        function setClipboard(action) {
+          if (!writable || batchRunning || managing || !selection.size) return;
+          clipboard = {action, parent: currentPath(), entries: Array.from(selection.values())};
+          selection.clear();
+          updateSelection();
+        }
+        async function runBatch(action, entries, destination = currentPath()) {
+          if (!writable || batchRunning || managing || !entries.length) return;
+          batchRunning = true;
+          const label = {copy: '复制', move: '移动', delete: '删除'}[action];
+          const failures = [];
+          let completed = 0;
+          try {
+            for (let index = 0; index < entries.length; ++index) {
+              const item = entries[index];
+              batchProgress = '正在' + label + ' ' + (index + 1) + '/' + entries.length;
+              updateSelection();
+              try {
+                const query = action === 'delete' ? '' : '?action=' + action + '&destination=' + encodeURIComponent(decodeURIComponent(destination));
+                const response = await fetch(item.url + query, {method: action === 'delete' ? 'DELETE' : 'POST', headers: {'X-Material-Files': '1'}});
+                const message = await response.text();
+                if (!response.ok) throw new Error(message || '操作失败（' + response.status + '）');
+                ++completed;
+                selection.delete(item.url);
+                if (clipboard && (action === 'move' || action === 'delete')) {
+                  clipboard.entries = clipboard.entries.filter(entry => entry.url !== item.url && !(action === 'delete' && item.directory === 'true' && entry.url.startsWith(item.url)));
+                  if (!clipboard.entries.length) clipboard = null;
+                }
+              } catch (error) {
+                failures.push({entry: item, message: error.message});
+              }
+            }
+            if (action === 'copy' && clipboard && failures.length && completed) clipboard.entries = failures.map(failure => failure.entry);
+            if (!byId('refresh').disabled) await loadDirectory(currentPath());
+            const details = failures.slice(0, 3).map(failure => '「' + failure.entry.name + '」：' + failure.message).join('；');
+            notify(label + '完成 ' + completed + ' 项' + (failures.length ? '，' + failures.length + ' 项失败。' + details + (action === 'delete' ? ' 文件夹可能已部分删除，请检查列表。' : '') : ''), failures.length > 0);
+          } finally {
+            batchRunning = false;
+            batchProgress = '';
+            updateSelection();
           }
         }
         async function loadDirectory(path, mode = 'refresh') {
@@ -237,7 +345,7 @@ internal object HttpServerPageAssets {
             if (ticket !== navigation) return;
             const changed = currentPath() !== browser.dataset.path;
             byId('browser').replaceWith(browser);
-            if (changed) byId('search').value = '';
+            if (changed) { byId('search').value = ''; selection.clear(); }
             if (mode === 'push') history.pushState(null, '', browser.dataset.path);
             if (mode === 'pop') history.replaceState(null, '', browser.dataset.path);
             document.title = page.title;
@@ -258,29 +366,47 @@ internal object HttpServerPageAssets {
         byId('refresh').addEventListener('click', () => loadDirectory(currentPath()));
         window.addEventListener('popstate', () => loadDirectory(location.pathname, 'pop'));
         window.addEventListener('beforeunload', event => {
-          if (activeTasks()) { event.preventDefault(); event.returnValue = ''; }
+          if (activeTasks() || batchRunning || managing) { event.preventDefault(); event.returnValue = ''; }
+        });
+        document.addEventListener('change', event => {
+          if (event.target.matches('.entry-select')) toggleSelection(event.target.closest('.file-row'), event.target.checked);
+        });
+        byId('select-all').addEventListener('change', event => {
+          if (batchRunning || managing) return;
+          selection.clear();
+          if (event.target.checked) for (const row of fileRows()) if (!row.hidden) selection.set(row.dataset.url, {...row.dataset});
+          updateSelection();
+        });
+        byId('selection-clear').addEventListener('click', () => { selection.clear(); updateSelection(); });
+        byId('selection-preview').addEventListener('click', () => {
+          if (!byId('selection-preview').disabled) openPreview(selection.values().next().value);
+        });
+        byId('selection-download').addEventListener('click', () => {
+          if (byId('selection-download').disabled) return;
+          const entry = selection.values().next().value;
+          const link = document.createElement('a');
+          link.href = entry.url; link.download = entry.name;
+          document.body.append(link); link.click(); link.remove();
         });
         document.addEventListener('click', event => {
           if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
           const directory = event.target.closest('a[data-directory-link]');
           if (directory) { event.preventDefault(); loadDirectory(directory.getAttribute('href'), 'push'); return; }
-          const control = event.target.closest('[data-action], [data-preview-link]');
-          if (!control) return;
-          const row = control.closest('.file-row');
+          const row = event.target.closest('.file-row');
           if (!row) return;
-          event.preventDefault();
-          const action = control.dataset.action || 'preview';
-          if (action === 'preview') openPreview(row.dataset);
-          else if (writable) openManagement(action, row.dataset);
+          if (event.target.closest('[data-preview-link]')) { event.preventDefault(); openPreview(row.dataset); }
+          else if (!event.target.closest('a, button, input')) toggleSelection(row);
         });
 
         let management;
         let managing = false;
         function openManagement(action, entry = {}) {
-          management = {action, url: entry.url || currentPath(), name: entry.name || '', directory: entry.directory === 'true'};
+          if (batchRunning || managing) return;
+          const entries = entry.url ? [entry] : Array.from(selection.values());
+          management = {action, url: entry.url || currentPath(), entries};
           const deleting = action === 'delete';
-          byId('manage-title').textContent = deleting ? '删除' + (management.directory ? '文件夹' : '文件') : action === 'rename' ? '重命名' : '新建文件夹';
-          byId('manage-description').textContent = deleting ? '确定删除「' + entry.name + '」' + (management.directory ? '及其中的全部内容' : '') + '？此操作无法撤销。' : '名称不能包含 /、\\，也不能是 . 或 ..。同名项目不会被覆盖。';
+          byId('manage-title').textContent = deleting ? '删除 ' + entries.length + ' 个项目' : action === 'rename' ? '重命名' : '新建文件夹';
+          byId('manage-description').textContent = deleting ? '确定删除' + (entries.length === 1 ? '「' + entries[0].name + '」' : '选中的 ' + entries.length + ' 个项目') + (entries.some(item => item.directory === 'true') ? '及文件夹中的全部内容' : '') + '？此操作无法撤销。' : '名称不能包含 /、\\，也不能是 . 或 ..。同名项目不会被覆盖。';
           byId('name-label').hidden = deleting;
           byId('entry-name').hidden = byId('entry-name').disabled = deleting;
           byId('entry-name').value = action === 'rename' ? entry.name : '';
@@ -296,27 +422,34 @@ internal object HttpServerPageAssets {
           event.preventDefault();
           if (managing) return;
           const item = management;
+          if (item.action === 'delete') {
+            byId('manage-dialog').close();
+            await runBatch('delete', item.entries);
+            return;
+          }
           const name = byId('entry-name').value;
-          if (item.action !== 'delete' && !validName(name)) {
+          if (!validName(name)) {
             byId('manage-error').textContent = '请输入有效名称，不要包含路径分隔符或控制字符。';
             return;
           }
           managing = true;
+          updateSelection();
           byId('manage-confirm').disabled = byId('manage-cancel').disabled = true;
           byId('manage-error').textContent = '正在处理…';
           try {
-            const query = item.action === 'delete' ? '' : '?action=' + item.action + '&name=' + encodeURIComponent(name);
-            const response = await fetch(item.url + query, {method: item.action === 'delete' ? 'DELETE' : 'POST', headers: {'X-Material-Files': '1'}});
+            const query = '?action=' + item.action + '&name=' + encodeURIComponent(name);
+            const response = await fetch(item.url + query, {method: 'POST', headers: {'X-Material-Files': '1'}});
             const message = await response.text();
             if (!response.ok) throw new Error(message || '操作失败（' + response.status + '）');
             byId('manage-dialog').close();
             notify(message);
             await loadDirectory(currentPath());
           } catch (error) {
-            byId('manage-error').textContent = error.message + (item.action === 'delete' ? ' 文件夹可能已部分删除，请刷新查看。' : '');
+            byId('manage-error').textContent = error.message;
           } finally {
             managing = false;
             byId('manage-confirm').disabled = byId('manage-cancel').disabled = false;
+            updateSelection();
           }
         }
 
@@ -408,6 +541,16 @@ internal object HttpServerPageAssets {
           }
         }
         if (writable) {
+          byId('selection-copy').addEventListener('click', () => setClipboard('copy'));
+          byId('selection-cut').addEventListener('click', () => setClipboard('move'));
+          byId('selection-paste').addEventListener('click', () => {
+            if (canPaste()) runBatch(clipboard.action, [...clipboard.entries]);
+          });
+          byId('clipboard-clear').addEventListener('click', () => { if (!batchRunning) { clipboard = null; updateSelection(); } });
+          byId('selection-rename').addEventListener('click', () => {
+            if (selection.size === 1) openManagement('rename', selection.values().next().value);
+          });
+          byId('selection-delete').addEventListener('click', () => { if (selection.size) openManagement('delete'); });
           byId('mkdir').addEventListener('click', () => openManagement('mkdir'));
           byId('manage-form').addEventListener('submit', submitManagement);
           byId('manage-cancel').addEventListener('click', () => byId('manage-dialog').close());

@@ -310,6 +310,9 @@ class HttpServer(
 
     private fun manage(session: IHTTPSession, segments: List<String>): Response {
         val action = session.parameters["action"]?.singleOrNull()
+        if (action == "copy" || action == "move") {
+            return transfer(session, segments, action == "move")
+        }
         require(action == "mkdir" || action == "rename")
         val name = session.parameters["name"]?.singleOrNull()
             ?: throw RequestException(Status.BAD_REQUEST, "请输入名称")
@@ -340,6 +343,67 @@ class HttpServer(
             message(Status.OK, "重命名完成").apply {
                 addHeader("Location", HttpServerPaths.url(targetSegments, attributes.isDirectory))
             }
+        }
+    }
+
+    private fun transfer(session: IHTTPSession, segments: List<String>, move: Boolean): Response {
+        require(segments.isNotEmpty()) { "不能复制或移动根文件夹" }
+        // Query parameters have already been decoded once by NanoHTTPD, like session.uri.
+        val destination = session.parameters["destination"]?.singleOrNull()
+            ?: throw RequestException(Status.BAD_REQUEST, "请选择目标文件夹")
+        val destinationSegments = HttpServerPaths.segments(destination)
+        val targetSegments = destinationSegments + segments.last()
+        require(targetSegments != segments) { "源和目标不能相同" }
+        require(destinationSegments.take(segments.size) != segments) {
+            "不能将文件夹复制或移动到自身或其子文件夹中"
+        }
+        return withChanges(listOf(segments, targetSegments)) {
+            val source = resolve(segments)
+            val parent = resolve(destinationSegments)
+            require(parent.isDirectory(NOFOLLOW_LINKS) || (parent == root && root.isDirectory()))
+            val target = resolve(targetSegments, true)
+            requireMissing(target)
+            val attributes = source.readAttributes(BasicFileAttributes::class.java, NOFOLLOW_LINKS)
+            require(attributes.isRegularFile || attributes.isDirectory)
+            if (move) source.moveTo(target) else copyTree(source, target)
+            message(Status.OK, if (move) "移动完成" else "复制完成").apply {
+                addHeader("Location", HttpServerPaths.url(targetSegments, attributes.isDirectory))
+            }
+        }
+    }
+
+    private fun copyTree(source: Path, target: Path) {
+        val pending = ArrayDeque<Pair<Path, Path>>()
+        pending.addLast(source to target)
+        var created = false
+        try {
+            while (pending.isNotEmpty()) {
+                val (currentSource, currentTarget) = pending.removeLast()
+                val attributes = currentSource.readAttributes(BasicFileAttributes::class.java, NOFOLLOW_LINKS)
+                if (attributes.isSymbolicLink || (!attributes.isDirectory && !attributes.isRegularFile)) {
+                    throw RequestException(Status.FORBIDDEN, "复制不支持符号链接或特殊文件")
+                }
+                if (attributes.isDirectory) {
+                    currentTarget.createDirectory()
+                    if (currentTarget == target) created = true
+                    currentSource.newDirectoryStream().use { children ->
+                        for (child in children) {
+                            pending.addLast(child to currentTarget.resolve(child.fileName.toString()))
+                        }
+                    }
+                } else {
+                    currentSource.newInputStream(NOFOLLOW_LINKS).use { input ->
+                        currentTarget.newOutputStream(CREATE_NEW, WRITE).use { output ->
+                            if (currentTarget == target) created = true
+                            input.copyTo(output)
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Only remove a target created by this request; existing targets are never touched.
+            if (created) runCatching { deleteTree(target) }.onFailure { e.addSuppressed(it) }
+            throw e
         }
     }
 

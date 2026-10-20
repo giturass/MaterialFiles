@@ -27,38 +27,22 @@ internal object HttpServerPage {
                 mime.isNotEmpty() -> "text"
                 else -> ""
             }
-            val type = when {
-                entry.directory -> "文件夹"
-                preview == "image" -> "图片"
-                preview == "text" -> "文本"
-                else -> "文件"
-            }
             val linkAttribute = when {
                 entry.directory -> "data-directory-link"
                 preview.isNotEmpty() -> "data-preview-link"
                 else -> "download"
             }
-            val readActions = if (entry.directory) "" else buildString {
-                if (preview.isNotEmpty()) {
-                    append("<button type=\"button\" data-action=\"preview\">预览</button>")
-                }
-                append("<a class=\"button\" href=\"$url\" download>下载</a>")
-            }
-            val writeActions = if (writable) """
-                <button type="button" data-action="rename">重命名</button>
-                <button type="button" class="danger-quiet" data-action="delete">删除</button>
-            """.trimIndent() else ""
             """
                 <tr class="file-row" data-name="${escape(entry.name)}" data-directory="${entry.directory}"
                     data-size="${entry.size}" data-modified="${entry.modified}" data-url="$url"
                     data-preview="$preview" data-mime="$mime">
+                  <td class="select-cell"><input class="entry-select" type="checkbox" aria-label="选择 ${escape(entry.name)}"></td>
                   <td class="file-cell">
                     <span class="file-icon ${if (entry.directory) "folder" else preview}" aria-hidden="true">${icon(if (entry.directory) "folder" else preview)}</span>
-                    <div class="file-label"><a class="entry-link" href="$url" $linkAttribute>${escape(entry.name)}</a><small>$type</small></div>
+                    <div class="file-label"><a class="entry-link" href="$url" $linkAttribute title="${escape(entry.name)}">${escape(entry.name)}</a></div>
                   </td>
                   <td class="size-cell">${if (entry.directory) "—" else formatSize(entry.size)}</td>
                   <td class="date-cell"><time data-time="${entry.modified}">—</time></td>
-                  <td class="actions"><div>$readActions$writeActions</div></td>
                 </tr>
             """.trimIndent()
         }
@@ -97,6 +81,16 @@ internal object HttpServerPage {
               </form>
             </dialog>
         """.trimIndent() else ""
+        val writeSelectionActions = if (writable) """
+            <button id="selection-copy" type="button" disabled>${icon("copy")}<span>复制</span></button>
+            <button id="selection-cut" type="button" disabled>${icon("cut")}<span>剪切</span></button>
+            <button id="selection-paste" type="button" disabled>${icon("paste")}<span>粘贴</span></button>
+            <button id="selection-rename" type="button" disabled>${icon("rename")}<span>重命名</span></button>
+            <button id="selection-delete" class="danger-quiet" type="button" disabled>${icon("delete")}<span>删除</span></button>
+        """.trimIndent() else ""
+        val clipboardPanel = if (writable) """
+            <div id="clipboard-panel" class="clipboard-panel" hidden><span id="clipboard-status" role="status"></span><button id="clipboard-clear" type="button">取消</button></div>
+        """.trimIndent() else ""
         return """
             <!doctype html>
             <html lang="zh-CN">
@@ -112,7 +106,7 @@ internal object HttpServerPage {
                 <div class="connection"><span class="connection-dot"></span>HTTP <span class="mode">${if (writable) "可读写" else "只读模式"}</span></div>
               </header>
               <main>
-                <section class="intro"><div><p class="eyebrow">你的文件，触手可及</p><h1>文件管理</h1><p class="subtitle">在浏览器与设备之间，轻松整理和传输文件。</p></div><div class="main-actions">$writeButtons</div></section>
+                <section class="intro"><h1>文件管理</h1><div class="main-actions">$writeButtons</div></section>
                 <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
                 <div class="workspace">
                   <section class="panel files-panel" aria-label="文件浏览器">
@@ -125,7 +119,7 @@ internal object HttpServerPage {
                         ${if (segments.isNotEmpty()) "<a class=\"parent-link\" data-directory-link href=\"${HttpServerPaths.url(segments.dropLast(1), true)}\">↑ 上一级</a>" else ""}
                       </div>
                       <div class="list-summary"><span>$folderCount 个文件夹 · ${entries.size - folderCount} 个文件</span><span id="filter-count"></span></div>
-                      <div class="table-wrap"><table><thead><tr><th scope="col">名称</th><th scope="col">大小</th><th scope="col" class="date-cell">修改时间</th><th scope="col" class="actions-heading">操作</th></tr></thead><tbody id="entries">$rows</tbody></table></div>
+                      <div class="table-wrap"><table><thead><tr><th scope="col" class="select-cell"><span class="sr-only">选择</span></th><th scope="col">名称</th><th scope="col" class="size-cell">大小</th><th scope="col" class="date-cell">修改时间</th></tr></thead><tbody id="entries">$rows</tbody></table></div>
                       <div id="empty" class="empty" ${if (entries.isNotEmpty()) "hidden" else ""}>${icon("folder")}<strong>此文件夹为空</strong><span>${if (writable) "上传文件或新建一个文件夹，开始整理吧" else "这里还没有文件"}</span></div>
                       <div id="no-results" class="empty" hidden><strong>没有匹配的文件</strong><span>试试其他名称</span></div>
                     </div>
@@ -134,6 +128,15 @@ internal object HttpServerPage {
                 </div>
                 <footer>Material Files <span>·</span> 通过局域网连接设备</footer>
               </main>
+              <div class="action-bar" role="region" aria-label="文件操作">
+                <div class="selection-info"><label class="select-all-label"><input id="select-all" type="checkbox" aria-label="全选当前可见项目"><span>全选</span></label><span id="selection-count" role="status">未选择</span><button id="selection-clear" type="button" disabled>取消选择</button></div>
+                <div class="selection-actions" role="group" aria-label="所选项目操作">
+                  $writeSelectionActions
+                  <button id="selection-download" type="button" disabled>${icon("download")}<span>下载</span></button>
+                  <button id="selection-preview" type="button" disabled>${icon("preview")}<span>预览</span></button>
+                </div>
+                $clipboardPanel
+              </div>
               $managementDialog
               <dialog id="preview-dialog" class="preview-dialog" aria-labelledby="preview-title">
                 <div class="preview-heading"><div><h2 id="preview-title">文件预览</h2><p id="preview-meta" class="hint"></p></div><button id="preview-close" type="button" aria-label="关闭预览">关闭</button></div>
@@ -175,6 +178,13 @@ internal object HttpServerPage {
             "upload" -> "<path d=\"M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5\"/>"
             "search" -> "<circle cx=\"10\" cy=\"10\" r=\"6\"/><path d=\"m15 15 5 5\"/>"
             "refresh" -> "<path d=\"M20 7v5h-5M4 17v-5h5\"/><path d=\"M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1\"/>"
+            "copy" -> "<rect x=\"8\" y=\"8\" width=\"12\" height=\"13\" rx=\"2\"/><path d=\"M15 8V3H3v13h5\"/>"
+            "cut" -> "<circle cx=\"6\" cy=\"6\" r=\"3\"/><circle cx=\"6\" cy=\"18\" r=\"3\"/><path d=\"m8 8 12 13M8 16 20 3\"/>"
+            "paste" -> "<path d=\"M9 5H5v16h14V5h-4\"/><rect x=\"9\" y=\"3\" width=\"6\" height=\"4\" rx=\"1\"/><path d=\"M8 12h8m-8 4h6\"/>"
+            "rename" -> "<path d=\"m14 5 5 5M4 20l5-1L21 7l-5-5L4 14Z\"/>"
+            "delete" -> "<path d=\"M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7\"/>"
+            "download" -> "<path d=\"M12 3v13m-5-5 5 5 5-5M4 17v4h16v-4\"/>"
+            "preview" -> "<path d=\"M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>"
             else -> "<path d=\"M13 3H5v18h14V9ZM13 3v6h6M8 13h8m-8 4h6\"/>"
         }
         return "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\">$shape</svg>"

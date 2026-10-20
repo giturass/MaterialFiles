@@ -86,7 +86,11 @@ class HttpServerProtocolTest {
         assertTrue(page.contains(HttpServerPaths.encode(name)))
         assertFalse(page.contains("id=\"upload\""))
         assertFalse(page.contains("id=\"mkdir\""))
-        assertFalse(page.contains("data-action=\"delete\""))
+        assertFalse(page.contains("id=\"selection-delete\""))
+        assertFalse(page.contains("id=\"selection-copy\""))
+        assertFalse(page.contains("id=\"selection-cut\""))
+        assertFalse(page.contains("id=\"selection-paste\""))
+        assertTrue(page.contains("id=\"select-all\""))
         assertTrue(page.contains("id=\"preview-dialog\""))
         assertTrue(page.contains("只读模式"))
     }
@@ -108,8 +112,15 @@ class HttpServerProtocolTest {
         assertTrue(page.contains("href=\"/page.html\" data-preview-link"))
         assertTrue(page.contains("href=\"/archive.zip\" download"))
         assertTrue(page.contains("href=\"/folder.png/\" data-directory-link"))
-        assertTrue(page.contains("data-action=\"rename\""))
-        assertTrue(page.contains("data-action=\"delete\""))
+        assertTrue(page.contains("id=\"selection-rename\""))
+        assertTrue(page.contains("id=\"selection-delete\""))
+        assertTrue(page.contains("id=\"selection-copy\""))
+        assertTrue(page.contains("id=\"selection-cut\""))
+        assertTrue(page.contains("id=\"selection-paste\""))
+        val rows = page.substringAfter("<tbody id=\"entries\">").substringBefore("</tbody>")
+        assertEquals(5, Regex("class=\"entry-select\"").findAll(rows).count())
+        assertFalse(rows.contains("<button"))
+        assertFalse(rows.contains("class=\"actions\""))
     }
 
     @Test

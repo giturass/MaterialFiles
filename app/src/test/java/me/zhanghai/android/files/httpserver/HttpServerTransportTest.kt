@@ -7,6 +7,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.io.InputStream
 import java.io.SequenceInputStream
 import java.net.SocketException
@@ -148,6 +149,132 @@ class HttpServerTransportTest {
     }
 
     @Test
+    fun copiesAndMovesNestedFoldersWithoutChangingTheSource() {
+        val transport = newTransport()
+        val name = "中文 空格+%?#&"
+        val source = "/$name"
+        fileSystem.directories.addAll(listOf(source, "$source/nested", "$source/empty"))
+        fileSystem.files["$source/nested/file"] = ByteArray(100_000) { (it % 256).toByte() }
+        fileSystem.files["$source/zero"] = byteArrayOf()
+        val url = HttpServerPaths.url(listOf(name), true)
+        val copy = transport.transfer(url, "copy", "/folder/")
+        assertEquals(200, copy.status)
+        assertEquals(HttpServerPaths.url(listOf("folder", name), true), copy.headers["location"])
+        assertArrayEquals(fileSystem.files["$source/nested/file"], fileSystem.files["/folder$source/nested/file"])
+        assertArrayEquals(byteArrayOf(), fileSystem.files["/folder$source/zero"])
+        assertTrue("/folder$source/empty" in fileSystem.directories)
+        assertTrue(source in fileSystem.directories)
+
+        val destination = "/目标 %2e%2e"
+        fileSystem.directories.add(destination)
+        val moved = transport.transfer(copy.headers["location"]!!, "move", destination)
+        assertEquals(200, moved.status)
+        assertEquals(HttpServerPaths.url(listOf("目标 %2e%2e", name), true), moved.headers["location"])
+        assertFalse("/folder$source" in fileSystem.directories)
+        assertTrue("$destination$source/empty" in fileSystem.directories)
+        assertArrayEquals(fileSystem.files["$source/nested/file"], fileSystem.files["$destination$source/nested/file"])
+    }
+
+    @Test
+    fun fileTransfersPreserveLiteralPercentSequences() {
+        val transport = newTransport()
+        fileSystem.files["/%2e%2e"] = "literal".toByteArray()
+        assertEquals(200, transport.transfer("/%252e%252e", "copy", "/folder").status)
+        assertArrayEquals("literal".toByteArray(), fileSystem.files["/folder/%2e%2e"])
+        assertEquals(201, transport.manage("/", "mkdir", "目标 %2e%2e").status)
+        val move = transport.transfer("/folder/%252e%252e", "move", "/目标 %2e%2e/")
+        assertEquals(200, move.status)
+        assertArrayEquals("literal".toByteArray(), fileSystem.files["/目标 %2e%2e/%2e%2e"])
+        assertArrayEquals("literal".toByteArray(), fileSystem.files["/%2e%2e"])
+        assertFalse(fileSystem.files.containsKey("/folder/%2e%2e"))
+    }
+
+    @Test
+    fun transfersRejectConflictsTraversalSelfDescendantsAndAmbiguousDestinations() {
+        val transport = newTransport()
+        fileSystem.files["/file"] = "source".toByteArray()
+        fileSystem.files["/folder/file"] = "existing".toByteArray()
+        fileSystem.directories.add("/folder/nested")
+        for (action in listOf("copy", "move")) {
+            assertEquals(409, transport.transfer("/file", action, "/folder/").status)
+            assertEquals(400, transport.transfer("/file", action, "/").status)
+            assertEquals(400, transport.transfer("/", action, "/folder/").status)
+            assertEquals(400, transport.transfer("/folder/", action, "/folder/").status)
+            assertEquals(400, transport.transfer("/folder/", action, "//folder//nested/").status)
+            assertEquals(400, transport.transfer("/file", action, "/file").status)
+            assertEquals(404, transport.transfer("/file", action, "/missing/").status)
+            assertEquals(404, transport.transfer("/missing", action, "/folder/").status)
+            for (destination in listOf("folder", "/../outside", "/folder/../outside", "/a\\b", "/a\u0000b")) {
+                assertEquals(destination, 400, transport.transfer("/file", action, destination).status)
+            }
+        }
+        val headers = mapOf("X-Material-Files" to "1")
+        assertEquals(400, transport.request("POST", "/file?action=copy", headers).status)
+        assertEquals(400, transport.request("POST", "/file?action=copy&destination=%2Ffolder&destination=%2F", headers).status)
+        assertEquals(400, transport.request("POST", "/file?action=copy&action=move&destination=%2Ffolder", headers).status)
+        assertArrayEquals("source".toByteArray(), fileSystem.files["/file"])
+        assertArrayEquals("existing".toByteArray(), fileSystem.files["/folder/file"])
+    }
+
+    @Test
+    fun copyRejectsLinksAndCleansUpIncompleteDestinationTrees() {
+        val transport = newTransport()
+        fileSystem.directories.add("/source")
+        fileSystem.symbolicLinks.add("/source/link")
+        fileSystem.files["/outside"] = "untouched".toByteArray()
+        assertEquals(403, transport.transfer("/source/", "copy", "/folder").status)
+        assertFalse("/folder/source" in fileSystem.directories)
+        assertTrue("/source/link" in fileSystem.symbolicLinks)
+        assertEquals(403, transport.transfer("/source/link", "copy", "/folder").status)
+        assertEquals(403, transport.transfer("/outside", "copy", "/source/link").status)
+        fileSystem.symbolicLinks.clear()
+        fileSystem.files["/source/file"] = "contents".toByteArray()
+        fileSystem.onOpen = { if (it == "/folder/source/file") throw IOException("Copy failed") }
+        assertEquals(500, transport.transfer("/source/", "copy", "/folder").status)
+        assertFalse("/folder/source" in fileSystem.directories)
+        assertFalse(fileSystem.files.keys.any { it.startsWith("/folder/source/") })
+        assertArrayEquals("contents".toByteArray(), fileSystem.files["/source/file"])
+        fileSystem.onOpen = {}
+        assertEquals(200, transport.transfer("/source/", "copy", "/folder").status)
+        assertArrayEquals("contents".toByteArray(), fileSystem.files["/folder/source/file"])
+        assertArrayEquals("untouched".toByteArray(), fileSystem.files["/outside"])
+    }
+
+    @Test
+    fun activeCopyReservesBothSourceAndDestinationUntilRemoteWritesFinish() {
+        val opened = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val transport = newTransport()
+        fileSystem.files["/source"] = "contents".toByteArray()
+        fileSystem.onOpen = { name ->
+            if (name == "/folder/source") {
+                opened.countDown()
+                check(release.await(5, TimeUnit.SECONDS))
+            }
+        }
+        val executor = Executors.newSingleThreadExecutor()
+        val copy = executor.submit<RawResponse> { transport.transfer("/source", "copy", "/folder") }
+        try {
+            assertTrue(opened.await(5, TimeUnit.SECONDS))
+            assertEquals(409, transport.delete("/source").status)
+            assertEquals(409, transport.manage("/source", "rename", "renamed").status)
+            assertEquals(409, transport.delete("/folder/").status)
+            assertEquals(409, transport.put("/folder/source", "replace").status)
+            assertEquals(409, transport.transfer("/source", "copy", "/folder").status)
+            assertEquals(201, transport.put("/independent", "independent").status)
+            release.countDown()
+            assertEquals(200, copy.get(5, TimeUnit.SECONDS).status)
+            assertArrayEquals("contents".toByteArray(), fileSystem.files["/folder/source"])
+            assertArrayEquals("contents".toByteArray(), fileSystem.files["/source"])
+            assertEquals(200, transport.delete("/folder/source").status)
+        } finally {
+            release.countDown()
+            executor.shutdownNow()
+            assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
     fun rejectsRootMutationsInvalidNamesAndAmbiguousParameters() {
         val transport = newTransport()
         assertEquals(400, transport.delete("/").status)
@@ -170,6 +297,8 @@ class HttpServerTransportTest {
         val requests = listOf(
             "POST" to "/?action=mkdir&name=new",
             "POST" to "/file?action=rename&name=new",
+            "POST" to "/file?action=copy&destination=%2Ffolder",
+            "POST" to "/file?action=move&destination=%2Ffolder",
             "DELETE" to "/file",
             "PUT" to "/new"
         )
@@ -279,6 +408,11 @@ class HttpServerTransportTest {
 
         fun delete(path: String): RawResponse =
             request("DELETE", path, mapOf("X-Material-Files" to "1"))
+
+        fun transfer(path: String, action: String, destination: String): RawResponse = request(
+            "POST", "$path?action=$action&destination=${HttpServerPaths.encode(destination)}",
+            mapOf("X-Material-Files" to "1")
+        )
 
         fun put(path: String, text: String): RawResponse {
             val bytes = text.toByteArray()
