@@ -19,14 +19,24 @@ import java.net.InetAddress
 object FtpServerUrl {
     fun getUrl(): String? {
         val localAddress = InetAddress::class.getLocalAddress() ?: return null
-        val username = if (!Settings.FTP_SERVER_ANONYMOUS_LOGIN.valueCompat) {
+        val protocol = Settings.SERVER_PROTOCOL.valueCompat
+        val username = if (
+            protocol == ServerProtocol.FTP && !Settings.FTP_SERVER_ANONYMOUS_LOGIN.valueCompat
+        ) {
             Settings.FTP_SERVER_USERNAME.valueCompat
         } else {
             null
         }
-        val host = localAddress.hostAddress
-        val port = Settings.FTP_SERVER_PORT.valueCompat
-        return "ftp://${if (username != null) "$username@" else ""}$host:$port/"
+        val host = localAddress.hostAddress!!.let { if (':' in it) "[$it]" else it }
+        val port = when (protocol) {
+            ServerProtocol.FTP -> Settings.FTP_SERVER_PORT.valueCompat
+            ServerProtocol.HTTP -> Settings.HTTP_SERVER_PORT.valueCompat
+        }
+        val scheme = when (protocol) {
+            ServerProtocol.FTP -> "ftp"
+            ServerProtocol.HTTP -> "http"
+        }
+        return "$scheme://${if (username != null) "$username@" else ""}$host:$port/"
     }
 
     fun createChangeReceiver(context: Context, onChange: () -> Unit): RuntimeBroadcastReceiver =

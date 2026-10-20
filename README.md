@@ -27,6 +27,7 @@ Builds from this repository contain no usage tracking, advertising SDKs or autom
 - APK signing: inspect signatures, import JKS/PKCS12 keys or create a private key, and save a separately verified APK. See [signing and its limits](docs/apk-signing.md).
 - APK coexistence: change a standalone APK's application ID, sign it and save a separate copy. See [scope and verification](docs/apk-coexistence.md).
 - NAS support: View and manage files on FTP, SFTP, SMB and WebDAV servers.
+- File server: Choose FTP or HTTP in the server screen to share files on your local network. HTTP supports browsing, downloads, resumable downloads and uploads from a browser.
 - Themes: Customizable UI colors, plus night mode with optional true black.
 - Linux-aware: Like [Nautilus](https://apps.gnome.org/Nautilus/), knows symbolic links, file permissions and SELinux context.
 - Robust: Uses Linux system calls under the hood, not yet another [`ls` parser](https://news.ycombinator.com/item?id=7994720).

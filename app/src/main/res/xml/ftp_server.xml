@@ -25,6 +25,14 @@
         android:title="@string/ftp_server_configuration_title"
         android:dependency="@string/pref_key_ftp_server_state">
 
+        <rikka.preference.SimpleMenuPreference
+            android:key="@string/pref_key_server_protocol"
+            android:title="@string/server_protocol_title"
+            android:defaultValue="@string/pref_default_value_server_protocol"
+            android:entries="@array/server_protocol_entries"
+            android:entryValues="@array/pref_entry_values_server_protocol"
+            app:useSimpleSummaryProvider="true" />
+
         <SwitchPreferenceCompat
             android:key="@string/pref_key_ftp_server_anonymous_login"
             android:title="@string/ftp_server_anonymous_login_title"
@@ -49,6 +57,12 @@
             android:key="@string/pref_key_ftp_server_port"
             android:title="@string/ftp_server_port_title"
             android:defaultValue="@integer/pref_default_value_ftp_server_port"
+            app:useSimpleSummaryProvider="true" />
+
+        <me.zhanghai.android.files.settings.NonNegativeIntegerPreference
+            android:key="@string/pref_key_http_server_port"
+            android:title="@string/ftp_server_port_title"
+            android:defaultValue="@integer/pref_default_value_http_server_port"
             app:useSimpleSummaryProvider="true" />
 
         <me.zhanghai.android.files.ftpserver.FtpServerHomeDirectoryPreference

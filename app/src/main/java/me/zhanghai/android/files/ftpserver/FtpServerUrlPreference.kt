@@ -55,6 +55,8 @@ class FtpServerUrlPreference : Preference {
         Settings.FTP_SERVER_ANONYMOUS_LOGIN.observeForever(observer)
         Settings.FTP_SERVER_USERNAME.observeForever(observer)
         Settings.FTP_SERVER_PORT.observeForever(observer)
+        Settings.SERVER_PROTOCOL.observeForever(observer)
+        Settings.HTTP_SERVER_PORT.observeForever(observer)
         receiver.register()
     }
 
@@ -64,6 +66,8 @@ class FtpServerUrlPreference : Preference {
         Settings.FTP_SERVER_ANONYMOUS_LOGIN.removeObserver(observer)
         Settings.FTP_SERVER_USERNAME.removeObserver(observer)
         Settings.FTP_SERVER_PORT.removeObserver(observer)
+        Settings.SERVER_PROTOCOL.removeObserver(observer)
+        Settings.HTTP_SERVER_PORT.removeObserver(observer)
         receiver.unregister()
     }
 

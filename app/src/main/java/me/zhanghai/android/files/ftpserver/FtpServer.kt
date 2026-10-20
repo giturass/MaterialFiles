@@ -20,11 +20,11 @@ class FtpServer(
     private val port: Int,
     private val homeDirectory: Path,
     private val writable: Boolean
-) {
+) : LocalServer {
     private lateinit var server: FtpServer
 
     @Throws(FtpException::class, RuntimeException::class)
-    fun start() {
+    override fun start() {
         server = FtpServerFactory()
             .apply {
                 val listener = ListenerFactory()
@@ -47,7 +47,7 @@ class FtpServer(
         server.start()
     }
 
-    fun stop() {
+    override fun stop() {
         server.stop()
     }
 }

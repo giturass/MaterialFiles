@@ -50,7 +50,7 @@ jobs:
           umask 077
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/materialfiles-release.p12"
 
-      - name: Build and lint release APK
+      - name: Build, test and lint release APK
         env:
           STORE_FILE: ${{ runner.temp }}/materialfiles-release.p12
           STORE_PASSWORD: ${{ secrets.MDTERM_RELEASE_STORE_PASSWORD }}
@@ -60,7 +60,7 @@ jobs:
           test -n "$STORE_PASSWORD"
           test -n "$KEY_ALIAS"
           test -n "$KEY_PASSWORD"
-          ./gradlew --no-daemon --console=plain :app:assembleRelease :app:lintRelease
+          ./gradlew --no-daemon --console=plain :app:assembleRelease :app:testReleaseUnitTest :app:lintRelease
 
       - name: Verify signature, absence of tracking SDKs and packaged editor
         run: |
@@ -88,6 +88,8 @@ jobs:
           name: materialfiles-build-reports-${{ github.sha }}
           path: |
             app/build/reports/lint-results-release.*
+            app/build/reports/tests/
+            app/build/test-results/
             app/build/outputs/mapping/release/
           if-no-files-found: ignore
           retention-days: 30

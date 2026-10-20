@@ -14,6 +14,7 @@ import me.zhanghai.android.files.app.application
 import me.zhanghai.android.files.compat.EnvironmentCompat2
 import me.zhanghai.android.files.filelist.FileSortOptions
 import me.zhanghai.android.files.filelist.OpenApkDefaultAction
+import me.zhanghai.android.files.ftpserver.ServerProtocol
 import me.zhanghai.android.files.navigation.BookmarkDirectory
 import me.zhanghai.android.files.navigation.StandardDirectorySettings
 import me.zhanghai.android.files.provider.root.RootStrategy
@@ -57,6 +58,17 @@ object Settings {
 
     val CREATE_ARCHIVE_TYPE: SettingLiveData<Int> =
         ResourceIdSettingLiveData(R.string.pref_key_create_archive_type, R.id.zipRadio)
+
+    val SERVER_PROTOCOL: SettingLiveData<ServerProtocol> =
+        EnumSettingLiveData(
+            R.string.pref_key_server_protocol, R.string.pref_default_value_server_protocol,
+            ServerProtocol::class.java
+        )
+
+    val HTTP_SERVER_PORT: SettingLiveData<Int> =
+        IntegerSettingLiveData(
+            R.string.pref_key_http_server_port, R.integer.pref_default_value_http_server_port
+        )
 
     val FTP_SERVER_ANONYMOUS_LOGIN: SettingLiveData<Boolean> =
         BooleanSettingLiveData(

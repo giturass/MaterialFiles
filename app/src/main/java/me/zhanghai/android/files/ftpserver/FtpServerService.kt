@@ -13,8 +13,10 @@ import androidx.annotation.WorkerThread
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import me.zhanghai.android.files.R
 import me.zhanghai.android.files.app.AppLocaleHelper
 import me.zhanghai.android.files.compat.mainExecutorCompat
+import me.zhanghai.android.files.httpserver.HttpServer
 import me.zhanghai.android.files.settings.Settings
 import me.zhanghai.android.files.util.WakeWifiLock
 import me.zhanghai.android.files.util.showToast
@@ -34,7 +36,9 @@ class FtpServerService : Service() {
 
     private val executorService = Executors.newSingleThreadExecutor()
 
-    private var server: FtpServer? = null
+    private var server: LocalServer? = null
+
+    private var destroyed = false
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppLocaleHelper.wrap(newBase))
@@ -55,6 +59,7 @@ class FtpServerService : Service() {
     override fun onDestroy() {
         super.onDestroy()
 
+        destroyed = true
         executeStop()
         executorService.shutdown()
     }
@@ -71,6 +76,9 @@ class FtpServerService : Service() {
 
     private fun onStartError(exception: Exception) {
         state = State.STOPPED
+        if (destroyed) {
+            return
+        }
         showToast(exception.toString())
         notification.stopForeground()
         wakeWifiLock.isAcquired = false
@@ -89,7 +97,11 @@ class FtpServerService : Service() {
 
     @WorkerThread
     private fun postState(state: State) {
-        mainExecutorCompat.execute { this.state = state }
+        mainExecutorCompat.execute {
+            if (state != State.RUNNING || !destroyed) {
+                this.state = state
+            }
+        }
     }
 
     @WorkerThread
@@ -97,7 +109,7 @@ class FtpServerService : Service() {
         if (server != null) {
             return
         }
-        val username: String?
+        val username: String
         val password: String?
         if (Settings.FTP_SERVER_ANONYMOUS_LOGIN.valueCompat) {
             username = USERNAME_ANONYMOUS
@@ -106,15 +118,29 @@ class FtpServerService : Service() {
             username = Settings.FTP_SERVER_USERNAME.valueCompat
             password = Settings.FTP_SERVER_PASSWORD.valueCompat
         }
-        val port = Settings.FTP_SERVER_PORT.valueCompat
+        val protocol = Settings.SERVER_PROTOCOL.valueCompat
+        val port = when (protocol) {
+            ServerProtocol.FTP -> Settings.FTP_SERVER_PORT.valueCompat
+            ServerProtocol.HTTP -> Settings.HTTP_SERVER_PORT.valueCompat
+        }
         val homeDirectory = Settings.FTP_SERVER_HOME_DIRECTORY.valueCompat
         val writable = Settings.FTP_SERVER_WRITABLE.valueCompat
-        val server = FtpServer(username, password, port, homeDirectory, writable)
-        this.server = server
         try {
+            require(port in 1..65535) { getString(R.string.server_port_error) }
+            val server = when (protocol) {
+                ServerProtocol.FTP -> FtpServer(username, password, port, homeDirectory, writable)
+                ServerProtocol.HTTP -> {
+                    require(password == null || ':' !in username) {
+                        getString(R.string.http_server_username_error)
+                    }
+                    HttpServer(username, password, port, homeDirectory, writable)
+                }
+            }
+            this.server = server
             server.start()
         } catch (e: Exception) {
             e.printStackTrace()
+            runCatching { this.server?.stop() }.onFailure { it.printStackTrace() }
             this.server = null
             mainExecutorCompat.execute { onStartError(e) }
             return
@@ -124,10 +150,14 @@ class FtpServerService : Service() {
 
     @WorkerThread
     private fun doStop() {
-        val server = server ?: return
-        server.stop()
-        this.server = null
-        postState(State.STOPPED)
+        try {
+            server?.stop()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            server = null
+            postState(State.STOPPED)
+        }
     }
 
     companion object {

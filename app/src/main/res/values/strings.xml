@@ -66,8 +66,8 @@
     <string name="notification_channel_background_activity_start_description">在应用处于后台期间采取动作</string>
     <string name="notification_channel_file_job_name">文件操作</string>
     <string name="notification_channel_file_job_description">显示和控制文件操作</string>
-    <string name="notification_channel_ftp_server_name">FTP 服务器</string>
-    <string name="notification_channel_ftp_server_description">显示和控制 FTP 服务器</string>
+    <string name="notification_channel_ftp_server_name">文件服务器</string>
+    <string name="notification_channel_ftp_server_description">显示和控制 FTP / HTTP 服务器</string>
 
     <string name="file_action_archive_password_title">需要密码</string>
     <string name="file_action_archive_password_message_format">“%1$s”受密码保护。</string>
@@ -708,6 +708,13 @@
     <string name="text_editor_close_message">您确定要舍弃对此文档未保存的变更吗？</string>
 
     <string name="ftp_server_title">服务器</string>
+    <string name="server_protocol_title">协议</string>
+    <string-array name="server_protocol_entries" translatable="false">
+        <item>FTP</item>
+        <item>HTTP</item>
+    </string-array>
+    <string name="server_port_error">端口必须在 1–65535 之间</string>
+    <string name="http_server_username_error">HTTP 登录用户名不能包含冒号</string>
     <string name="ftp_server_state_title">状态</string>
     <string name="ftp_server_state_summary_starting">正在启动…</string>
     <string name="ftp_server_state_summary_running">正在运行</string>

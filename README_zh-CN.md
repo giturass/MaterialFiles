@@ -25,6 +25,7 @@
 - APK 签名：检查原始签名，导入 JKS/PKCS12 或创建私有密钥，签名验签后另存 APK。详见[功能与限制](docs/apk-signing.md)。
 - APK 共存：修改单体 APK 的安装包名，重新签名后另存。详见[支持范围与验证](docs/apk-coexistence.md)。
 - NAS 支持：查看和管理 FTP、SFTP、SMB 和 WebDAV 服务器上的文件。
+- 文件服务器：在“服务器”页面选择 FTP 或 HTTP，向局域网共享文件；HTTP 支持浏览器浏览、下载、断点下载和上传文件。
 - 主题：可定制的界面颜色，以及可选纯黑的夜间模式。
 - Linux 友好：类似 [Nautilus](https://wiki.gnome.org/action/show/Apps/Files)，支持符号链接、文件权限和 SELinux 上下文。
 - 健壮性：使用 Linux 系统调用实现，而不是另一个 [`ls` 解析器](https://news.ycombinator.com/item?id=7994720)。

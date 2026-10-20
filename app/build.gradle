@@ -121,6 +121,8 @@ dependencies {
 }
 
 dependencies {
+    testImplementation 'junit:junit:4.13.2'
+
     // Use the same published apksig release as AGP, through its in-process Java API.
     implementation 'com.android.tools.build:apksig:9.4.1'
 
@@ -225,6 +227,7 @@ dependencies {
     implementation 'me.zhanghai.android.retrofile:library:1.2.0'
     implementation 'me.zhanghai.android.systemuihelper:library:1.0.0'
     implementation 'org.apache.ftpserver:ftpserver-core:1.2.1'
+    implementation 'org.nanohttpd:nanohttpd:2.3.1'
     // This is a dependency of org.apache.ftpserver:ftpserver-core but org.apache.mina:mina-core
     // 2.1.4+ became incompatible before API 24 due to dependency on StandardSocketOptions
     // (DIRMINA-1123) and NetworkChannel.supportedOptions() (DIRMINA-1130).

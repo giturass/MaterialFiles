@@ -19,6 +19,14 @@
     <string name="pref_key_create_archive_type">key_create_archive_type</string>
 
     <string name="pref_key_ftp_server_state">key_ftp_server_state</string>
+    <string name="pref_key_server_protocol">key_server_protocol</string>
+    <string name="pref_default_value_server_protocol">0</string>
+    <string-array name="pref_entry_values_server_protocol">
+        <item>0</item>
+        <item>1</item>
+    </string-array>
+    <string name="pref_key_http_server_port">key_http_server_port</string>
+    <integer name="pref_default_value_http_server_port">8080</integer>
     <bool name="pref_visible_ftp_server_add_tile">false</bool>
     <string name="pref_key_ftp_server_anonymous_login">key_ftp_server_anonymous_login</string>
     <bool name="pref_default_value_ftp_server_anonymous_login">true</bool>
