@@ -87,7 +87,7 @@ function harness(writable = true) {
         'browser', 'search', 'sort', 'refresh', 'entries', 'empty', 'no-results', 'filter-count',
         'notice', 'preview-dialog', 'preview-close', 'preview-title', 'preview-meta',
         'preview-download', 'preview-image', 'preview-text', 'preview-status', 'preview-note',
-        'select-all', 'selection-count', 'selection-clear', 'selection-download', 'selection-preview'
+        'select-all', 'selection-count', 'selection-clear', 'selection-download'
     ];
     if (writable) elements.push('queue', 'queue-count', 'queue-summary', 'queue-empty', 'clear-queue',
         'mkdir', 'manage-dialog', 'manage-title', 'manage-description', 'manage-form', 'manage-cancel',
@@ -186,8 +186,15 @@ function select(h, element, checked = true) {
 test('read-only page supports browsing and preview without requiring write controls', async () => {
     const h = harness(false);
     assert.equal(h.ids.has('upload'), false);
+    const entry = row('page.html', false, '/', 'text');
+    const link = new Element('a');
+    link.setAttribute('data-preview-link', '');
+    entry.append(link);
+    h.ids.get('entries').append(entry);
     h.context.fetch = async () => response('<script>alert(1)</script>');
-    await h.context.openPreview({name: 'page.html', url: '/page.html', preview: 'text', size: 25});
+    h.document.dispatch('click', {button: 0, target: link});
+    await h.settle();
+    assert.equal(h.ids.get('preview-dialog').open, true);
     assert.equal(h.ids.get('preview-text').textContent, '<script>alert(1)</script>');
     assert.equal(h.ids.get('preview-text').hidden, false);
 });
@@ -232,7 +239,6 @@ test('row and checkbox selection update the bottom bar, and select-all only sele
     assert.equal(text.querySelector('.entry-select').checked, true);
     assert.equal(text.classList.contains('is-selected'), true);
     assert.equal(h.ids.get('select-all').indeterminate, true);
-    assert.equal(h.ids.get('selection-preview').disabled, false);
     assert.equal(h.ids.get('selection-rename').disabled, false);
     select(h, folder);
     assert.equal(h.ids.get('selection-count').textContent, '已选 2 项');
@@ -253,12 +259,11 @@ test('row and checkbox selection update the bottom bar, and select-all only sele
     assert.equal(text.classList.contains('is-selected'), false);
 });
 
-test('read-only selection enables preview and download without write actions', () => {
+test('read-only selection enables download without write actions', () => {
     const h = harness(false);
     const entry = row('photo.jpg', false, '/', 'image');
     h.ids.get('entries').append(entry);
     select(h, entry);
-    assert.equal(h.ids.get('selection-preview').disabled, false);
     assert.equal(h.ids.get('selection-download').disabled, false);
     assert.equal(h.ids.has('selection-copy'), false);
     assert.equal(h.ids.has('selection-delete'), false);

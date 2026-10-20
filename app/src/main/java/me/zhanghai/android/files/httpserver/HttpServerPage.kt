@@ -39,10 +39,12 @@ internal object HttpServerPage {
                   <td class="select-cell"><input class="entry-select" type="checkbox" aria-label="选择 ${escape(entry.name)}"></td>
                   <td class="file-cell">
                     <span class="file-icon ${if (entry.directory) "folder" else preview}" aria-hidden="true">${icon(if (entry.directory) "folder" else preview)}</span>
-                    <div class="file-label"><a class="entry-link" href="$url" $linkAttribute title="${escape(entry.name)}">${escape(entry.name)}</a></div>
+                    <div class="file-label">
+                      <a class="entry-link" href="$url" $linkAttribute title="${escape(entry.name)}">${escape(entry.name)}</a>
+                      <time class="entry-modified" data-time="${entry.modified}">—</time>
+                    </div>
                   </td>
                   <td class="size-cell">${if (entry.directory) "—" else formatSize(entry.size)}</td>
-                  <td class="date-cell"><time data-time="${entry.modified}">—</time></td>
                 </tr>
             """.trimIndent()
         }
@@ -119,7 +121,7 @@ internal object HttpServerPage {
                         ${if (segments.isNotEmpty()) "<a class=\"parent-link\" data-directory-link href=\"${HttpServerPaths.url(segments.dropLast(1), true)}\">↑ 上一级</a>" else ""}
                       </div>
                       <div class="list-summary"><span>$folderCount 个文件夹 · ${entries.size - folderCount} 个文件</span><span id="filter-count"></span></div>
-                      <div class="table-wrap"><table><thead><tr><th scope="col" class="select-cell"><span class="sr-only">选择</span></th><th scope="col">名称</th><th scope="col" class="size-cell">大小</th><th scope="col" class="date-cell">修改时间</th></tr></thead><tbody id="entries">$rows</tbody></table></div>
+                      <div class="table-wrap"><table><thead><tr><th scope="col" class="select-cell"><span class="sr-only">选择</span></th><th scope="col">名称</th><th scope="col" class="size-cell">大小</th></tr></thead><tbody id="entries">$rows</tbody></table></div>
                       <div id="empty" class="empty" ${if (entries.isNotEmpty()) "hidden" else ""}>${icon("folder")}<strong>此文件夹为空</strong><span>${if (writable) "上传文件或新建一个文件夹，开始整理吧" else "这里还没有文件"}</span></div>
                       <div id="no-results" class="empty" hidden><strong>没有匹配的文件</strong><span>试试其他名称</span></div>
                     </div>
@@ -133,7 +135,6 @@ internal object HttpServerPage {
                 <div class="selection-actions" role="group" aria-label="所选项目操作">
                   $writeSelectionActions
                   <button id="selection-download" type="button" disabled>${icon("download")}<span>下载</span></button>
-                  <button id="selection-preview" type="button" disabled>${icon("preview")}<span>预览</span></button>
                 </div>
                 $clipboardPanel
               </div>
@@ -184,7 +185,6 @@ internal object HttpServerPage {
             "rename" -> "<path d=\"m14 5 5 5M4 20l5-1L21 7l-5-5L4 14Z\"/>"
             "delete" -> "<path d=\"M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7\"/>"
             "download" -> "<path d=\"M12 3v13m-5-5 5 5 5-5M4 17v4h16v-4\"/>"
-            "preview" -> "<path d=\"M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>"
             else -> "<path d=\"M13 3H5v18h14V9ZM13 3v6h6M8 13h8m-8 4h6\"/>"
         }
         return "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\">$shape</svg>"

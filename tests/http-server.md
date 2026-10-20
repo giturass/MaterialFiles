@@ -5,11 +5,13 @@ FTP and HTTP. Each protocol keeps its own port (FTP: 2121, HTTP: 8080). Stop the
 server before switching protocol. With HTTP running, open the displayed URL from
 a browser on the same network. The responsive page supports light/dark mode,
 breadcrumb navigation, searching and sorting the current directory, folder
-creation, copying, moving, renaming, deletion, and text/image preview. The compact
-list has a checkbox per row and a fixed bottom bar for selection and actions.
-Select multiple files/folders to copy, cut or delete; rename, preview and download
-act on one selected item. Copy/cut retains the selection in a page-local clipboard;
-browse to another directory and choose Paste. A failed item does not stop a batch,
+creation, copying, moving, renaming, deletion, and text/image preview. The file
+list shows the last modification time beneath each file/folder name, with a checkbox
+per row and a fixed bottom bar for selection and actions.
+Select multiple files/folders to copy, cut or delete; rename and download act on one
+selected item. Click a text/image filename to preview it. Copy/cut retains the
+selection in a page-local clipboard; browse to another directory and choose Paste.
+A failed item does not stop a batch,
 and failed moves remain in the clipboard for retry. A partial copy batch retains
 only failed items for retry; a fully successful copy can be pasted elsewhere again.
 Filtering removes hidden selections, refreshing retains existing visible
@@ -102,19 +104,23 @@ On an Android device, verify the transport and storage providers as follows:
     report a decoding error, and an image over 20 MiB should offer downloading.
     Close a slow preview and open another: cancelled/stale data must not appear.
     Original downloads must keep the attachment disposition and full file contents.
-11. Check desktop and 360 px mobile layouts in light and dark mode. Long filenames
+11. Check desktop and 360 px mobile layouts in light and dark mode. Search, the
+    smaller sort control and refresh should stay on one line. Folder icons should
+    use #2196F3 with a matching circular background and halo. Long filenames
     should truncate with the full name available on hover and in the checkbox's
     accessible label; deep breadcrumbs should wrap. Search is case insensitive; sorting always
     keeps folders first. Confirm empty/no-match states, keyboard focus, Escape to
     close dialogs, and error feedback after stopping the server. Disable external
     Internet access while keeping the local connection: the page must still work.
-12. Check that rows stay compact on desktop and mobile, without per-row action
-    buttons. Select rows using their checkboxes or empty row space. The bottom
-    bar must show the selected count and enable only valid actions. Select all
+12. Check that rows have balanced spacing on desktop and mobile, with the last
+    modification time below both file and folder names (or a dash if unavailable),
+    without per-row action buttons. Select rows using their checkboxes or empty
+    row space. The bottom bar must show the selected count and enable only valid actions. Select all
     with a search active: only visible results should be selected. Hiding a
     selected item by searching must deselect it. Sorting and refreshing should
     retain visible selections; entering another directory must clear selection.
-    Rename should enable for one item, and download/preview for one supported file.
+    Rename should enable for one item, and download for one file. The bottom bar
+    should have no preview button; text/image filenames should still open previews.
     Check that the bar does not cover the final row and respects the mobile safe area.
 13. Select several files and nonempty/empty folders, copy, enter another directory,
     and paste. Compare bytes and folder structure; the originals must remain.
