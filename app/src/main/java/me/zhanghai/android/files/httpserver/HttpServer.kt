@@ -22,6 +22,7 @@ import java.io.EOFException
 import java.io.IOException
 import java.security.MessageDigest
 import java.util.Base64
+import java.util.concurrent.ConcurrentHashMap
 
 /** HTTP transport over the same storage providers used by the file manager. */
 class HttpServer(
@@ -33,6 +34,7 @@ class HttpServer(
 ) : NanoHTTPD(port), LocalServer {
     private val root = homeDirectory.toAbsolutePath().normalize()
     private val credentials = password?.let { "$username:$it".toByteArray(Charsets.UTF_8) }
+    private val uploadingPaths = ConcurrentHashMap.newKeySet<Path>()
 
     override fun start() {
         require(root.isDirectory()) { "根文件夹不存在或无法访问" }
@@ -68,6 +70,12 @@ class HttpServer(
             message(Status.INTERNAL_ERROR, "文件操作失败")
         }
         return response.apply {
+            // NanoHTTPD 2.3.1 still sends fixed-length response bodies for HEAD. Keep the
+            // original Content-Length, but suppress the data for directories and errors too.
+            if (session.method == Method.HEAD) {
+                data.close()
+                data = ByteArrayInputStream(ByteArray(0))
+            }
             // Rejected requests may have an unread body. Never interpret it as another request.
             closeConnection(true)
             addHeader("Cache-Control", "no-store")
@@ -247,6 +255,11 @@ class HttpServer(
         }
         val length = session.headers["content-length"]?.toLongOrNull()?.takeIf { it >= 0 }
             ?: throw RequestException(Status.LENGTH_REQUIRED, "缺少有效的 Content-Length")
+        // Some providers implement CREATE_NEW as an existence check followed by a write.
+        // Reserve the path until close/cleanup finishes, including for delayed remote writes.
+        if (!uploadingPaths.add(path)) {
+            throw RequestException(Status.CONFLICT, "同名文件正在上传，请稍后重试")
+        }
         var created = false
         try {
             path.newOutputStream(WRITE, CREATE_NEW).use { output ->
@@ -269,6 +282,8 @@ class HttpServer(
                 runCatching { path.deleteIfExists() }.onFailure { e.addSuppressed(it) }
             }
             throw e
+        } finally {
+            uploadingPaths.remove(path)
         }
         return message(Status.CREATED, "上传完成").apply {
             addHeader("Location", HttpServerPaths.url(segments, false))

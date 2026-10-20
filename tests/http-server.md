@@ -9,6 +9,9 @@ Upload to upload into the current directory. Existing files are never overwritte
 The release workflow runs `:app:testReleaseUnitTest`. `HttpServerProtocolTest`
 covers URL encoding, traversal rejection, byte ranges (including large files),
 HTML escaping, parent links and read-only listings.
+`HttpServerTransportTest` exercises NanoHTTPD's request parser and response writer,
+including HEAD responses, ranged downloads, concurrent uploads to a provider with
+delayed file visibility, and cleanup/retry after an interrupted upload.
 
 On an Android device, verify the transport and storage providers as follows:
 
@@ -22,6 +25,10 @@ On an Android device, verify the transport and storage providers as follows:
    `Range: bytes=2-`, and `Range: bytes=-3`. Expect matching Content-Length and
    Content-Range headers; HEAD must have no response body. A range starting past
    the file length should return 416. HEAD ignores Range.
+   Also send HEAD to a directory, a missing file, an invalid path and a protected
+   URL without credentials. Each must keep the corresponding GET status and
+   Content-Length but send no body (check with a raw socket, since HTTP clients
+   commonly hide unexpected HEAD response bodies).
 4. Stop the server, disable anonymous login, set a username and password, then
    restart. A fresh browser session should ask for credentials. Missing, invalid
    or malformed Basic credentials must return 401 for both downloads and uploads.
@@ -37,6 +44,11 @@ On an Android device, verify the transport and storage providers as follows:
    disappears, and the port can be reused. Repeat start/stop and test an occupied
    port: failure should release locks and return the switch to the stopped state.
 8. Repeat browsing, download and upload with a Storage Access Framework root.
+   On a remote FTP/WebDAV root, start a slow upload and upload the same name from
+   a second client before the first finishes. The second request must return 409
+   without replacing the first upload. Uploads to different names can proceed
+   concurrently. Repeat with an interrupted first upload and retry its name after
+   cleanup; the retry must succeed.
    Switch back to FTP and confirm the previous FTP port, login and file operations
    still work. The quick settings tile and notification should control whichever
    protocol is selected.
