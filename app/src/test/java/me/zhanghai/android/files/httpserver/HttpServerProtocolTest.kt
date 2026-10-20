@@ -80,18 +80,42 @@ class HttpServerProtocolTest {
         val page = HttpServerPage.render(
             listOf("<script>alert(2)</script>"), listOf(HttpServerPage.Entry(name, false, 10)), false
         )
-        assertFalse(page.contains("<img"))
-        assertFalse(page.contains("<script>"))
+        assertFalse(page.contains(name))
+        assertFalse(page.contains("<script>alert(2)</script>"))
         assertTrue(page.contains("&lt;img src=x onerror=alert(1)&gt;&amp;&quot;.txt"))
         assertTrue(page.contains(HttpServerPaths.encode(name)))
         assertFalse(page.contains("id=\"upload\""))
+        assertFalse(page.contains("id=\"mkdir\""))
+        assertFalse(page.contains("data-action=\"delete\""))
+        assertTrue(page.contains("id=\"preview-dialog\""))
         assertTrue(page.contains("只读模式"))
+    }
+
+    @Test
+    fun previewTypesKeepActiveContentAsTextAndDirectoriesAsLinks() {
+        val page = HttpServerPage.render(
+            emptyList(), listOf(
+                HttpServerPage.Entry("photo.JPG", false, 100),
+                HttpServerPage.Entry("script.svg", false, 100),
+                HttpServerPage.Entry("page.html", false, 100),
+                HttpServerPage.Entry("archive.zip", false, 100),
+                HttpServerPage.Entry("folder.png", true, 0)
+            ), true
+        )
+        assertTrue(page.contains("data-preview=\"image\" data-mime=\"image/jpeg\""))
+        assertFalse(page.contains("image/svg+xml"))
+        assertTrue(page.contains("href=\"/script.svg\" data-preview-link"))
+        assertTrue(page.contains("href=\"/page.html\" data-preview-link"))
+        assertTrue(page.contains("href=\"/archive.zip\" download"))
+        assertTrue(page.contains("href=\"/folder.png/\" data-directory-link"))
+        assertTrue(page.contains("data-action=\"rename\""))
+        assertTrue(page.contains("data-action=\"delete\""))
     }
 
     @Test
     fun rootListingHasNoParentAndWritableListingOffersUploads() {
         val rootPage = HttpServerPage.render(emptyList(), emptyList(), true)
-        assertFalse(rootPage.contains("上一级"))
+        assertFalse(rootPage.contains("class=\"parent-link\""))
         assertTrue(rootPage.contains("此文件夹为空"))
         assertTrue(rootPage.contains("id=\"upload\""))
         val childPage = HttpServerPage.render(listOf("a", "b"), emptyList(), false)

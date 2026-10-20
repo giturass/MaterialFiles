@@ -2,6 +2,7 @@ package me.zhanghai.android.files.httpserver
 
 import java8.nio.file.AccessMode
 import java8.nio.file.CopyOption
+import java8.nio.file.DirectoryNotEmptyException
 import java8.nio.file.DirectoryStream
 import java8.nio.file.FileAlreadyExistsException
 import java8.nio.file.FileSystem
@@ -27,7 +28,8 @@ import java.util.concurrent.ConcurrentHashMap
 internal class HttpServerTestFileSystem : FileSystem() {
     val files = ConcurrentHashMap<String, ByteArray>()
     var onOpen: (String) -> Unit = {}
-    private val directories = setOf("/", "/folder")
+    val directories = ConcurrentHashMap.newKeySet<String>().apply { addAll(listOf("/", "/folder")) }
+    val symbolicLinks = ConcurrentHashMap.newKeySet<String>()
 
     private val provider = object : FileSystemProvider() {
         override fun getScheme(): String = "http-test"
@@ -37,9 +39,10 @@ internal class HttpServerTestFileSystem : FileSystem() {
 
         override fun newOutputStream(path: Path, vararg options: OpenOption): OutputStream {
             val name = path.toString()
-            if (CREATE_NEW in options && (files.containsKey(name) || name in directories)) {
+            if (CREATE_NEW in options && exists(name)) {
                 throw FileAlreadyExistsException(name)
             }
+            requireParent(name)
             onOpen(name)
             return object : ByteArrayOutputStream() {
                 override fun close() {
@@ -52,7 +55,7 @@ internal class HttpServerTestFileSystem : FileSystem() {
         override fun newDirectoryStream(
             dir: Path, filter: DirectoryStream.Filter<in Path>
         ): DirectoryStream<Path> {
-            val children = (directories + files.keys).filter {
+            val children = (directories + files.keys + symbolicLinks).filter {
                 Paths.get(it).parent?.toString() == dir.toString()
             }.map { this@HttpServerTestFileSystem.getPath(it) }.filter { filter.accept(it) }
             return object : DirectoryStream<Path> {
@@ -66,14 +69,15 @@ internal class HttpServerTestFileSystem : FileSystem() {
         ): A {
             val name = path.toString()
             val directory = name in directories
+            val link = name in symbolicLinks
             val bytes = files[name]
-            if (!directory && bytes == null) {
+            if (!directory && !link && bytes == null) {
                 throw NoSuchFileException(name)
             }
             return type.cast(object : BasicFileAttributes {
                 override fun isDirectory(): Boolean = directory
-                override fun isRegularFile(): Boolean = !directory
-                override fun isSymbolicLink(): Boolean = false
+                override fun isRegularFile(): Boolean = !directory && !link
+                override fun isSymbolicLink(): Boolean = link
                 override fun isOther(): Boolean = false
                 override fun size(): Long = bytes?.size?.toLong() ?: 0
                 override fun fileKey(): Any = name
@@ -84,9 +88,51 @@ internal class HttpServerTestFileSystem : FileSystem() {
         }
 
         override fun delete(path: Path) {
-            if (files.remove(path.toString()) == null) {
-                throw NoSuchFileException(path.toString())
+            val name = path.toString()
+            if (name in directories) {
+                if ((directories + files.keys + symbolicLinks).any { it.startsWith("$name/") }) {
+                    throw DirectoryNotEmptyException(name)
+                }
+                directories.remove(name)
+            } else if (!symbolicLinks.remove(name) && files.remove(name) == null) {
+                throw NoSuchFileException(name)
             }
+        }
+
+        override fun createDirectory(path: Path, vararg attrs: FileAttribute<*>) {
+            val name = path.toString()
+            if (exists(name)) throw FileAlreadyExistsException(name)
+            requireParent(name)
+            directories.add(name)
+        }
+
+        override fun move(source: Path, target: Path, vararg options: CopyOption) {
+            val from = source.toString()
+            val to = target.toString()
+            if (!exists(from)) throw NoSuchFileException(from)
+            if (exists(to)) throw FileAlreadyExistsException(to)
+            requireParent(to)
+            for (name in files.keys.toList()) {
+                if (name == from || name.startsWith("$from/")) {
+                    files[to + name.removePrefix(from)] = files.remove(name)!!
+                }
+            }
+            for (set in listOf(directories, symbolicLinks)) {
+                for (name in set.toList()) {
+                    if (name == from || name.startsWith("$from/")) {
+                        set.remove(name)
+                        set.add(to + name.removePrefix(from))
+                    }
+                }
+            }
+        }
+
+        private fun exists(name: String): Boolean =
+            name in directories || files.containsKey(name) || name in symbolicLinks
+
+        private fun requireParent(name: String) {
+            val parent = Paths.get(name).parent?.toString()
+            if (parent == null || parent !in directories) throw NoSuchFileException(name)
         }
 
         override fun newFileSystem(uri: URI, env: Map<String, *>): Nothing = unsupported()
@@ -95,9 +141,7 @@ internal class HttpServerTestFileSystem : FileSystem() {
         override fun newByteChannel(
             path: Path, options: Set<OpenOption>, vararg attrs: FileAttribute<*>
         ): Nothing = unsupported()
-        override fun createDirectory(path: Path, vararg attrs: FileAttribute<*>): Nothing = unsupported()
         override fun copy(source: Path, target: Path, vararg options: CopyOption): Nothing = unsupported()
-        override fun move(source: Path, target: Path, vararg options: CopyOption): Nothing = unsupported()
         override fun isSameFile(path: Path, other: Path): Boolean = path == other
         override fun isHidden(path: Path): Boolean = false
         override fun getFileStore(path: Path): Nothing = unsupported()

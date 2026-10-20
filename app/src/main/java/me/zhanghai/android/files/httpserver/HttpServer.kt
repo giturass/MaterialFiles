@@ -11,8 +11,11 @@ import java8.nio.file.StandardOpenOption.CREATE_NEW
 import java8.nio.file.StandardOpenOption.WRITE
 import java8.nio.file.attribute.BasicFileAttributes
 import me.zhanghai.android.files.ftpserver.LocalServer
+import me.zhanghai.android.files.provider.common.createDirectory
+import me.zhanghai.android.files.provider.common.delete
 import me.zhanghai.android.files.provider.common.deleteIfExists
 import me.zhanghai.android.files.provider.common.isDirectory
+import me.zhanghai.android.files.provider.common.moveTo
 import me.zhanghai.android.files.provider.common.newDirectoryStream
 import me.zhanghai.android.files.provider.common.newInputStream
 import me.zhanghai.android.files.provider.common.newOutputStream
@@ -21,8 +24,8 @@ import java.io.ByteArrayInputStream
 import java.io.EOFException
 import java.io.IOException
 import java.security.MessageDigest
+import java.util.ArrayDeque
 import java.util.Base64
-import java.util.concurrent.ConcurrentHashMap
 
 /** HTTP transport over the same storage providers used by the file manager. */
 class HttpServer(
@@ -34,7 +37,7 @@ class HttpServer(
 ) : NanoHTTPD(port), LocalServer {
     private val root = homeDirectory.toAbsolutePath().normalize()
     private val credentials = password?.let { "$username:$it".toByteArray(Charsets.UTF_8) }
-    private val uploadingPaths = ConcurrentHashMap.newKeySet<Path>()
+    private val changingPaths = mutableSetOf<Path>()
 
     override fun start() {
         require(root.isDirectory()) { "根文件夹不存在或无法访问" }
@@ -56,7 +59,7 @@ class HttpServer(
         } catch (e: NoSuchFileException) {
             message(Status.NOT_FOUND, "文件不存在")
         } catch (e: FileAlreadyExistsException) {
-            message(Status.CONFLICT, "同名文件已存在，请重命名后上传")
+            message(Status.CONFLICT, "同名文件或文件夹已存在，请使用其他名称")
         } catch (e: AccessDeniedException) {
             message(Status.FORBIDDEN, "无法访问此文件")
         } catch (e: SecurityException) {
@@ -90,23 +93,33 @@ class HttpServer(
                 addHeader("WWW-Authenticate", "Basic realm=\"Material Files\", charset=\"UTF-8\"")
             }
         }
-        if (session.method !in listOf(Method.GET, Method.HEAD, Method.PUT)) {
+        if (session.method !in listOf(Method.GET, Method.HEAD, Method.PUT, Method.POST, Method.DELETE)) {
             return message(Status.METHOD_NOT_ALLOWED, "不支持此方法").apply {
-                addHeader("Allow", if (writable) "GET, HEAD, PUT" else "GET, HEAD")
+                addHeader("Allow", if (writable) "GET, HEAD, PUT, POST, DELETE" else "GET, HEAD")
             }
         }
         if (session.headers.containsKey("expect")) {
             throw RequestException(Status.EXPECTATION_FAILED, "不支持 Expect 请求头")
         }
-        if (session.method == Method.PUT && !writable) {
-            throw RequestException(Status.FORBIDDEN, "服务器未允许写入")
-        }
         // NanoHTTPD has already percent-decoded the URI. Do not decode it a second time.
         val segments = HttpServerPaths.segments(session.uri)
-        val path = resolve(segments, session.method == Method.PUT)
-        if (session.method == Method.PUT) {
-            return upload(session, path, segments)
+        if (session.method in listOf(Method.PUT, Method.POST, Method.DELETE)) {
+            checkWriteRequest(session)
+            return when (session.method) {
+                Method.PUT -> withChanges(listOf(segments)) {
+                    upload(session, resolve(segments, true), segments)
+                }
+                Method.POST -> manage(session, segments)
+                else -> {
+                    require(segments.isNotEmpty()) { "不能删除根文件夹" }
+                    withChanges(listOf(segments)) {
+                        deleteTree(resolve(segments))
+                        message(Status.OK, "删除完成")
+                    }
+                }
+            }
         }
+        val path = resolve(segments)
         val attributes = path.readAttributes(BasicFileAttributes::class.java, NOFOLLOW_LINKS)
         // A configured root may itself be an alias such as /sdcard.
         if (attributes.isDirectory || (path == root && root.isDirectory())) {
@@ -136,7 +149,7 @@ class HttpServer(
         return MessageDigest.isEqual(expected, supplied)
     }
 
-    private fun resolve(segments: List<String>, uploading: Boolean): Path {
+    private fun resolve(segments: List<String>, allowMissingLeaf: Boolean = false): Path {
         var path = root
         for ((index, segment) in segments.withIndex()) {
             path = path.resolve(segment)
@@ -146,7 +159,7 @@ class HttpServer(
             val attributes = try {
                 path.readAttributes(BasicFileAttributes::class.java, NOFOLLOW_LINKS)
             } catch (e: NoSuchFileException) {
-                if (uploading && index == segments.lastIndex) {
+                if (allowMissingLeaf && index == segments.lastIndex) {
                     return path
                 }
                 throw e
@@ -174,7 +187,8 @@ class HttpServer(
                     return@mapNotNull null
                 }
                 HttpServerPage.Entry(
-                    child.fileName.toString(), attributes.isDirectory, attributes.size()
+                    child.fileName.toString(), attributes.isDirectory, attributes.size(),
+                    attributes.lastModifiedTime().toMillis()
                 )
             }.sortedWith(compareBy({ !it.directory }, { it.name.lowercase() }))
         }
@@ -184,7 +198,8 @@ class HttpServer(
             addHeader(
                 "Content-Security-Policy",
                 "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; " +
-                    "connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+                    "connect-src 'self'; img-src blob:; base-uri 'none'; " +
+                    "frame-ancestors 'none'; form-action 'none'"
             )
         }
     }
@@ -243,11 +258,6 @@ class HttpServer(
         if (segments.isEmpty() || session.uri.endsWith('/')) {
             throw RequestException(Status.BAD_REQUEST, "请选择文件名")
         }
-        // Browser uploads must originate from our page; no CORS permission is granted.
-        val origin = session.headers["origin"]
-        if (origin != null && origin != "http://${session.headers["host"]}") {
-            throw RequestException(Status.FORBIDDEN, "不允许跨站上传")
-        }
         if (session.headers.containsKey("transfer-encoding")
             || session.headers.containsKey("content-range")
         ) {
@@ -255,11 +265,6 @@ class HttpServer(
         }
         val length = session.headers["content-length"]?.toLongOrNull()?.takeIf { it >= 0 }
             ?: throw RequestException(Status.LENGTH_REQUIRED, "缺少有效的 Content-Length")
-        // Some providers implement CREATE_NEW as an existence check followed by a write.
-        // Reserve the path until close/cleanup finishes, including for delayed remote writes.
-        if (!uploadingPaths.add(path)) {
-            throw RequestException(Status.CONFLICT, "同名文件正在上传，请稍后重试")
-        }
         var created = false
         try {
             path.newOutputStream(WRITE, CREATE_NEW).use { output ->
@@ -282,11 +287,106 @@ class HttpServer(
                 runCatching { path.deleteIfExists() }.onFailure { e.addSuppressed(it) }
             }
             throw e
-        } finally {
-            uploadingPaths.remove(path)
         }
         return message(Status.CREATED, "上传完成").apply {
             addHeader("Location", HttpServerPaths.url(segments, false))
+        }
+    }
+
+    private fun checkWriteRequest(session: IHTTPSession) {
+        if (!writable) {
+            throw RequestException(Status.FORBIDDEN, "服务器未允许写入")
+        }
+        val origin = session.headers["origin"]
+        if (origin != null && origin != "http://${session.headers["host"]}") {
+            throw RequestException(Status.FORBIDDEN, "不允许跨站修改文件")
+        }
+        // POST can otherwise be sent by a cross-site form, even without an Origin header.
+        // No CORS permission is granted for this custom header or any write method.
+        if (session.method != Method.PUT && session.headers["x-material-files"] != "1") {
+            throw RequestException(Status.FORBIDDEN, "缺少文件管理请求标识")
+        }
+    }
+
+    private fun manage(session: IHTTPSession, segments: List<String>): Response {
+        val action = session.parameters["action"]?.singleOrNull()
+        require(action == "mkdir" || action == "rename")
+        val name = session.parameters["name"]?.singleOrNull()
+            ?: throw RequestException(Status.BAD_REQUEST, "请输入名称")
+        require(name.isNotBlank() && HttpServerPaths.segments("/$name") == listOf(name))
+        if (action == "mkdir") {
+            val targetSegments = segments + name
+            return withChanges(listOf(targetSegments)) {
+                val parent = resolve(segments)
+                require(parent.isDirectory(NOFOLLOW_LINKS) || (parent == root && root.isDirectory()))
+                val target = resolve(targetSegments, true)
+                requireMissing(target)
+                target.createDirectory()
+                message(Status.CREATED, "文件夹已创建").apply {
+                    addHeader("Location", HttpServerPaths.url(targetSegments, true))
+                }
+            }
+        }
+        require(segments.isNotEmpty()) { "不能重命名根文件夹" }
+        require(name != segments.last()) { "名称未更改" }
+        val targetSegments = segments.dropLast(1) + name
+        return withChanges(listOf(segments, targetSegments)) {
+            val source = resolve(segments)
+            val target = resolve(targetSegments, true)
+            requireMissing(target)
+            val attributes = source.readAttributes(BasicFileAttributes::class.java, NOFOLLOW_LINKS)
+            require(attributes.isRegularFile || attributes.isDirectory)
+            source.moveTo(target)
+            message(Status.OK, "重命名完成").apply {
+                addHeader("Location", HttpServerPaths.url(targetSegments, attributes.isDirectory))
+            }
+        }
+    }
+
+    private fun requireMissing(path: Path) {
+        try {
+            path.readAttributes(BasicFileAttributes::class.java, NOFOLLOW_LINKS)
+        } catch (e: NoSuchFileException) {
+            return
+        }
+        throw FileAlreadyExistsException(path.toString())
+    }
+
+    private fun deleteTree(path: Path) {
+        // Iterative postorder traversal also works for providers that only delete empty folders.
+        // Read without following links; a nested link is removed, never traversed.
+        val pending = ArrayDeque<Pair<Path, Boolean>>()
+        pending.addLast(path to false)
+        while (pending.isNotEmpty()) {
+            val (current, visited) = pending.removeLast()
+            val attributes = current.readAttributes(BasicFileAttributes::class.java, NOFOLLOW_LINKS)
+            if (attributes.isDirectory && !attributes.isSymbolicLink && !visited) {
+                pending.addLast(current to true)
+                current.newDirectoryStream().use { children ->
+                    for (child in children) {
+                        pending.addLast(child to false)
+                    }
+                }
+            } else {
+                current.delete()
+            }
+        }
+    }
+
+    private fun <T> withChanges(segments: List<List<String>>, action: () -> T): T {
+        val paths = segments.map { it.fold(root) { path, name -> path.resolve(name) } }
+        synchronized(changingPaths) {
+            // Reserve source, destination and descendants until remote writes/cleanup finish.
+            // Sibling uploads can run concurrently; moving/deleting their parent cannot.
+            if (paths.any { path -> changingPaths.any { it.startsWith(path) || path.startsWith(it) } }) {
+                throw RequestException(Status.CONFLICT, "文件或文件夹正在修改，请稍后重试")
+            }
+            changingPaths.addAll(paths)
+        }
+        try {
+            return action()
+        } finally {
+            synchronized(changingPaths) { changingPaths.removeAll(paths.toSet()) }
         }
     }
 

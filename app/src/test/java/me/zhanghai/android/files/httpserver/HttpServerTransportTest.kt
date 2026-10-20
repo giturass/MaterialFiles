@@ -17,8 +17,8 @@ import java.util.concurrent.TimeUnit
 class HttpServerTransportTest {
     private val fileSystem = HttpServerTestFileSystem()
 
-    private fun newTransport(password: String? = null): Transport =
-        Transport(HttpServer("user", password, 0, fileSystem.getPath("/"), true))
+    private fun newTransport(password: String? = null, writable: Boolean = true): Transport =
+        Transport(HttpServer("user", password, 0, fileSystem.getPath("/"), writable))
 
     @Test
     fun headKeepsGetHeadersWithoutSendingDirectoryOrErrorBodies() {
@@ -110,10 +110,175 @@ class HttpServerTransportTest {
         assertEquals(201, transport.put("/retry", "after conflict").status)
     }
 
+    @Test
+    fun createsRenamesAndDeletesNestedFoldersWithEncodedNames() {
+        val transport = newTransport()
+        val name = "中文 空格+%?#&"
+        val url = HttpServerPaths.url(listOf(name), true)
+        assertEquals(201, transport.manage("/", "mkdir", name).status)
+        assertEquals(200, transport.request("GET", url).status)
+        assertEquals(201, transport.manage(url, "mkdir", "nested").status)
+        assertEquals(201, transport.put(url + "nested/file.txt", "contents").status)
+        val renamed = transport.manage(url, "rename", "%2e%2e")
+        assertEquals(200, renamed.status)
+        assertEquals("/%252e%252e/", renamed.headers["location"])
+        assertEquals(404, transport.request("GET", url).status)
+        assertEquals(200, transport.request("GET", "/%252e%252e/nested/file.txt").status)
+        assertEquals(200, transport.delete("/%252e%252e/").status)
+        assertFalse(fileSystem.directories.any { it.startsWith("/%2e%2e") })
+        assertTrue(fileSystem.files.isEmpty())
+    }
+
+    @Test
+    fun conflictsNeverReplaceFilesOrFoldersAndReservationsAreReleased() {
+        val transport = newTransport()
+        transport.put("/first", "first")
+        transport.put("/second", "second")
+        assertEquals(409, transport.manage("/first", "rename", "second").status)
+        assertEquals(409, transport.manage("/first", "rename", "folder").status)
+        assertEquals(409, transport.manage("/", "mkdir", "first").status)
+        assertEquals(409, transport.manage("/", "mkdir", "folder").status)
+        assertArrayEquals("first".toByteArray(), fileSystem.files["/first"])
+        assertArrayEquals("second".toByteArray(), fileSystem.files["/second"])
+        assertEquals(200, transport.manage("/first", "rename", "renamed").status)
+        assertEquals(200, transport.delete("/renamed").status)
+        assertEquals(404, transport.delete("/renamed").status)
+        assertEquals(201, transport.manage("/", "mkdir", "renamed").status)
+        assertEquals(201, transport.put("/first", "new file").status)
+    }
+
+    @Test
+    fun rejectsRootMutationsInvalidNamesAndAmbiguousParameters() {
+        val transport = newTransport()
+        assertEquals(400, transport.delete("/").status)
+        assertEquals(400, transport.manage("/", "rename", "root").status)
+        for (name in listOf("", " ", ".", "..", "a/b", "/outside", "a\\b", "a\u0000b")) {
+            assertEquals(name, 400, transport.manage("/", "mkdir", name).status)
+            assertEquals(name, 400, transport.manage("/folder/", "rename", name).status)
+        }
+        val headers = mapOf("X-Material-Files" to "1")
+        assertEquals(400, transport.request("POST", "/?action=mkdir&name=a&name=b", headers).status)
+        assertEquals(400, transport.request("POST", "/?action=mkdir&action=rename&name=a", headers).status)
+        assertEquals(400, transport.manage("/", "unknown", "name").status)
+        assertEquals(404, transport.manage("/missing/", "mkdir", "child").status)
+        assertEquals(setOf("/", "/folder"), fileSystem.directories)
+    }
+
+    @Test
+    fun allManagementMethodsRequireWriteAccessAuthenticationAndSameOrigin() {
+        fileSystem.files["/file"] = "original".toByteArray()
+        val requests = listOf(
+            "POST" to "/?action=mkdir&name=new",
+            "POST" to "/file?action=rename&name=new",
+            "DELETE" to "/file",
+            "PUT" to "/new"
+        )
+        val readOnly = newTransport(writable = false)
+        val authenticated = newTransport(password = "password")
+        val transport = newTransport()
+        for ((method, path) in requests) {
+            val headers = mapOf("X-Material-Files" to "1", "Content-Length" to "0")
+            assertEquals(403, readOnly.request(method, path, headers).status)
+            assertEquals(401, authenticated.request(method, path, headers).status)
+            assertEquals(403, transport.request(method, path, headers + ("Origin" to "http://foreign")).status)
+            if (method != "PUT") assertEquals(403, transport.request(method, path).status)
+        }
+        val readOnlyOptions = readOnly.request("OPTIONS", "/")
+        assertEquals(405, readOnlyOptions.status)
+        assertEquals("GET, HEAD", readOnlyOptions.headers["allow"])
+        assertEquals("GET, HEAD, PUT, POST, DELETE", transport.request("OPTIONS", "/").headers["allow"])
+        assertArrayEquals("original".toByteArray(), fileSystem.files["/file"])
+        val authorization = "Basic " + java.util.Base64.getEncoder().encodeToString("user:password".toByteArray())
+        assertEquals(201, authenticated.request(
+            "POST", "/?action=mkdir&name=authenticated",
+            mapOf("X-Material-Files" to "1", "Origin" to "http://localhost", "Authorization" to authorization)
+        ).status)
+    }
+
+    @Test
+    fun deletionRemovesNestedLinksWithoutTraversingThem() {
+        fileSystem.symbolicLinks.add("/folder/link")
+        fileSystem.files["/outside"] = "untouched".toByteArray()
+        val transport = newTransport()
+        assertEquals(403, transport.delete("/folder/link").status)
+        assertEquals(403, transport.manage("/folder/link/", "mkdir", "child").status)
+        assertEquals(403, transport.manage("/folder/link", "rename", "renamed").status)
+        assertEquals(400, transport.manage("/outside", "rename", "folder/link").status)
+        assertEquals(200, transport.delete("/folder/").status)
+        assertTrue(fileSystem.symbolicLinks.isEmpty())
+        assertArrayEquals("untouched".toByteArray(), fileSystem.files["/outside"])
+    }
+
+    @Test
+    fun activeUploadPreventsChangingItsParentOrReplacingItsDestination() {
+        val opened = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        fileSystem.onOpen = { name -> if (name == "/folder/slow") opened.countDown() }
+        val transport = newTransport()
+        val executor = Executors.newSingleThreadExecutor()
+        val body = object : InputStream() {
+            private val input = "upload".byteInputStream()
+            override fun read(): Int {
+                check(release.await(5, TimeUnit.SECONDS))
+                return input.read()
+            }
+        }
+        val upload = executor.submit<RawResponse> {
+            transport.request("PUT", "/folder/slow", mapOf("Content-Length" to "6"), body)
+        }
+        try {
+            assertTrue(opened.await(5, TimeUnit.SECONDS))
+            assertEquals(409, transport.delete("/folder/").status)
+            assertEquals(409, transport.delete("/folder/slow").status)
+            assertEquals(409, transport.manage("/folder/", "rename", "renamed").status)
+            assertEquals(409, transport.manage("/folder/", "mkdir", "slow").status)
+            assertEquals(201, transport.put("/folder/sibling", "sibling").status)
+            assertEquals(409, transport.manage("/folder/sibling", "rename", "slow").status)
+            assertEquals(201, transport.manage("/", "mkdir", "independent").status)
+            release.countDown()
+            assertEquals(201, upload.get(5, TimeUnit.SECONDS).status)
+            assertEquals(200, transport.manage("/folder/", "rename", "renamed").status)
+            assertArrayEquals("upload".toByteArray(), fileSystem.files["/renamed/slow"])
+            assertEquals(200, transport.delete("/renamed/").status)
+        } finally {
+            release.countDown()
+            executor.shutdownNow()
+            assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS))
+        }
+    }
+
+    @Test
+    fun previewReadsStayBoundedAndDownloadsKeepTheirAttachmentHeaders() {
+        fileSystem.files["/page.html"] = ByteArray(300_000) { 'x'.code.toByte() }
+        fileSystem.files["/photo.png"] = byteArrayOf(1, 2, 3)
+        val transport = newTransport()
+        val text = transport.request("GET", "/page.html", mapOf("Range" to "bytes=0-262144"))
+        assertEquals(206, text.status)
+        assertEquals(262_145, text.body.size)
+        assertEquals("bytes 0-262144/300000", text.headers["content-range"])
+        for (path in listOf("/page.html", "/photo.png")) {
+            val response = transport.request("GET", path)
+            assertEquals("application/octet-stream", response.headers["content-type"])
+            assertTrue(response.headers["content-disposition"]!!.startsWith("attachment;"))
+            assertEquals("nosniff", response.headers["x-content-type-options"])
+        }
+        val page = transport.request("GET", "/")
+        assertTrue(page.headers["content-security-policy"]!!.contains("img-src blob:"))
+        assertFalse(page.headers.containsKey("access-control-allow-origin"))
+    }
+
     /** Runs NanoHTTPD's request parser and response writer without Android or a network port. */
     private class Transport(private val server: HttpServer) : NanoHTTPD(0) {
         override fun serve(session: IHTTPSession): Response = server.serve(session)
         override fun useGzipWhenAccepted(response: Response): Boolean = false
+
+        fun manage(path: String, action: String, name: String): RawResponse = request(
+            "POST", "$path?action=$action&name=${HttpServerPaths.encode(name)}",
+            mapOf("X-Material-Files" to "1")
+        )
+
+        fun delete(path: String): RawResponse =
+            request("DELETE", path, mapOf("X-Material-Files" to "1"))
 
         fun put(path: String, text: String): RawResponse {
             val bytes = text.toByteArray()
