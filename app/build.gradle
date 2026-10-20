@@ -103,6 +103,13 @@ android {
     }
 }
 
+androidComponents {
+    beforeVariants(selector().withBuildType('release')) { variantBuilder ->
+        // AGP 9 enables unit tests only for the tested (debug) build type by default.
+        variantBuilder.enableUnitTest = true
+    }
+}
+
 repositories {
     maven {
         url 'https://jitpack.io'
