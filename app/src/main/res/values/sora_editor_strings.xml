@@ -17,4 +17,6 @@
     <string name="sora_editor_font_size_value">%1$d</string>
     <string name="sora_editor_symbols_tab">缩进</string>
     <string name="sora_editor_file_missing">无法获取要编辑的文件</string>
+    <string name="sora_editor_save_outside_cache">请选择临时预览目录以外的位置保存</string>
+    <string name="sora_editor_temporary_preview">临时预览 · 修改需另存为</string>
 </resources>

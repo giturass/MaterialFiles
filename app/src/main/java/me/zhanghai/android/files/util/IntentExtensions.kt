@@ -21,6 +21,7 @@ import me.zhanghai.android.files.compat.removeFlagsCompat
 import me.zhanghai.android.files.file.MimeType
 import me.zhanghai.android.files.file.fileProviderUri
 import me.zhanghai.android.files.file.intentType
+import me.zhanghai.android.files.filejob.OpenCacheManager
 import me.zhanghai.android.files.viewer.text.SoraEditorActivity
 import kotlin.reflect.KClass
 
@@ -171,8 +172,10 @@ fun Uri.createViewIntent(mimeType: MimeType): Intent =
 
 fun Path.createViewIntent(mimeType: MimeType, useInternalEditor: Boolean = true): Intent =
     fileProviderUri.createViewIntent(mimeType)
-        .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         .apply {
+            if (!OpenCacheManager.isCachePath(this@createViewIntent)) {
+                addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            }
             extraPath = this@createViewIntent
             if (useInternalEditor) {
                 val name = this@createViewIntent.fileName?.toString().orEmpty()

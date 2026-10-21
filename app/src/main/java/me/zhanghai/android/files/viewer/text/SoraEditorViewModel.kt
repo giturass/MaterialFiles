@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import me.zhanghai.android.files.filejob.FileJobService
+import me.zhanghai.android.files.filejob.OpenCacheManager
 import me.zhanghai.android.files.provider.common.readAllBytes
 import me.zhanghai.android.files.provider.common.size
 import me.zhanghai.android.files.util.ActionState
@@ -39,6 +40,8 @@ import java.nio.charset.Charset
 class SoraEditorViewModel(file: Path) : ViewModel() {
     private val _file = MutableStateFlow(file)
     val file = _file.asStateFlow()
+    var isTemporaryFile = OpenCacheManager.isCachePath(file)
+        private set
 
     private val _bytesState = MutableStateFlow<DataState<ByteArray>>(DataState.Loading())
 
@@ -145,6 +148,7 @@ class SoraEditorViewModel(file: Path) : ViewModel() {
     val writeFileState = _writeFileState.asStateFlow()
 
     fun writeFile(path: Path, text: String, context: Context) {
+        require(!OpenCacheManager.isCachePath(path)) { "Save temporary previews outside the cache" }
         viewModelScope.launch {
             check(_writeFileState.value.isReady)
             val argument = path to text
@@ -160,6 +164,9 @@ class SoraEditorViewModel(file: Path) : ViewModel() {
                     document.markSaved(text)
                     onTextChanged()
                     _bytesState.value = DataState.Success(bytes)
+                    if (isTemporaryFile) isReadOnly = false
+                    isTemporaryFile = false
+                    _file.value = path
                 }
                 _writeFileState.value = if (successful) {
                     ActionState.Success(argument, Unit)
@@ -182,7 +189,7 @@ class SoraEditorViewModel(file: Path) : ViewModel() {
     var editorViewState: EditorViewState? = null
 
     var languageId = "auto"
-    var isReadOnly = false
+    var isReadOnly = isTemporaryFile
     var searchVisible = false
     var searchQuery = ""
     var replacementText = ""

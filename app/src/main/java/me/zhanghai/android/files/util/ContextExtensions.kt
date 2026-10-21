@@ -249,13 +249,14 @@ fun Context.showToast(text: CharSequence, duration: Int = Toast.LENGTH_SHORT) {
     Toast.makeText(this, text, duration).show()
 }
 
-fun Context.startActivitySafe(intent: Intent, options: Bundle? = null) {
+fun Context.startActivitySafe(intent: Intent, options: Bundle? = null): Boolean =
     try {
         startActivity(intent, options)
+        true
     } catch (e: ActivityNotFoundException) {
         showToast(R.string.activity_not_found)
+        false
     }
-}
 
 fun Context.withTheme(@StyleRes themeRes: Int): Context =
     if (themeRes != 0) ContextThemeWrapper(this, themeRes) else this

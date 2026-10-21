@@ -37,6 +37,7 @@ import me.zhanghai.android.files.BuildConfig
 import me.zhanghai.android.files.app.storageManager
 import me.zhanghai.android.files.compat.ProxyFileDescriptorCallbackCompat
 import me.zhanghai.android.files.compat.openProxyFileDescriptorCompat
+import me.zhanghai.android.files.filejob.OpenCacheManager
 import me.zhanghai.android.files.provider.common.InvalidFileNameException
 import me.zhanghai.android.files.provider.common.IsDirectoryException
 import me.zhanghai.android.files.provider.common.force
@@ -50,6 +51,7 @@ import me.zhanghai.android.files.provider.linux.isLinuxPath
 import me.zhanghai.android.files.provider.linux.syscall.SyscallException
 import me.zhanghai.android.files.util.hasBits
 import me.zhanghai.android.files.util.withoutPenaltyDeathOnNetwork
+import java.io.Closeable
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.io.InterruptedIOException
@@ -187,25 +189,47 @@ class FileProvider : ContentProvider() {
         // ContentProvider has already checked granted permissions
         val path = uri.fileProviderPath
         val modeBits = ParcelFileDescriptor.parseMode(mode)
-        if (path.canOpenDirectly(modeBits)) {
-            return ParcelFileDescriptor.open(path.toFile(), modeBits)
+        if (OpenCacheManager.isCachePath(path) && modeBits != ParcelFileDescriptor.MODE_READ_ONLY) {
+            throw FileNotFoundException("Temporary previews are read-only; save a copy to edit")
         }
-        val options = modeBits.toOpenOptions()
-        val channel = try {
-            // Strict mode thread policy is passed through binder, but some apps (notably music
-            // players) like to open file on their main thread.
-            StrictMode::class.withoutPenaltyDeathOnNetwork {
+        val lease = try {
+            OpenCacheManager.acquire(path)
+        } catch (e: IOException) {
+            throw e.toFileNotFoundException()
+        }
+        try {
+            if (path.canOpenDirectly(modeBits)) {
+                return if (lease != null) {
+                    ParcelFileDescriptor.open(path.toFile(), modeBits, callbackHandler) {
+                        lease.close()
+                    }
+                } else {
+                    ParcelFileDescriptor.open(path.toFile(), modeBits)
+                }
+            }
+            val options = modeBits.toOpenOptions()
+            val channel = StrictMode::class.withoutPenaltyDeathOnNetwork {
+                // Some apps open files on their main thread; Binder propagates strict mode.
                 path.newByteChannel(options)
             }
+            try {
+                return storageManager.openProxyFileDescriptorCompat(
+                    modeBits, ChannelCallback(channel, lease), callbackHandler
+                )
+            } catch (e: Exception) {
+                try {
+                    channel.close()
+                } catch (closeException: Exception) {
+                    e.addSuppressed(closeException)
+                }
+                throw e
+            }
         } catch (e: IOException) {
+            lease?.close()
             throw e.toFileNotFoundException()
-        }
-        return try {
-            storageManager.openProxyFileDescriptorCompat(
-                modeBits, ChannelCallback(channel), callbackHandler
-            )
-        } catch (e: IOException) {
-            throw e.toFileNotFoundException()
+        } catch (e: RuntimeException) {
+            lease?.close()
+            throw e
         }
     }
 
@@ -251,7 +275,8 @@ class FileProvider : ContentProvider() {
         }
 
     private class ChannelCallback(
-        private val channel: SeekableByteChannel
+        private val channel: SeekableByteChannel,
+        private val cacheLease: Closeable?
     ) : ProxyFileDescriptorCallbackCompat() {
         private var offset = 0L
         private var released = false
@@ -340,6 +365,8 @@ class FileProvider : ContentProvider() {
                 channel.close()
             } catch (e: IOException) {
                 e.printStackTrace()
+            } finally {
+                cacheLease?.close()
             }
             released = true
         }

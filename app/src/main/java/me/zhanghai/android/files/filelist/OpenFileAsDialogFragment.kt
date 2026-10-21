@@ -7,7 +7,6 @@ package me.zhanghai.android.files.filelist
 
 import android.app.Dialog
 import android.content.DialogInterface
-import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatDialogFragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -17,13 +16,11 @@ import kotlinx.parcelize.WriteWith
 import me.zhanghai.android.files.R
 import me.zhanghai.android.files.file.MimeType
 import me.zhanghai.android.files.file.asMimeType
-import me.zhanghai.android.files.file.fileProviderUri
 import me.zhanghai.android.files.provider.archive.createArchiveRootPath
 import me.zhanghai.android.files.util.ParcelableArgs
 import me.zhanghai.android.files.util.ParcelableParceler
 import me.zhanghai.android.files.util.args
 import me.zhanghai.android.files.util.createViewIntent
-import me.zhanghai.android.files.util.extraPath
 import me.zhanghai.android.files.util.finish
 import me.zhanghai.android.files.util.startActivitySafe
 import me.zhanghai.android.files.util.withChooser
@@ -47,9 +44,7 @@ class OpenFileAsDialogFragment : AppCompatDialogFragment() {
             finish()
             return
         }
-        val intent = args.path.fileProviderUri.createViewIntent(mimeType)
-            .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-            .apply { extraPath = args.path }
+        val intent = args.path.createViewIntent(mimeType, useInternalEditor = false)
             .withChooser()
         startActivitySafe(intent)
         finish()

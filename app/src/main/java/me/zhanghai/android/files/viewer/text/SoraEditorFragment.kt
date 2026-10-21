@@ -8,6 +8,7 @@ package me.zhanghai.android.files.viewer.text
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
+import android.os.Environment
 import android.text.InputType
 import android.view.KeyEvent
 import android.view.LayoutInflater
@@ -42,6 +43,7 @@ import io.github.rosemoe.sora.text.LineSeparator
 import io.github.rosemoe.sora.widget.CodeEditor
 import io.github.rosemoe.sora.widget.component.EditorAutoCompletion
 import java8.nio.file.Path
+import java8.nio.file.Paths
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -51,6 +53,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.parcelize.Parcelize
 import me.zhanghai.android.files.R
 import me.zhanghai.android.files.databinding.SoraEditorFragmentBinding
+import me.zhanghai.android.files.file.MimeType
+import me.zhanghai.android.files.filejob.OpenCacheManager
+import me.zhanghai.android.files.filelist.FileListActivity
 import me.zhanghai.android.files.util.ActionState
 import me.zhanghai.android.files.util.DataState
 import me.zhanghai.android.files.util.ParcelableArgs
@@ -70,6 +75,17 @@ class SoraEditorFragment : Fragment(), ConfirmReloadDialogFragment.Listener,
     private val args by args<Args>()
     private lateinit var argsFile: Path
     private val viewModel by viewModels { { SoraEditorViewModel(argsFile) } }
+    private val saveAsLauncher =
+        registerForActivityResult(FileListActivity.CreateFileContract()) { path ->
+            if (path != null && _binding != null) {
+                if (OpenCacheManager.isCachePath(path)) {
+                    showToast(R.string.sora_editor_save_outside_cache)
+                } else if (viewModel.textState.value is DataState.Success
+                    && viewModel.writeFileState.value.isReady) {
+                    viewModel.writeFile(path, binding.editor.text.toString(), requireContext())
+                }
+            }
+        }
 
     private var _binding: SoraEditorFragmentBinding? = null
     private val binding get() = _binding!!
@@ -477,7 +493,10 @@ class SoraEditorFragment : Fragment(), ConfirmReloadDialogFragment.Listener,
         val loaded = viewModel.textState.value is DataState.Success
         val editable = loaded && editor.isEditable
         val writeReady = viewModel.writeFileState.value.isReady
-        menu.findItem(R.id.action_save).isEnabled = loaded && writeReady && !viewModel.isReadOnly
+        menu.findItem(R.id.action_save).apply {
+            setTitle(if (viewModel.isTemporaryFile) R.string.save_as_title else R.string.save)
+            isEnabled = loaded && writeReady && (!viewModel.isReadOnly || viewModel.isTemporaryFile)
+        }
         menu.findItem(R.id.action_undo).isEnabled = editable && editor.canUndo()
         menu.findItem(R.id.action_redo).isEnabled = editable && editor.canRedo()
         menu.findItem(R.id.action_search_replace).isEnabled = loaded
@@ -507,6 +526,11 @@ class SoraEditorFragment : Fragment(), ConfirmReloadDialogFragment.Listener,
             if (viewModel.isTextChanged.value) R.string.text_editor_title_changed_format
             else R.string.text_editor_title_format, argsFile.fileName.toString()
         )
+        binding.toolbar.subtitle = if (viewModel.isTemporaryFile) {
+            getString(R.string.sora_editor_temporary_preview)
+        } else {
+            null
+        }
     }
 
     private fun updateStatus() {
@@ -674,14 +698,31 @@ class SoraEditorFragment : Fragment(), ConfirmReloadDialogFragment.Listener,
 
     private fun save() {
         if (viewModel.textState.value !is DataState.Success
-            || !viewModel.writeFileState.value.isReady || viewModel.isReadOnly) return
-        viewModel.writeFile(argsFile, binding.editor.text.toString(), requireContext())
+            || !viewModel.writeFileState.value.isReady) return
+        if (viewModel.isTemporaryFile) {
+            val downloads = Paths.get(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).path
+            )
+            saveAsLauncher.launch(
+                Triple(MimeType.guessFromPath(argsFile.toString()), argsFile.fileName.toString(), downloads)
+            )
+        } else if (!viewModel.isReadOnly) {
+            viewModel.writeFile(argsFile, binding.editor.text.toString(), requireContext())
+        }
     }
 
     private fun onWriteFileStateChanged(state: ActionState<Pair<Path, String>, Unit>) {
         when (state) {
             is ActionState.Ready, is ActionState.Running -> Unit
             is ActionState.Success -> {
+                if (argsFile != state.argument.first) {
+                    argsFile = state.argument.first
+                    args.intent.extraPath = argsFile
+                    requireActivity().intent.extraPath = argsFile
+                    updateEditability()
+                    updateTitle()
+                    applyLanguage()
+                }
                 showToast(R.string.text_editor_save_success)
                 viewModel.finishWritingFile()
             }

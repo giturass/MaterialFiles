@@ -7,14 +7,12 @@ package me.zhanghai.android.files.filejob
 
 import android.app.PendingIntent
 import android.content.Intent
-import android.os.Environment
 import android.widget.Toast
 import androidx.annotation.AnyRes
 import androidx.annotation.PluralsRes
 import androidx.annotation.StringRes
 import androidx.core.app.NotificationCompat
 import java.io.ByteArrayInputStream
-import java.io.File
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.net.SocketTimeoutException
@@ -95,6 +93,7 @@ import me.zhanghai.android.files.util.asFileName
 import me.zhanghai.android.files.util.createInstallPackageIntent
 import me.zhanghai.android.files.util.createIntent
 import me.zhanghai.android.files.util.createViewIntent
+import me.zhanghai.android.files.util.extraPath
 import me.zhanghai.android.files.util.getQuantityString
 import me.zhanghai.android.files.util.putArgs
 import me.zhanghai.android.files.util.showToast
@@ -1714,12 +1713,14 @@ private fun FileJob.postCopyMoveNotification(
 
 class InstallApkJob(private val file: Path) : FileJob() {
     override fun run() {
-        open(
-            file, R.string.file_install_apk_from_background_title_format,
-            R.string.file_install_apk_from_background_text
-        ) { file ->
-            val uri = file.fileProviderUri
-            uri.createInstallPackageIntent()
+        OpenCacheManager.acquire(file).use {
+            open(
+                file, R.string.file_install_apk_from_background_title_format,
+                R.string.file_install_apk_from_background_text
+            ) { file ->
+                val uri = file.fileProviderUri
+                uri.createInstallPackageIntent()
+            }
         }
     }
 }
@@ -1730,6 +1731,10 @@ class OpenFileJob(
     private val withChooser: Boolean
 ) : FileJob() {
     override fun run() {
+        OpenCacheManager.acquire(file).use { openFile() }
+    }
+
+    private fun openFile() {
         open(
             file, R.string.file_open_from_background_title_format,
             R.string.file_open_from_background_text
@@ -1739,6 +1744,7 @@ class OpenFileJob(
                     if (withChooser) {
                         it.withChooser(
                             OpenFileAsDialogActivity::class.createIntent()
+                                .apply { extraPath = file }
                                 .putArgs(OpenFileAsDialogFragment.Args(file))
                         )
                     } else {
@@ -1748,12 +1754,6 @@ class OpenFileJob(
         }
     }
 }
-
-private val FileJob.cacheDirectory: File
-    get() =
-        service.externalCacheDir?.takeIf {
-            Environment.getExternalStorageState(it) == Environment.MEDIA_MOUNTED
-        } ?: service.cacheDir
 
 @Throws(IOException::class)
 private fun FileJob.open(
@@ -1770,20 +1770,26 @@ private fun FileJob.open(
             R.plurals.file_job_copy_scan_notification_title_format
         }
     )
-    val cacheDirectory = Paths.get(cacheDirectory.path, "open_cache")
-    cacheDirectory.createDirectories()
     val targetFileName = getTargetFileName(file)
-    val targetFile = cacheDirectory.resolveForeign(targetFileName)
-    val transferInfo = TransferInfo(scanInfo, cacheDirectory)
-    val actionAllInfo = ActionAllInfo(replace = true)
-    val copied = copy(file, targetFile, isExtract, transferInfo, actionAllInfo)
-    if (!copied) {
-        return
+    // A session owns its incomplete output until it has been handed to an activity/notification.
+    OpenCacheManager.create().use { session ->
+        val cacheDirectory = Paths.get(session.files.path)
+        val targetFile = cacheDirectory.resolveForeign(targetFileName)
+        val transferInfo = TransferInfo(scanInfo, cacheDirectory)
+        val actionAllInfo = ActionAllInfo()
+        if (!copy(file, targetFile, isExtract, transferInfo, actionAllInfo)) return
+        throwIfInterrupted()
+        val intent = intentCreator(targetFile)
+        session.prepareToOpen()
+        if (BackgroundActivityStarter.startActivity(
+                intent, getString(notificationTitleFormatRes, targetFileName),
+                getString(notificationTextRes), service,
+                notificationTag = session.notificationTag,
+                notificationTimeoutMillis = OpenCacheManager.RETENTION_MILLIS
+            )) {
+            session.retain()
+        }
     }
-    BackgroundActivityStarter.startActivity(
-        intentCreator(targetFile), getString(notificationTitleFormatRes, targetFileName),
-        getString(notificationTextRes), service
-    )
 }
 
 class RenameFileJob(private val path: Path, private val newName: String) : FileJob() {
@@ -1962,7 +1968,7 @@ private fun FileJob.postRestoreSeLinuxContextNotification(
 
 class SaveFileJob(private val source: Path, private val target: Path) : FileJob() {
     override fun run() {
-        save(source, target)
+        OpenCacheManager.acquire(source).use { save(source, target) }
     }
 }
 

@@ -11,6 +11,7 @@ import jcifs.context.SingletonContext
 import me.zhanghai.android.files.BuildConfig
 import me.zhanghai.android.files.apk.ApkOperations
 import me.zhanghai.android.files.coil.initializeCoil
+import me.zhanghai.android.files.filejob.OpenCacheManager
 import me.zhanghai.android.files.filejob.fileJobNotificationTemplate
 import me.zhanghai.android.files.ftpserver.ftpServerServiceNotificationTemplate
 import me.zhanghai.android.files.hiddenapi.HiddenApi
@@ -39,7 +40,8 @@ val appInitializers = listOf(
     ::initializeLiveDataObjects,
     ::initializeCustomTheme,
     ::initializeNightMode,
-    ::createNotificationChannels
+    ::createNotificationChannels,
+    OpenCacheManager::cleanupAsync
 )
 
 private fun disableHiddenApiChecks() {

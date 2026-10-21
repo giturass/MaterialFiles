@@ -17,6 +17,7 @@ import me.zhanghai.android.files.R
 import me.zhanghai.android.files.util.NotificationChannelTemplate
 import me.zhanghai.android.files.util.NotificationTemplate
 import me.zhanghai.android.files.util.startActivitySafe
+import me.zhanghai.android.files.util.showToast
 
 val backgroundActivityStartNotificationTemplate =
     NotificationTemplate(
@@ -36,13 +37,33 @@ val backgroundActivityStartNotificationTemplate =
     )
 
 object BackgroundActivityStarter {
-    fun startActivity(intent: Intent, title: CharSequence, text: CharSequence?, context: Context) {
+    fun startActivity(
+        intent: Intent,
+        title: CharSequence,
+        text: CharSequence?,
+        context: Context,
+        notificationTag: String? = null,
+        notificationTimeoutMillis: Long? = null
+    ): Boolean {
         // TODO: Only use new task when in background?
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (isInForeground) {
+        return if (isInForeground) {
             context.startActivitySafe(intent)
         } else {
-            notifyStartActivity(intent, title, text, context)
+            if (notificationTag != null) {
+                val channel = notificationManager.getNotificationChannel(
+                    backgroundActivityStartNotificationTemplate.channelTemplate.id
+                )
+                if (!notificationManager.areNotificationsEnabled()
+                    || channel == null || channel.importance == NotificationManagerCompat.IMPORTANCE_NONE) {
+                    context.showToast(R.string.file_open_from_background_unavailable)
+                    return false
+                }
+            }
+            notifyStartActivity(
+                intent, title, text, context, notificationTag, notificationTimeoutMillis
+            )
+            true
         }
     }
 
@@ -58,7 +79,9 @@ object BackgroundActivityStarter {
         intent: Intent,
         title: CharSequence,
         text: CharSequence?,
-        context: Context
+        context: Context,
+        tag: String?,
+        timeoutMillis: Long?
     ) {
         val pendingIntent = PendingIntent.getActivity(
             context, intent.hashCode(), intent, PendingIntent.FLAG_ONE_SHOT or
@@ -68,7 +91,8 @@ object BackgroundActivityStarter {
             .setContentTitle(title)
             .setContentText(text)
             .setContentIntent(pendingIntent)
+            .apply { timeoutMillis?.let { setTimeoutAfter(it) } }
             .build()
-        notificationManager.notify(intent.hashCode(), notification)
+        notificationManager.notify(tag, if (tag != null) 0 else intent.hashCode(), notification)
     }
 }
