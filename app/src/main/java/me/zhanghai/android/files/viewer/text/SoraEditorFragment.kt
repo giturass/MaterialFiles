@@ -54,6 +54,7 @@ import kotlinx.parcelize.Parcelize
 import me.zhanghai.android.files.R
 import me.zhanghai.android.files.databinding.SoraEditorFragmentBinding
 import me.zhanghai.android.files.file.MimeType
+import me.zhanghai.android.files.file.guessFromPath
 import me.zhanghai.android.files.filejob.OpenCacheManager
 import me.zhanghai.android.files.filelist.FileListActivity
 import me.zhanghai.android.files.util.ActionState
