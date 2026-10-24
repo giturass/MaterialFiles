@@ -82,17 +82,26 @@ internal class OpenCacheStore(
 
     private fun cleanupEntry(root: File, entry: File, managed: Boolean) {
         try {
-            // Old releases could cache directories. Do not scan those trees under the lease lock.
+            // Do not inspect an unfinished copy that could be completed before retirement.
+            synchronized(lock) {
+                if (active.containsKey(entry)) return
+            }
+            // Scan directory contents without holding the lease lock.
             val legacyTimestamp = if (managed) null else legacyTime(entry)
+            val deleting = managed && entry.name.startsWith(TRASH_PREFIX)
+            val hasPayload = !managed || deleting || hasPayload(entry)
             val retired = synchronized(lock) {
                 if (active.containsKey(entry)) return
-                if (managed && entry.name.startsWith(TRASH_PREFIX)) {
+                if (deleting) {
                     entry
                 } else {
-                    val diskTime = if (managed) readAccessTime(entry) else legacyTimestamp
-                    val timestamp = listOfNotNull(diskTime, recentAccess[entry]).maxOrNull()
-                    // An incomplete managed session has never been handed to another app.
-                    if (timestamp != null && now() - timestamp < RETENTION_MILLIS) return
+                    // Metadata and empty directories alone do not need a grace period.
+                    if (hasPayload) {
+                        val diskTime = if (managed) readAccessTime(entry) else legacyTimestamp
+                        val timestamp = listOfNotNull(diskTime, recentAccess[entry]).maxOrNull()
+                        // An incomplete managed session has never been handed to another app.
+                        if (timestamp != null && now() - timestamp < RETENTION_MILLIS) return
+                    }
                     retire(root, entry)
                 }
             }
@@ -214,6 +223,24 @@ internal class OpenCacheStore(
         return time
     }
 
+    private fun hasPayload(entry: File): Boolean {
+        val entryPath = entry.toPath()
+        var found = false
+        Files.walkFileTree(entryPath, object : SimpleFileVisitor<Path>() {
+            override fun visitFile(path: Path, attributes: BasicFileAttributes): FileVisitResult {
+                // Only the session's own metadata is bookkeeping, even if payload names match.
+                if (path.parent == entryPath && attributes.isRegularFile
+                    && (path.fileName.toString() == ACCESS_FILE
+                        || path.fileName.toString() == "$ACCESS_FILE.tmp")) {
+                    return FileVisitResult.CONTINUE
+                }
+                found = true
+                return FileVisitResult.TERMINATE
+            }
+        })
+        return found
+    }
+
     private fun release(entry: File) {
         val count = checkNotNull(active[entry])
         if (count == 1) active.remove(entry) else active[entry] = count - 1
@@ -279,7 +306,7 @@ internal class OpenCacheStore(
     }
 
     companion object {
-        const val RETENTION_MILLIS = 48 * 60 * 60 * 1000L
+        const val RETENTION_MILLIS = 24 * 60 * 60 * 1000L
         private const val MANAGED_DIRECTORY = ".managed-v1"
         private const val ACCESS_FILE = "last-used"
         private const val TRASH_PREFIX = ".deleting-"

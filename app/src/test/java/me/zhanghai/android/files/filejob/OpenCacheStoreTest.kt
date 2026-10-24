@@ -50,16 +50,100 @@ class OpenCacheStoreTest {
     }
 
     @Test
-    fun expiresAt48HoursAndCancelsItsNotification() {
+    fun expiresAt24HoursAndCancelsItsNotification() {
         val file = ready()
-        time += OpenCacheStore.RETENTION_MILLIS - 1
+        time += TimeUnit.HOURS.toMillis(24) - 1
         store.cleanup()
         assertTrue(file.exists())
         assertTrue(removed.isEmpty())
         time++
         store.cleanup()
         assertFalse(file.exists())
+        assertTrue(file.parentFile.parentFile.parentFile.list()!!.isEmpty())
         assertEquals(listOf("open-cache:${file.parentFile.parentFile.name}"), removed)
+        assertTrue(errors.isEmpty())
+    }
+
+    @Test
+    fun missingPayloadRemovesEmptyDirectoriesAndMetadataImmediately() {
+        val tags = mutableListOf<String>()
+        for (root in listOf(internal, external)) {
+            val file = ready(root)
+            val directory = file.parentFile.parentFile
+            tags += "open-cache:${directory.name}"
+            assertTrue(file.delete())
+            assertTrue(File(file.parentFile, "nested/empty").mkdirs())
+            File(directory, "last-used.tmp").writeText(time.toString())
+            store.cleanup()
+            assertFalse(directory.exists())
+            assertTrue(directory.parentFile.list()!!.isEmpty())
+        }
+        assertEquals(tags, removed)
+        assertTrue(errors.isEmpty())
+    }
+
+    @Test
+    fun metadataAloneDoesNotKeepAnEmptySession() {
+        for (metadata in listOf(time.toString(), "broken")) {
+            val file = ready()
+            val directory = file.parentFile.parentFile
+            assertTrue(file.delete())
+            assertTrue(file.parentFile.delete())
+            File(directory, "last-used").writeText(metadata)
+            store.cleanup()
+            assertFalse(directory.exists())
+            assertTrue(directory.parentFile.list()!!.isEmpty())
+        }
+        assertEquals(2, removed.size)
+        assertTrue(errors.isEmpty())
+    }
+
+    @Test
+    fun activeEmptyCopiesArePreservedAndCanFinish() {
+        val session = store.create(internal)
+        store.cleanup()
+        assertTrue(session.files.isDirectory)
+        val file = File(session.files, "preview.txt").apply { writeText("preview") }
+        session.prepareToOpen()
+        session.retain()
+        session.close()
+        store.cleanup()
+        assertEquals("preview", file.readText())
+        assertTrue(removed.isEmpty())
+        assertTrue(errors.isEmpty())
+    }
+
+    @Test
+    fun emptySessionIsProtectedUntilItsLastReaderCloses() {
+        val file = ready()
+        val directory = file.parentFile.parentFile
+        val first = checkNotNull(store.acquire(file))
+        val second = checkNotNull(store.acquire(file))
+        assertTrue(file.delete())
+        store.cleanup()
+        assertTrue(directory.exists())
+        first.close()
+        store.cleanup()
+        assertTrue(directory.exists())
+        second.close()
+        store.cleanup()
+        assertFalse(directory.exists())
+        assertTrue(directory.parentFile.list()!!.isEmpty())
+        assertEquals(listOf("open-cache:${directory.name}"), removed)
+        assertTrue(errors.isEmpty())
+    }
+
+    @Test
+    fun zeroBytePayloadsAreRetainedEvenWhenTheirNamesMatchMetadata() {
+        val files = listOf("empty.txt", "last-used", "last-used.tmp").map { name ->
+            ready(name = name).apply { writeText("") }
+        }
+        store.cleanup()
+        for (file in files) {
+            assertTrue(file.isFile)
+            assertEquals(0L, file.length())
+        }
+        assertTrue(removed.isEmpty())
         assertTrue(errors.isEmpty())
     }
 
@@ -95,6 +179,7 @@ class OpenCacheStoreTest {
             val file = File(session.files, "partial").apply { writeText("incomplete") }
             assertThrows(IOException::class.java) { session.use { throw failure } }
             assertFalse(file.parentFile.parentFile.exists())
+            assertTrue(file.parentFile.parentFile.parentFile.list()!!.isEmpty())
             session.close() // Closing twice must be harmless.
         }
     }
@@ -122,7 +207,7 @@ class OpenCacheStoreTest {
     }
 
     @Test
-    fun interruptedCopiesDoNotNeedToWait48HoursAfterRestart() {
+    fun interruptedCopiesDoNotNeedToWait24HoursAfterRestart() {
         val session = store.create(internal)
         val file = File(session.files, "partial").apply { writeText("incomplete") }
         newStore().cleanup()
