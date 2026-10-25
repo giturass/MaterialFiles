@@ -18,7 +18,14 @@ public final class ApkEditorTest {
     private static int checks;
     public static void main(String[] args) throws Exception {
         work = new File(args[0]);
-        File golden = new File(args[1], "golden-aligned-in.apk");
+        File golden = new File(work, "resource-fixture.apk");
+        try (ApkModule module = ApkModule.loadApkFile(new File(args[1], "golden-aligned-in.apk"))) {
+            String path = "res/raw/payload.bin";
+            module.getTableBlock().pickOne().getOrCreate("", "raw", "payload").setDataAsString(path);
+            module.add(new com.reandroid.archive.ByteInputSource("resource payload".getBytes(), path));
+            module.refreshTable();
+            module.writeApk(golden);
+        }
         File original = new File(work, "original.apk");
         fixture(golden, original, null, false);
         File clone = new File(work, "clone.apk");
