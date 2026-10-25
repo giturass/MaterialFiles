@@ -256,15 +256,18 @@ object ApkOperations {
                 keyStore, request.keyStoreFormat, request.storePassword, request.alias,
                 request.keyPassword
             ).use { key ->
+                // Preview and compare metadata against the original bytes. Resource edits
+                // invalidate that signature and belong only in the explicit signing operation.
+                val edited = editResources(input, directory, request.editMode, callback)
                 val signingInput = request.targetPackageName?.let { targetPackage ->
                     val rebuilt = File(directory, "rebuilt.apk")
                     val report = ApkCoexistenceService().rebuild(
-                        input, rebuilt, directory, targetPackage, original.label,
-                        manifestValueResolver(context, input, original.packageName), callback
+                        edited, rebuilt, directory, targetPackage, original.label,
+                        manifestValueResolver(context, edited, original.packageName), callback
                     )
                     coexistenceReport = report.summary
                     rebuilt
-                } ?: input
+                } ?: edited
                 signingService.sign(signingInput, signed, directory, key, options, callback)
             }
             checkCanceled()
@@ -336,7 +339,7 @@ object ApkOperations {
         }
         val modules = if (container) engine.extractContainer(files.single(), File(workspace, "splits"), callback)
             else files
-        var apk = if (modules.size > 1 || mode == ApkEditMode.MERGE) {
+        val apk = if (modules.size > 1 || mode == ApkEditMode.MERGE) {
             File(workspace, "merged.apk").also { engine.merge(modules, it, workspace, callback) }
         } else modules.single()
         if (needsEditor) ApkCoexistenceService.validateInput(apk, workspace, callback)
@@ -344,20 +347,25 @@ object ApkOperations {
         if (ApkManifestReader.read(apk).requiresSplits) {
             throw IOException("缺少分包：请多选 base 和所需 split，或选择完整 APKS/XAPK/APKM 容器。")
         }
-        if (mode == ApkEditMode.REFACTOR || mode == ApkEditMode.PROTECT) {
-            val original = ApkManifestReader.read(apk)
-            apk = File(workspace, "edited.apk").also {
-                if (mode == ApkEditMode.PROTECT) engine.protect(apk, it, callback)
-                else engine.refactor(apk, it, callback)
-            }
-            ApkCoexistenceService.validateInput(apk, workspace, callback)
-            val result = ApkManifestReader.read(apk)
-            if (original.packageName != result.packageName || original.versionCode != result.versionCode
-                || original.minSdk != result.minSdk || original.targetSdk != result.targetSdk) {
-                throw IOException("处理结果改变了应用的包名、版本或 SDK。")
-            }
-        }
         return apk
+    }
+
+    private fun editResources(
+        input: File, workspace: File, mode: ApkEditMode, callback: ApkOperationCallback
+    ): File {
+        if (mode != ApkEditMode.REFACTOR && mode != ApkEditMode.PROTECT) return input
+        val original = ApkManifestReader.read(input)
+        val engine = ApkEditorService()
+        val output = File(workspace, "edited.apk")
+        if (mode == ApkEditMode.PROTECT) engine.protect(input, output, callback)
+        else engine.refactor(input, output, callback)
+        ApkCoexistenceService.validateInput(output, workspace, callback)
+        val result = ApkManifestReader.read(output)
+        if (original.packageName != result.packageName || original.versionCode != result.versionCode
+            || original.minSdk != result.minSdk || original.targetSdk != result.targetSdk) {
+            throw IOException("处理结果改变了应用的包名、版本或 SDK。")
+        }
+        return output
     }
 
     fun editorInfo(context: Context, inputs: List<Path>, progress: (ApkProgress) -> Unit): String =

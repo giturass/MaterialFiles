@@ -87,6 +87,17 @@ python3 -B tools/verify_apk_signing_android.py --minified \
 
 该模式从待测 APK 的 DEX 方法签名和诊断字符串定位生产验签入口、从结果构造器定位验证字段，不需要 mapping、未混淆类或资源 ID。只将[反射测试入口](../tests/ApkSigningMinifiedAndroidTest.java) 单独编译为 DEX；运行时的验签代码和依赖全部来自待测 APK，不替换 apksig。测试核对固定 AOSP 样本的 SHA-256，验证有效签名在多个最低 API 下的结果，并检查未签名、篡改和损坏输入；报告保存实际 APK 的 SHA-256、定位结果和逐项错误。此模式只覆盖验签，不替代密钥创建、重新签名、输出恢复或界面测试。
 
+`APKEditor validation` 工作流也会发布 `apk-verification-art-harness-<提交>`，包含已编译的
+测试入口、来源摘要和 AOSP 样本。下载解压后，可直接在 Termux 运行以下命令，不在本机编译：
+
+```sh
+python3 tools/verify_apk_signing_android.py --minified --apk /path/to/release.apk \
+  --harness-dir "$HOME/tmp/apk-verification-art-harness"
+```
+
+资源重构和资源保护在打开窗口时读取原 APK 的签名；资源改写只在点击开始、加载密钥后执行，
+然后签名及验证输出。不能把改写后的未签名中间 APK 当作原文件进行签名状态预览。
+
 [签名 ART 测试](../tests/ApkSigningAndroidTest.java) 覆盖真实签名、密钥库、中文/空格路径、取消、32 MiB 样本以及重新签名 Material Files 自身，并比对实际 APK 的资源 ID。[输出恢复 ART 测试](../tests/ApkOutputRecoveryAndroidTest.java) 调用实际 `OwnedOutput` 和 Android 文件系统 API，检查未完成输出清理、同 inode 改写/替换文件保护、缺失或变化的私有副本、符号链接、恢复取消及日志。脚本在 `~/tmp/materialfiles-apk-art-check/run-*` 保存命令、源码与依赖摘要、APK 摘要、系统版本和逐项结果。
 
 [私有密钥 ART 测试](../tests/ApkPrivateKeyAndroidTest.java) 加载 APK 的真实 Linux 文件提供方、JNI 和 Root 路由，调用 `ApkOperations` 创建密钥、列出密钥、读取别名、签名及保存输出，并独立验签。共 30 项检查，还覆盖私有目录别名、相邻目录、`..`、符号链接、源文件变化、明确指定的 Root 模式，以及导入、重复导入、错误密码、无效/空/超大密钥库、导出成功与失败、占用目标、文件替换保护、受限删除、不同密码密钥的 ZIP 往返、同名编号、预览变更、整批回滚、归档边界和导入事务恢复。多选回归直接调用实际 ViewModel 并使用真实 LinuxPath，检查勾选第二项、取消勾选、全选、退出及删除后的状态。导出用隔离的 `DocumentsProvider` 包装真实文件描述符，不访问真实 Termux 文档提供方。此测试使用隔离的应用目录和偏好，不启动 Root 服务，不安装应用；不验证系统选择器授权、真实设备加密存储的解锁过程、媒体扫描和界面交互。默认 APK ART 套件包含此测试，也可单独对指定的未混淆 APK 执行：
