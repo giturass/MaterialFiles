@@ -19,7 +19,8 @@ The six tools are decode (XML/Smali), build, merge, refactor, resource protectio
 and info. Build, merge, refactor and protection share the existing key selection,
 alignment, signing, verification and exclusive publication pipeline.
 Protection uses the upstream directory/file/table confusers, preserving Manifest,
-DEX and resource type names; ZIP corruption and DEX protection are disabled.
+DEX and resource type names, using generated ordinary ZIP paths instead of the
+upstream malformed-path dictionary; ZIP corruption and DEX protection are disabled.
 
 The coexistence adapter applies the existing semantic rules through a DOM view of
 binary attributes. It writes only changed attributes back with ARSCLib and copies

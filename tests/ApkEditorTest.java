@@ -40,6 +40,31 @@ public final class ApkEditorTest {
             require((PACKAGE + ".clone.permission").equals(AndroidManifestBlock.getAndroidNameValue(
                     manifest.getManifestElement().getElement("permission"))), "permission declaration renamed");
         }
+        File noLabel = new File(work, "no-label.apk"), labeled = new File(work, "labeled.apk");
+        try (ApkModule module = ApkModule.loadApkFile(original)) {
+            module.getAndroidManifest().getApplicationElement().removeAttributesWithId(0x01010001);
+            module.writeApk(noLabel);
+        }
+        String displayName = "A 'quoted' \\ title";
+        new ApkCoexistenceService().rebuild(noLabel, labeled, work, PACKAGE + ".labeled",
+                displayName, reference -> PACKAGE + ".resource", NONE);
+        try (ApkModule module = ApkModule.loadApkFile(labeled)) {
+            require(displayName.equals(module.getAndroidManifest().getApplicationLabelString()),
+                    "binary fallback label has no text-resource escapes");
+        }
+        File obfuscated = new File(work,"obfuscated.apk"), named = new File(work,"named.apk");
+        try (ApkModule module = ApkModule.loadApkFile(original)) {
+            module.getAndroidManifest().getApplicationElement().getElement("provider")
+                    .searchAttributeByResourceId(0x01010018).setName("hidden",0x01010018);
+            module.writeApk(obfuscated);
+        }
+        new ApkCoexistenceService().rebuild(obfuscated,named,work,PACKAGE + ".named",null,
+                reference -> PACKAGE + ".resource",NONE);
+        try (ApkModule module = ApkModule.loadApkFile(named)) {
+            require(module.getAndroidManifest().getApplicationElement().getElement("provider")
+                    .searchAttributeByResourceId(0x01010018).getDataAsString().startsWith(PACKAGE + ".named."),
+                    "obfuscated attribute names follow framework IDs");
+        }
         samePayloads(original, clone);
         fail(() -> new ApkCoexistenceService().rebuild(original, new File(work,"same.apk"), work, PACKAGE, NONE));
         File cancelled = new File(work, "cancelled.apk");
@@ -89,6 +114,22 @@ public final class ApkEditorTest {
             attribute(uses, "name", 0x01010003, "feature.missing"); module.writeApk(missingDependency);
         }
         fail(() -> EDITOR.merge(Arrays.asList(base, missingDependency), new File(work,"missing.apk"), work, NONE));
+        File typedBase = new File(work,"typed-base.apk");
+        try (ApkModule module = ApkModule.loadApkFile(base)) {
+            attribute(module.getAndroidManifest().getManifestElement(),"requiredSplitTypes",
+                    com.reandroid.app.AndroidManifest.ID_requiredSplitTypes,"base__abi");
+            module.writeApk(typedBase);
+        }
+        fail(() -> EDITOR.merge(Arrays.asList(typedBase, split),new File(work,"missing-type.apk"),work,NONE));
+        File typedSplit = new File(work,"typed-split.apk");
+        try (ApkModule module = ApkModule.loadApkFile(split)) {
+            attribute(module.getAndroidManifest().getManifestElement(),"splitTypes",
+                    com.reandroid.app.AndroidManifest.ID_splitTypes,"base__abi");
+            module.writeApk(typedSplit);
+        }
+        File typedMerged = new File(work,"typed-merged.apk");
+        EDITOR.merge(Arrays.asList(typedBase,typedSplit),typedMerged,work,NONE);
+        require(!ApkManifestReader.read(typedMerged).requiresSplits,"required split types satisfied");
         File archive = new File(work, "splits.apks");
         try (ZipOutputStream zip = new ZipOutputStream(new FileOutputStream(archive))) {
             add(zip, "nested/base.apk", Files.readAllBytes(base.toPath()));
@@ -116,6 +157,13 @@ public final class ApkEditorTest {
         File refactored = new File(work,"refactored.apk"), protectedApk = new File(work,"protected.apk");
         EDITOR.refactor(golden, refactored, NONE);
         EDITOR.protect(golden, protectedApk, NONE);
+        try (ApkModule before = ApkModule.loadApkFile(golden); ApkModule after = ApkModule.loadApkFile(protectedApk)) {
+            List<String> originalPaths = new ArrayList<>(), protectedPaths = new ArrayList<>();
+            before.listResFiles().forEach(resource -> originalPaths.add(resource.getFilePath()));
+            after.listResFiles().forEach(resource -> protectedPaths.add(resource.getFilePath()));
+            require(!originalPaths.isEmpty() && !new HashSet<>(originalPaths).equals(new HashSet<>(protectedPaths)),
+                    "resource protection changes file paths");
+        }
         require(EDITOR.info(refactored,NONE).contains(ApkManifestReader.read(golden).packageName), "APKEditor info");
         File projectZip = new File(work,"project.zip");
         EDITOR.zipProject(project, projectZip, NONE);

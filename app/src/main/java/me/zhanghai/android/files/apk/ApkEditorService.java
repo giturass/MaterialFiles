@@ -161,6 +161,9 @@ public final class ApkEditorService {
 
     private static void splitTypes(ResXmlElement root, String name, Set<String> types) throws IOException {
         ResXmlAttribute attribute = root.searchAttributeByName(name);
+        if (attribute == null) attribute = root.searchAttributeByResourceId(
+                name.equals("requiredSplitTypes") ? com.reandroid.app.AndroidManifest.ID_requiredSplitTypes
+                        : com.reandroid.app.AndroidManifest.ID_splitTypes);
         if (attribute == null) return;
         String value = attribute.getDataAsString();
         if (value == null) throw new IOException("无法解析分包类型：" + name);
@@ -229,9 +232,12 @@ public final class ApkEditorService {
         try (ApkModule module = ApkModule.loadApkFile(input)) {
             if (!module.hasTableBlock()) throw new IOException("此 APK 没有可保护的资源表。");
             module.setAPKLogger(logger(callback));
-            ProtectorOptions options = new ProtectorOptions();
+            ProtectorOptions options = new ProtectorOptions() {
+                @Override public String[] loadDirectoryNameDictionary() { return protectionNames("r/"); }
+                @Override public String[] loadFileNameDictionary() { return protectionNames("f"); }
+            };
             options.skipManifest = true;
-            options.keepTypes.add("all-types");
+            options.keepTypes.add("font");
             Protector protector = new Protector(options) {
                 @Override public void logMessage(String message) { checkpoint(callback); }
                 @Override public void logVerbose(String message) { checkpoint(callback); }
@@ -239,11 +245,20 @@ public final class ApkEditorService {
             protector.setApkModule(module);
             new DirectoryConfuser(protector).confuse();
             new FileNameConfuser(protector).confuse();
+            options.keepTypes.add("all-types");
             new TableConfuser(protector).confuse();
             module.refreshTable();
             write(module, output, callback);
         } catch (Cancelled error) { throw error.io; }
         catch (OutOfMemoryError error) { throw new IOException("内存不足，无法保护此 APK。", error); }
+    }
+
+    private static String[] protectionNames(String prefix) {
+        // Upstream's default dictionary intentionally includes absolute and malformed paths.
+        // Supply ordinary ZIP paths so the output remains editable by the file manager and signer.
+        String[] names = new String[4096];
+        for (int i = 0; i < names.length; ++i) names[i] = prefix + Integer.toString(i, 36);
+        return names;
     }
 
     public String info(File input, ApkOperationCallback callback) throws IOException {

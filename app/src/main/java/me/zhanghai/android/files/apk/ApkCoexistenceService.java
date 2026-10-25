@@ -155,6 +155,9 @@ public final class ApkCoexistenceService {
             else if (type == DataType.ATTRIBUTE) text = "?0x" + Integer.toHexString(value.getData());
             else if (type == DataType.NULL) text = "@null";
             else text = Integer.toString(value.getData());
+            if (element.hasAttributeNS(uri == null || uri.isEmpty() ? null : uri, name)) {
+                throw new IOException("Manifest 中包含名称冲突的属性。");
+            }
             attr.setValue(text == null ? "" : text);
             element.setAttributeNodeNS(attr);
             attributes.put(attr, value);

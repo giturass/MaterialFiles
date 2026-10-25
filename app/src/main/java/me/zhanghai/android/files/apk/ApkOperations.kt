@@ -340,6 +340,7 @@ object ApkOperations {
             File(workspace, "merged.apk").also { engine.merge(modules, it, workspace, callback) }
         } else modules.single()
         if (needsEditor) ApkCoexistenceService.validateInput(apk, workspace, callback)
+        ApkSigningService().validateInput(apk, callback)
         if (ApkManifestReader.read(apk).requiresSplits) {
             throw IOException("缺少分包：请多选 base 和所需 split，或选择完整 APKS/XAPK/APKM 容器。")
         }
@@ -374,6 +375,7 @@ object ApkOperations {
                     append(path.fileName.toString()).append("\n")
                     for (file in files) {
                         ApkCoexistenceService.validateInput(file, directory, callback)
+                        ApkSigningService().validateInput(file, callback)
                         append(engine.info(file, callback)).append("\n")
                         if (length > 262144) throw IOException("APK 信息过多，请减少所选分包数量。")
                     }
