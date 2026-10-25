@@ -18,11 +18,14 @@ The app calls ARSCLib and APKEditor workers directly, never `Main.main` or a she
 The six tools are decode (XML/Smali), build, merge, refactor, resource protection,
 and info. Build, merge, refactor and protection share the existing key selection,
 alignment, signing, verification and exclusive publication pipeline.
-Protection uses the upstream directory/file confusers and updates resource table
-path references, preserving Manifest,
-DEX and resource type names, using generated ordinary ZIP paths instead of the
-upstream malformed-path dictionary; malformed table chunks, ZIP corruption and
-DEX protection are disabled.
+Protection calls the pinned upstream `Protector.runCommand()` with validated
+default `ProtectorOptions`: original dictionaries, Manifest/directory/file/table
+protection and the default `font` exception. ZIP structure confusion and DEX
+protection remain off, as upstream defaults specify. The upstream protected-input
+guard is respected. Signing preserves the protected payloads and exact ZIP entry
+names without interpreting those names as filesystem paths; container extraction
+continues to validate paths. The bounded ZIP reader avoids Android ZipFile's path
+policy while retaining header, overlap, size, decompression and CRC checks.
 
 The coexistence adapter applies the existing semantic rules through a DOM view of
 binary attributes. It writes only changed attributes back with ARSCLib and copies

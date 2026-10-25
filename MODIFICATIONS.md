@@ -58,3 +58,4 @@ Termux / MDTerm 首次使用需要授予本应用“在 Termux 环境中运行�
 - [Android 自适应图标图层实现](https://github.com/aosp-mirror/platform_frameworks_base/blob/master/graphics/java/android/graphics/drawable/AdaptiveIconDrawable.java)
 
 - APK 引擎迁移至 APKEditor 1.4.9 / ARSCLib，移除应用内 Apktool 与 AAPT2。底部更多在签名、共存之前排列反编译、回编译、合并、资源重构、资源保护、信息查看六项功能。签名和共存对分包输入自动调用同一合并服务；反编译输出可编辑的 XML/Smali ZIP，回编译、重构、保护、合并复用密钥、验签和另存流程。详见 [APKEditor 工具](docs/apk-editor.md)。
+- 资源保护使用 APKEditor 上游默认流程与字典，恢复 Manifest 和资源表保护；签名保留特殊资源路径和保护内容，分包容器继续执行解压路径校验。

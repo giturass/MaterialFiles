@@ -13,6 +13,7 @@ import org.w3c.dom.*;
 import me.zhanghai.android.files.apk.core.ApkCoexistenceRewriter;
 import me.zhanghai.android.files.apk.core.ApkOperationCallback;
 import me.zhanghai.android.files.apk.core.ApkSigningService;
+import me.zhanghai.android.files.apk.core.ApkZipArchive;
 
 /** Edits binary Manifest attributes with ARSCLib; all other entry contents stay original. */
 public final class ApkCoexistenceService {
@@ -193,43 +194,39 @@ public final class ApkCoexistenceService {
         }
     }
 
-    /** Validate archive paths and reserve bounded disk space before configuring a signing key. */
+    /** Validate archive bounds and reserve disk space before configuring a signing key. */
     public static void validateInput(File input, File workspace, ApkOperationCallback callback)
             throws IOException {
         if (callback == null) callback = ApkOperationCallback.NONE;
         if (input.length() > MAX_INPUT_BYTES) {
             throw new IOException("共存暂支持不超过 512 MiB 的单体 APK。");
         }
-        new ApkSigningService().validateArchiveStructure(input, callback);
+        ApkZipArchive archive = ApkZipArchive.inspect(input, callback);
         long expanded = 0;
         int count = 0;
         Set<String> directories = new HashSet<>();
-        try (ZipFile zip = new ZipFile(input)) {
-            Enumeration<? extends ZipEntry> entries = zip.entries();
-            while (entries.hasMoreElements()) {
-                checkCancelled(callback);
-                ZipEntry entry = entries.nextElement();
-                String name = entry.getName();
-                int depth = 0;
-                for (int slash = name.indexOf('/'); slash >= 0; slash = name.indexOf('/', slash + 1)) {
-                    if (++depth > 32) throw new IOException("APK 的目录层级过深，暂不支持制作共存版。");
-                    directories.add(name.substring(0, slash));
-                    if (directories.size() + count > MAX_ENTRIES) {
-                        throw new IOException("APK 的文件和目录数量超过共存处理上限。");
-                    }
+        for (ApkZipArchive.Entry entry : archive.entries) {
+            checkCancelled(callback);
+            String name = entry.name;
+            int depth = 0;
+            for (int slash = name.indexOf('/'); slash >= 0; slash = name.indexOf('/', slash + 1)) {
+                if (++depth > 32) throw new IOException("APK 的目录层级过深，暂不支持制作共存版。");
+                directories.add(name.substring(0, slash));
+                if (directories.size() + count > MAX_ENTRIES) {
+                    throw new IOException("APK 的文件和目录数量超过共存处理上限。");
                 }
-                long size = entry.getSize();
-                if (++count + directories.size() > MAX_ENTRIES || size < 0 || size > MAX_EXPANDED_BYTES
-                        || expanded > MAX_EXPANDED_BYTES - size) {
-                    throw new IOException("APK 的文件数量或展开体积超过共存处理上限。");
-                }
-                expanded += size;
-                if (name.equals("AndroidManifest.xml") && size > 4L * 1024 * 1024) {
-                    throw new IOException("Manifest 超过 4 MiB。 ");
-                }
-                if (name.equals("resources.arsc") && size > MAX_RESOURCES_BYTES) {
-                    throw new IOException("资源表超过 16 MiB，暂不能在可控内存内制作共存版。");
-                }
+            }
+            long size = entry.size;
+            if (++count + directories.size() > MAX_ENTRIES || size < 0 || size > MAX_EXPANDED_BYTES
+                    || expanded > MAX_EXPANDED_BYTES - size) {
+                throw new IOException("APK 的文件数量或展开体积超过共存处理上限。");
+            }
+            expanded += size;
+            if (name.equals("AndroidManifest.xml") && size > 4L * 1024 * 1024) {
+                throw new IOException("Manifest 超过 4 MiB。 ");
+            }
+            if (name.equals("resources.arsc") && size > MAX_RESOURCES_BYTES) {
+                throw new IOException("资源表超过 16 MiB，暂不能在可控内存内制作共存版。");
             }
         }
         // Manifest-only decoding keeps the original code and resource payloads.

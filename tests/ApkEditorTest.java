@@ -1,5 +1,7 @@
 /* Copyright (c) 2026 Material Files contributors. All Rights Reserved. */
 import com.reandroid.apk.ApkModule;
+import com.reandroid.apkeditor.protect.Protector;
+import com.reandroid.apkeditor.protect.ProtectorOptions;
 import com.reandroid.arsc.chunk.xml.*;
 import com.reandroid.arsc.value.DataType;
 import java.io.*;
@@ -163,14 +165,7 @@ public final class ApkEditorTest {
         require(ApkManifestReader.read(built).packageName.equals(ApkManifestReader.read(golden).packageName), "round-trip package");
         File refactored = new File(work,"refactored.apk"), protectedApk = new File(work,"protected.apk");
         EDITOR.refactor(golden, refactored, NONE);
-        EDITOR.protect(golden, protectedApk, NONE);
-        try (ApkModule before = ApkModule.loadApkFile(golden); ApkModule after = ApkModule.loadApkFile(protectedApk)) {
-            List<String> originalPaths = new ArrayList<>(), protectedPaths = new ArrayList<>();
-            before.listResFiles().forEach(resource -> originalPaths.add(resource.getFilePath()));
-            after.listResFiles().forEach(resource -> protectedPaths.add(resource.getFilePath()));
-            require(!originalPaths.isEmpty() && !new HashSet<>(originalPaths).equals(new HashSet<>(protectedPaths)),
-                    "resource protection changes file paths");
-        }
+        protection(golden, protectedApk);
         require(EDITOR.info(refactored,NONE).contains(ApkManifestReader.read(golden).packageName), "APKEditor info");
         File projectZip = new File(work,"project.zip");
         EDITOR.zipProject(project, projectZip, NONE);
@@ -196,9 +191,90 @@ public final class ApkEditorTest {
                 new ApkSigningService().sign(apk, signed, work, key,
                         ApkSigningService.Options.forMinSdk(minSdk), NONE);
                 require(new ApkVerificationService().verify(signed,minSdk,NONE).verified, "independent output signature");
+                if (apk.equals(protectedApk)) {
+                    try (ZipFile before = new ZipFile(apk); ZipFile after = new ZipFile(signed)) {
+                        for (ZipEntry entry : Collections.list(before.entries())) {
+                            if (entry.getName().startsWith("META-INF/")) continue;
+                            require(Arrays.equals(payload(before, entry.getName()), payload(after, entry.getName())),
+                                    "signing preserves protected bytes and names: " + entry.getName());
+                        }
+                    }
+                    ApkManifestReader.read(signed);
+                    ApkCoexistenceService.validateInput(signed, work, NONE);
+                }
             }
         }
         System.out.println("APKEditor integration: " + checks + " checks passed");
+    }
+
+    private static void protection(File golden, File protectedApk) throws Exception {
+        File input = new File(work, "protection-input.apk");
+        try (ApkModule module = ApkModule.loadApkFile(golden)) {
+            // Exercise the full upstream dictionaries, including absolute paths and backslashes.
+            for (int i = 0; i < 32; ++i) {
+                String name = "payload_" + i;
+                String path = "res/raw/" + name + ".bin";
+                module.getTableBlock().pickOne().getOrCreate("", "raw", name).setDataAsString(path);
+                module.add(new com.reandroid.archive.ByteInputSource(new byte[]{(byte) i}, path));
+            }
+            module.refreshTable();
+            module.writeApk(input);
+        }
+        File upstream = new File(work, "upstream-protected.apk");
+        ProtectorOptions options = new ProtectorOptions();
+        options.inputFile = input;
+        options.outputFile = upstream;
+        options.validate();
+        Protector protector = new Protector(options);
+        protector.setEnableLog(false);
+        protector.runCommand();
+        EDITOR.protect(input, protectedApk, NONE);
+        try (ZipFile original = new ZipFile(input); ZipFile expected = new ZipFile(upstream);
+                ZipFile actual = new ZipFile(protectedApk)) {
+            Set<String> expectedNames = new HashSet<>(), actualNames = new HashSet<>();
+            for (ZipEntry entry : Collections.list(expected.entries())) expectedNames.add(entry.getName());
+            for (ZipEntry entry : Collections.list(actual.entries())) actualNames.add(entry.getName());
+            require(expectedNames.equals(actualNames), "resource names match upstream default protection");
+            require(actualNames.stream().anyMatch(name -> name.startsWith("/")), "upstream absolute paths retained");
+            require(actualNames.stream().anyMatch(name -> name.contains("\\")), "upstream backslashes retained");
+            require(Arrays.equals(payload(expected, "resources.arsc"), payload(actual, "resources.arsc")),
+                    "resource table protection matches upstream byte for byte");
+            require(!Arrays.equals(payload(original, "AndroidManifest.xml"), payload(actual, "AndroidManifest.xml")),
+                    "upstream Manifest protection enabled");
+            for (String name : expectedNames) {
+                // Upstream intentionally randomizes Manifest protection.
+                if (!name.equals("AndroidManifest.xml")) {
+                    require(Arrays.equals(payload(expected, name), payload(actual, name)),
+                            "upstream protected payload preserved: " + name);
+                }
+            }
+            require(Arrays.equals(payload(original, "classes.dex"), payload(actual, "classes.dex")),
+                    "DEX protection remains off by default");
+        }
+        ApkManifestReader before = ApkManifestReader.read(input), after = ApkManifestReader.read(protectedApk);
+        require(before.packageName.equals(after.packageName) && before.versionCode == after.versionCode
+                && before.minSdk == after.minSdk && before.targetSdk == after.targetSdk
+                && before.requiresSplits == after.requiresSplits, "protected Manifest identity preserved");
+        ApkCoexistenceService.validateInput(protectedApk, work, NONE);
+        new ApkSigningService().validateInput(protectedApk, NONE);
+        File repeated = new File(work, "repeated-protection.apk");
+        fail(() -> EDITOR.protect(protectedApk, repeated, NONE));
+        require(!repeated.exists(), "upstream protected-input guard produces no output");
+        File cancelled = new File(work, "cancelled-protection.apk");
+        fail(() -> EDITOR.protect(input, cancelled, new ApkOperationCallback() {
+            private int checks;
+            @Override public void checkCancelled() throws InterruptedIOException {
+                if (++checks >= 4) throw new InterruptedIOException("test cancellation");
+            }
+            @Override public void onProgress(String phase, long completed, long total) { }
+        }));
+        require(!cancelled.exists(), "cancelled upstream protection produces no output");
+    }
+
+    private static byte[] payload(ZipFile zip, String name) throws IOException {
+        ZipEntry entry = zip.getEntry(name);
+        if (entry == null) throw new IOException("Missing test entry: " + name);
+        try (InputStream input = zip.getInputStream(entry)) { return input.readAllBytes(); }
     }
     private static void fixture(File source, File target, String split, boolean requiresSplits) throws Exception {
         try (ApkModule module = ApkModule.loadApkFile(source)) {

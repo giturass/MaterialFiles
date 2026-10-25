@@ -252,34 +252,36 @@ public final class ApkEditorService {
 
     public void protect(File input, File output, ApkOperationCallback callback) throws IOException {
         callback.onProgress("protect", 0, -1);
+        check(callback);
+        ProtectorOptions options = new ProtectorOptions();
+        options.inputFile = input;
+        options.outputFile = output;
+        // Applies upstream defaults, including keeping font resources. Never replace its dictionaries.
+        options.validate();
         try (ApkModule module = ApkModule.loadApkFile(input)) {
             if (!module.hasTableBlock()) throw new IOException("此 APK 没有可保护的资源表。");
-            module.setAPKLogger(logger(callback));
-            ProtectorOptions options = new ProtectorOptions() {
-                @Override public String[] loadDirectoryNameDictionary() { return protectionNames("r/"); }
-                @Override public String[] loadFileNameDictionary() { return protectionNames("f"); }
-            };
-            options.skipManifest = true;
-            options.keepTypes.add("font");
-            Protector protector = new Protector(options) {
-                @Override public void logMessage(String message) { checkpoint(callback); }
-                @Override public void logVerbose(String message) { checkpoint(callback); }
-            };
-            protector.setApkModule(module);
-            new DirectoryConfuser(protector).confuse();
-            new FileNameConfuser(protector).confuse();
-            module.refreshTable();
-            write(module, output, callback);
+            if (com.reandroid.apkeditor.Util.isProtected(module) != null) {
+                throw new IOException("APKEditor 已将此 APK 标记为受保护，不能重复保护。");
+            }
+        }
+        Protector protector = new Protector(options) {
+            @Override public void logMessage(String message) { checkpoint(callback); }
+            @Override public void logVerbose(String message) { checkpoint(callback); }
+        };
+        boolean complete = false;
+        try {
+            // Run the pinned upstream command itself: Manifest, directories, files, table and DEX.
+            // ZIP structure confusion and DEX protection stay at their upstream defaults (off).
+            protector.runCommand();
+            check(callback);
+            if (!output.isFile()) throw new IOException("APKEditor 未生成保护结果。");
+            complete = true;
         } catch (Cancelled error) { throw error.io; }
         catch (OutOfMemoryError error) { throw new IOException("内存不足，无法保护此 APK。", error); }
-    }
-
-    private static String[] protectionNames(String prefix) {
-        // Upstream's default dictionary intentionally includes absolute and malformed paths.
-        // Supply ordinary ZIP paths so the output remains editable by the file manager and signer.
-        String[] names = new String[4096];
-        for (int i = 0; i < names.length; ++i) names[i] = prefix + Integer.toString(i, 36);
-        return names;
+        finally {
+            if (protector.getApkModule() != null) protector.getApkModule().close();
+            if (!complete) output.delete();
+        }
     }
 
     public String info(File input, ApkOperationCallback callback) throws IOException {

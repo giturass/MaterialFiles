@@ -5,17 +5,15 @@ package me.zhanghai.android.files.apk;
 import com.android.apksig.apk.ApkUtils;
 import com.android.apksig.internal.apk.AndroidBinXmlParser;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
+import me.zhanghai.android.files.apk.core.ApkOperationCallback;
+import me.zhanghai.android.files.apk.core.ApkZipArchive;
 
 /** Reads the binary manifest without loading the APK or resolving arbitrary resource references. */
 public final class ApkManifestReader {
@@ -44,26 +42,8 @@ public final class ApkManifestReader {
     }
 
     public static ApkManifestReader read(File apk) throws IOException {
-        byte[] manifest;
-        try (ZipFile zip = new ZipFile(apk)) {
-            ZipEntry entry = zip.getEntry("AndroidManifest.xml");
-            if (entry == null || entry.isDirectory() || entry.getSize() > MAX_MANIFEST_BYTES) {
-                throw new IOException("Missing or oversized APK AndroidManifest.xml");
-            }
-            try (InputStream input = zip.getInputStream(entry);
-                 ByteArrayOutputStream output = new ByteArrayOutputStream()) {
-                byte[] buffer = new byte[8192];
-                int count;
-                while ((count = input.read(buffer)) != -1) {
-                    checkInterrupted();
-                    if (output.size() > MAX_MANIFEST_BYTES - count) {
-                        throw new IOException("APK AndroidManifest.xml exceeds 16 MiB");
-                    }
-                    output.write(buffer, 0, count);
-                }
-                manifest = output.toByteArray();
-            }
-        }
+        byte[] manifest = ApkZipArchive.inspect(apk, ApkOperationCallback.NONE).readEntry(
+                apk, "AndroidManifest.xml", MAX_MANIFEST_BYTES, ApkOperationCallback.NONE);
         try {
             ByteBuffer xml = ByteBuffer.wrap(manifest);
             String packageName = ApkUtils.getPackageNameFromBinaryAndroidManifest(xml.duplicate());
