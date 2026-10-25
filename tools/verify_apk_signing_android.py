@@ -194,6 +194,42 @@ def run_private_keys_only(args, java, javac):
         print("ART report:", work / "report.json", flush=True)
 
 
+def compile_minified_harness(args, java, javac, work, commands, compile_env):
+    classes = work / "test-classes"
+    classes.mkdir()
+    test = ROOT / "tests/ApkSigningMinifiedAndroidTest.java"
+    run([javac, f"-J-Djava.io.tmpdir={work}", "--release", "17", "-encoding", "UTF-8",
+         "-cp", args.android_jar, "-d", classes, test],
+        work, "javac-harness", commands, compile_env)
+    harness = work / "minified-verification-tests.jar"
+    classes_jar(harness, classes)
+    dex = work / "minified-verification-test-dex.jar"
+    run([java, f"-Djava.io.tmpdir={work}", "-Xmx768m", "-cp", args.d8_jar,
+         "com.android.tools.r8.D8", "--min-api", "30", "--lib", args.android_jar,
+         "--output", dex, harness], work, "d8", commands, compile_env)
+    return dex
+
+
+def prepare_minified_harness(args, java, javac):
+    """Compile on CI so a Termux device can test release DEX without a local build."""
+    work = args.prepare_minified_harness.resolve()
+    work.mkdir(parents=True, exist_ok=True)
+    env = os.environ.copy()
+    env["TMPDIR"] = str(work)
+    dex = compile_minified_harness(args, java, javac, work, [], env)
+    fixtures = work / "fixtures"
+    fixtures.mkdir()
+    for name in FIXTURES:
+        shutil.copyfile(args.fixtures / name, fixtures / name)
+    manifest = {
+        "source_sha256": sha256(ROOT / "tests/ApkSigningMinifiedAndroidTest.java"),
+        "dex_sha256": sha256(dex),
+        "fixtures": FIXTURE_SHA256,
+    }
+    (work / "harness.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    print("Prepared ART harness:", work)
+
+
 def run_minified(args, java, javac):
     args.work_dir.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix="minified-", dir=args.work_dir)).resolve()
@@ -244,17 +280,12 @@ def run_minified(args, java, javac):
             path.name: sha256(path) for path in (tampered, malformed)
         }
 
-        classes = work / "test-classes"
-        classes.mkdir()
-        run([javac, f"-J-Djava.io.tmpdir={work}", "--release", "17", "-encoding", "UTF-8",
-             "-cp", args.android_jar, "-d", classes, test],
-            work, "javac-harness", commands, compile_env)
-        harness = work / "minified-verification-tests.jar"
-        classes_jar(harness, classes)
-        dex = work / "minified-verification-test-dex.jar"
-        run([java, f"-Djava.io.tmpdir={work}", "-Xmx768m", "-cp", args.d8_jar,
-             "com.android.tools.r8.D8", "--min-api", "30", "--lib", args.android_jar,
-             "--output", dex, harness], work, "d8", commands, compile_env)
+        if args.harness_dir:
+            dex = work / "minified-verification-test-dex.jar"
+            shutil.copyfile(args.harness_dir / dex.name, dex)
+            report["prebuilt_harness_sha256"] = sha256(dex)
+        else:
+            dex = compile_minified_harness(args, java, javac, work, commands, compile_env)
         dex.chmod(0o400)
         runtime_env = os.environ.copy()
         runtime_env.pop("LD_LIBRARY_PATH", None)
@@ -303,8 +334,10 @@ def main():
     parser.add_argument("--fixtures", type=Path,
                         default=Path.home() / "tmp/materialfiles-apk-tools/fixtures")
     parser.add_argument("--java-home", type=Path, default=os.environ.get("JAVA_HOME"))
-    parser.add_argument("--android-jar", type=Path, required=True)
+    parser.add_argument("--android-jar", type=Path)
     parser.add_argument("--d8-jar", type=Path)
+    parser.add_argument("--harness-dir", type=Path,
+                        help="CI-prepared harness and fixtures; --minified performs no compilation")
     parser.add_argument("--apk", type=Path,
                         help="APK under test; required with --minified, otherwise defaults to the debug APK")
     parser.add_argument("--app-classes", type=Path, default=ROOT /
@@ -321,7 +354,18 @@ def main():
                       help="Verify fixtures using the actual APK's minified production code via reflection")
     mode.add_argument("--private-keys-only", action="store_true",
                       help="Run private-key operations/root routing against an unminified APK via reflection")
+    mode.add_argument("--prepare-minified-harness", type=Path,
+                      help="Compile a reusable ART verification harness on the build host")
     args = parser.parse_args()
+    if args.harness_dir:
+        if not args.minified:
+            parser.error("--harness-dir requires --minified")
+        manifest = json.loads((args.harness_dir / "harness.json").read_text(encoding="utf-8"))
+        dex = args.harness_dir / "minified-verification-test-dex.jar"
+        if manifest["source_sha256"] != sha256(ROOT / "tests/ApkSigningMinifiedAndroidTest.java") \
+                or manifest["dex_sha256"] != sha256(dex) or manifest["fixtures"] != FIXTURE_SHA256:
+            parser.error("The prebuilt ART harness does not match its source, DEX or fixture hashes")
+        args.fixtures = args.harness_dir / "fixtures"
     if args.apk is None:
         if args.minified:
             parser.error("--minified requires an explicit --apk to identify the production artifact")
@@ -329,17 +373,21 @@ def main():
 
     java = args.java_home / "bin/java" if args.java_home else shutil.which("java")
     javac = args.java_home / "bin/javac" if args.java_home else shutil.which("javac")
-    if not java or not javac:
-        parser.error("A JDK 17+ is required; specify --java-home")
-    if not args.android_jar.is_file() or not args.app_process.is_file():
-        parser.error("Use an Android SDK android.jar and run on Android/Termux")
-    if args.d8_jar is None:
-        text = (ROOT / "app/build.gradle").read_text(encoding="utf-8")
-        version = re.search(r"buildToolsVersion\s*=\s*'([^']+)'", text).group(1)
-        args.d8_jar = args.android_jar.resolve().parents[2] / "build-tools" / version / "lib/d8.jar"
-    if not args.d8_jar.is_file():
-        parser.error("D8 was not found; specify --d8-jar")
-    jars = [] if args.minified or args.private_keys_only else [args.dependencies / name for name in SHA256]
+    if not args.harness_dir:
+        if not java or not javac:
+            parser.error("A JDK 17+ is required; specify --java-home")
+        if args.android_jar is None or not args.android_jar.is_file():
+            parser.error("Use an Android SDK android.jar")
+        if args.d8_jar is None:
+            text = (ROOT / "app/build.gradle").read_text(encoding="utf-8")
+            version = re.search(r"buildToolsVersion\s*=\s*'([^']+)'", text).group(1)
+            args.d8_jar = args.android_jar.resolve().parents[2] / "build-tools" / version / "lib/d8.jar"
+        if not args.d8_jar.is_file():
+            parser.error("D8 was not found; specify --d8-jar")
+    if not args.prepare_minified_harness and not args.app_process.is_file():
+        parser.error("Run on Android/Termux")
+    jars = [] if args.minified or args.private_keys_only or args.prepare_minified_harness \
+        else [args.dependencies / name for name in SHA256]
     for jar in jars:
         if not jar.is_file() or sha256(jar) != SHA256[jar.name]:
             parser.error(f"Missing or incorrect pinned dependency: {jar}; run verify_apk_signing.py")
@@ -348,6 +396,9 @@ def main():
             parser.error("Missing AOSP fixture " + name + "; run verify_apk_signing.py first")
         if sha256(args.fixtures / name) != FIXTURE_SHA256[name]:
             parser.error("AOSP fixture checksum mismatch: " + name)
+    if args.prepare_minified_harness:
+        prepare_minified_harness(args, java, javac)
+        return
     if args.jks and not args.jks.is_file():
         parser.error("--jks must point to the disposable host test fixture")
     if args.private_keys_only:
