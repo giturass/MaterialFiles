@@ -2,11 +2,12 @@ package me.zhanghai.android.files.media
 
 import android.content.Context
 import android.util.AttributeSet
+import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 
-@UnstableApi
+@OptIn(UnstableApi::class)
 class VideoPlayerView @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null) :
     PlayerView(context, attrs) {
     private var sourceRatio = 0f

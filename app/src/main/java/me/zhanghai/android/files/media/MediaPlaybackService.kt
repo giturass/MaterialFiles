@@ -9,6 +9,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -27,12 +28,13 @@ import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import java.io.Closeable
+import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
-import me.zhanghai.android.files.file.fileProviderPath
+import java8.nio.file.Paths
 import me.zhanghai.android.files.filejob.OpenCacheManager
 import me.zhanghai.android.files.R
 
-@UnstableApi
+@OptIn(UnstableApi::class)
 class MediaPlaybackService : MediaSessionService() {
     private lateinit var player: ExoPlayer
     private lateinit var session: MediaSession
@@ -136,7 +138,8 @@ class MediaPlaybackService : MediaSessionService() {
             val uri = item.localConfiguration?.uri ?: continue
             if (uri.authority != me.zhanghai.android.files.BuildConfig.FILE_PROVIDIER_AUTHORITY) continue
             try {
-                OpenCacheManager.acquire(uri.fileProviderPath)?.let { leases[item.mediaId] = it }
+                OpenCacheManager.acquire(Paths.get(URI.create(uri.toString())))
+                    ?.let { leases[item.mediaId] = it }
             } catch (_: Exception) {
                 // Playback reports unreadable files through the player's error listener.
             }
@@ -214,7 +217,7 @@ class MediaPlaybackService : MediaSessionService() {
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
                 .add(SessionCommand(COMMAND_DECODER, Bundle.EMPTY))
                 .add(SessionCommand(COMMAND_CLOSE, Bundle.EMPTY)).build()
-            return Futures.immediateFuture(MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+            return Futures.immediateFuture(MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
                 .setAvailableSessionCommands(commands).build())
         }
 

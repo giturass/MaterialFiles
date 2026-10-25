@@ -31,6 +31,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
+import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
@@ -44,7 +45,7 @@ import me.zhanghai.android.files.R
 import me.zhanghai.android.files.app.AppActivity
 import me.zhanghai.android.files.util.extraPathList
 
-@UnstableApi
+@OptIn(UnstableApi::class)
 class MediaPlayerActivity : AppActivity() {
     private lateinit var preferences: MediaPreferences
     private lateinit var toolbar: MaterialToolbar

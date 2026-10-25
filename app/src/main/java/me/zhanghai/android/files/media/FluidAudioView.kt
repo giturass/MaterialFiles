@@ -12,6 +12,7 @@ import android.widget.SeekBar
 import android.widget.TextView
 import androidx.media3.common.C
 import androidx.media3.common.Player
+import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import androidx.transition.AutoTransition
 import androidx.transition.TransitionManager
@@ -19,7 +20,7 @@ import com.google.android.material.card.MaterialCardView
 import me.zhanghai.android.files.R
 
 /** In-app capsule and expanded music card, available on every Android device. */
-@UnstableApi
+@OptIn(UnstableApi::class)
 class FluidAudioView(context: Context) : MaterialCardView(context) {
     private val content = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL

@@ -1,0 +1,41 @@
+name: Media playback validation
+on:
+  push:
+    branches: [master, codex/media-player]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  harness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify official BASS artifacts
+        run: python3 tools/verify_media_vendor.py
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-37.2 build-tools;37.0.0'
+      - name: Install audio fixture encoder
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - name: Prepare Android media regression without building on the device
+        run: |
+          python3 tools/prepare_media_harness.py \
+            --output "$RUNNER_TEMP/media-harness" \
+            --android-jar "$ANDROID_HOME/platforms/android-37.2/android.jar" \
+            --d8-jar "$ANDROID_HOME/build-tools/37.0.0/lib/d8.jar"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: media-art-harness-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/media-harness/media-test-dex.jar
+            ${{ runner.temp }}/media-harness/harness.json
+            ${{ runner.temp }}/media-harness/fixtures/
+          retention-days: 30

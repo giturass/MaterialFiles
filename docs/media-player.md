@@ -36,4 +36,6 @@ VLC 上游未接入 Seedling SDK；本项目也采用标准会话路径。系统
 
 本机仅执行依赖校验和 XML/差异检查；遵守项目不在 Termux 本机编译的规则。GitHub Actions 执行 Release 构建、单元测试、Lint、签名校验，并检查播放器类和 BASS 原生库打包。软硬解能力、字幕渲染、后台/耳机交互、画中画及 ColorOS 真机流体云展示需要设备实测。
 
+`Media playback validation` 工作流另外在远端编译 Android ART 回归程序，并生成 WAV、ALAC、FLAC 和 WavPack 无损样本。下载与当前提交一致的 `media-art-harness-<commit>` 产物后，可运行 `python3 tools/verify_media_android.py --harness-dir <产物目录>`，在 Android ARM64 设备验证官方 BASS JNI、六个插件加载、文件与 `ParcelFileDescriptor` 两种读取方式、小块 PCM 读取和非帧边界定位。该命令只运行远端编译好的程序，不在本机编译、不安装应用、不输出可听音频；结果保存在产物目录的 `art-media.json` 和 `art-media.log`。它不覆盖安装后的播放器界面、实际音频输出或流体云展示。
+
 接口依据：[Media3 官方源码](https://github.com/androidx/media/tree/1.11.1)、[ExoPlayer 支持格式](https://developer.android.com/media/media3/exoplayer/supported-formats)、[后台播放](https://developer.android.com/media/media3/session/background-playback)、[BASS 下载和许可](https://www.un4seen.com/bass.html)。

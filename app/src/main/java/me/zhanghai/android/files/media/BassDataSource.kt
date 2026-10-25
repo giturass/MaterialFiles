@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import androidx.media3.common.C
+import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.BaseDataSource
 import androidx.media3.datasource.DataSource
@@ -13,7 +14,7 @@ import java.io.IOException
 import java.nio.ByteBuffer
 
 /** Presents BASS decoded float PCM as a seekable WAV to Media3's standard WavExtractor. */
-@UnstableApi
+@OptIn(UnstableApi::class)
 class BassDataSource(private val context: Context) : BaseDataSource(false) {
     private var descriptor: ParcelFileDescriptor? = null
     private var stream = 0
@@ -88,13 +89,16 @@ class BassDataSource(private val context: Context) : BaseDataSource(false) {
                 stream = 0
             }
         } finally {
-            descriptor?.close()
-            descriptor = null
-            reader = null
-            uri = null
-            if (started) {
-                started = false
-                transferEnded()
+            try {
+                descriptor?.close()
+            } finally {
+                descriptor = null
+                reader = null
+                uri = null
+                if (started) {
+                    started = false
+                    transferEnded()
+                }
             }
         }
     }
