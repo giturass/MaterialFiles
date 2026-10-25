@@ -6,7 +6,7 @@
 2. **APK 回编译**：选择包含 `AndroidManifest.xml` 的本地 APKEditor 项目目录，输入输出名并选择签名密钥，生成已验签 APK。
 3. **APK 分包合并**：选择一个 APKS/XAPK/APKM 容器或多选同一版本的 base 与 split，合并成单体后签名另存。
 4. **APK 资源重构**：调用 APKEditor 修复/整理资源类型名称、条目名称与文件路径，再签名另存。
-5. **APK 资源保护**：调用 APKEditor 的目录、文件名和资源表保护，保留资源类型、Manifest 与 DEX，使用标准 ZIP 并签名。此配置不启用破坏 ZIP/Manifest 结构或 DEX 保护。
+5. **APK 资源保护**：调用 APKEditor 的目录与文件名混淆，同步更新资源表中的路径引用，保留资源类型、Manifest 与 DEX，使用标准 ZIP 并签名。此配置不启用破坏资源表、ZIP/Manifest 结构或 DEX 保护。
 6. **APK 信息**：查看包名、版本、SDK、应用类、入口 Activity、权限、分包信息和资源包信息。容器会逐个列出分包信息。
 
 签名或制作共存版时，分包输入**自动调用上述同一合并服务**；用户不需要先手动生成中间 APK。

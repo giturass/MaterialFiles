@@ -245,8 +245,6 @@ public final class ApkEditorService {
             protector.setApkModule(module);
             new DirectoryConfuser(protector).confuse();
             new FileNameConfuser(protector).confuse();
-            options.keepTypes.add("all-types");
-            new TableConfuser(protector).confuse();
             module.refreshTable();
             write(module, output, callback);
         } catch (Cancelled error) { throw error.io; }

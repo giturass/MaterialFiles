@@ -18,9 +18,11 @@ The app calls ARSCLib and APKEditor workers directly, never `Main.main` or a she
 The six tools are decode (XML/Smali), build, merge, refactor, resource protection,
 and info. Build, merge, refactor and protection share the existing key selection,
 alignment, signing, verification and exclusive publication pipeline.
-Protection uses the upstream directory/file/table confusers, preserving Manifest,
+Protection uses the upstream directory/file confusers and updates resource table
+path references, preserving Manifest,
 DEX and resource type names, using generated ordinary ZIP paths instead of the
-upstream malformed-path dictionary; ZIP corruption and DEX protection are disabled.
+upstream malformed-path dictionary; malformed table chunks, ZIP corruption and
+DEX protection are disabled.
 
 The coexistence adapter applies the existing semantic rules through a DOM view of
 binary attributes. It writes only changed attributes back with ARSCLib and copies
