@@ -98,8 +98,13 @@ def main():
     classes.mkdir(exist_ok=True)
     sources = sorted((ROOT / "app/src/main/java/me/zhanghai/android/files/apk/core")
                      .glob("*.java"))
-    # The Android Apktool orchestration has a separate on-device suite. Keep this host suite on
-    # the signing, binary-manifest and semantic-rewriter workers, without loading Android libraries.
+    # In-process APKEditor workers also run on the host, without Android framework APIs.
+    vendor = ROOT / "third_party/apkeditor"
+    subprocess.run(["python3", str(vendor / "verify_vendor.py")], check=True)
+    jars.extend(sorted((vendor / "libs").glob("*.jar")))
+    sources.extend(sorted((vendor / "src/main/java").rglob("*.java")))
+    sources.extend(ROOT / "app/src/main/java/me/zhanghai/android/files/apk" / name
+                   for name in ("ApkEditorService.java", "ApkCoexistenceService.java"))
     sources.append(ROOT / "app/src/main/java/me/zhanghai/android/files/apk/ApkManifestReader.java")
     tests = sorted(path for path in (ROOT / "tests").glob("Apk*Test.java")
                    if not path.name.endswith("AndroidTest.java"))
@@ -114,7 +119,7 @@ def main():
         work = Path(tempfile.mkdtemp(prefix=test.stem + "-", dir=runs))
         print(f"Running {test.stem}", flush=True)
         subprocess.run(["java", "-Xmx512m", "-cp",
-                        os.pathsep.join((str(classes), classpath)), test.stem, str(work), str(fixtures)],
+                        os.pathsep.join((str(classes), str(vendor / "src/main/resources"), classpath)), test.stem, str(work), str(fixtures)],
                        check=True)
 
 

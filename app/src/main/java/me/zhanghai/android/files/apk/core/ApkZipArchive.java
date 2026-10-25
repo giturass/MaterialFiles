@@ -43,6 +43,11 @@ final class ApkZipArchive {
     }
 
     static ApkZipArchive inspect(File file, ApkOperationCallback callback) throws IOException {
+        return inspect(file, callback, true);
+    }
+
+    static ApkZipArchive inspect(File file, ApkOperationCallback callback, boolean requireManifest)
+            throws IOException {
         ApkIo.check(callback);
         try (RandomAccessFile input = new RandomAccessFile(file, "r")) {
             long length = input.length();
@@ -131,7 +136,7 @@ final class ApkZipArchive {
                 position = nextPosition;
             }
             if (position != endFileOffset) throw new IOException("APK directory length is inconsistent");
-            if (!names.contains("AndroidManifest.xml")) {
+            if (requireManifest && !names.contains("AndroidManifest.xml")) {
                 throw new IOException("Input is not a standalone APK: AndroidManifest.xml is missing");
             }
             List<Entry> byOffset = new ArrayList<>(entries);

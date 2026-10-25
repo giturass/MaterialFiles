@@ -23,6 +23,11 @@ public final class ApkSigningService {
         ApkZipArchive.inspect(ApkIo.input(input), callback);
     }
 
+    public void validateContainer(File input, ApkOperationCallback callback) throws IOException {
+        callback = ApkIo.callback(callback);
+        ApkZipArchive.inspect(ApkIo.input(input), callback, false).validateContents(input, callback);
+    }
+
     public void validateInput(File input, ApkOperationCallback callback) throws IOException {
         callback = ApkIo.callback(callback);
         input = ApkIo.input(input);

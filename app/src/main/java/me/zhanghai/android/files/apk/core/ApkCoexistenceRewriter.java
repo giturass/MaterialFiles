@@ -47,7 +47,7 @@ import org.xml.sax.XMLReader;
 import org.xml.sax.helpers.DefaultHandler;
 
 /**
- * Changes only AndroidManifest.xml in an Apktool working directory.
+ * Applies the shared coexistence rules to a Manifest document.
  *
  * <p>The caller must rebuild with the original resources and DEX, then sign the result. Component
  * classes remain in the original code package; authorities and custom permissions get independent
@@ -131,6 +131,21 @@ public final class ApkCoexistenceRewriter {
         }
     }
 
+    /** Binary editors project attributes into a DOM, then apply only the changed attributes. */
+    public Report rewriteManifest(Document document, String original, String target,
+            String label, ManifestValueResolver resolver, ApkOperationCallback callback)
+            throws IOException {
+        validateTargetPackage(original, target);
+        Plan plan = new Plan(null, original, target, label, resolver,
+                callback != null ? callback : ApkOperationCallback.NONE);
+        plan.binary = true;
+        List<Element> elements = allElements(document.getDocumentElement());
+        plan.analyze(document.getDocumentElement(), elements);
+        plan.rewrite(document.getDocumentElement(), elements);
+        return new Report(original, target, plan.changedAttributes, plan.authorities.size(),
+                plan.permissions.size());
+    }
+
     private static final class Plan {
         final Path requestedRoot;
         final Path root;
@@ -146,6 +161,7 @@ public final class ApkCoexistenceRewriter {
         final Map<String, String> permissions = new LinkedHashMap<>();
         final Map<String, String> permissionSources = new LinkedHashMap<>();
         int changedAttributes;
+        boolean binary;
 
         Plan(File directory, String original, String target, String originalLabel,
                 ManifestValueResolver resolver, ApkOperationCallback callback) throws IOException {
@@ -155,6 +171,10 @@ public final class ApkCoexistenceRewriter {
             this.resolver = resolver;
             this.callback = callback;
             check();
+            if (directory == null) {
+                requestedRoot = root = manifest = null;
+                return;
+            }
             requestedRoot = directory.toPath().toAbsolutePath().normalize();
             if (Files.isSymbolicLink(requestedRoot)
                     || !Files.isDirectory(requestedRoot, LinkOption.NOFOLLOW_LINKS)) {
@@ -293,7 +313,7 @@ public final class ApkCoexistenceRewriter {
                     String label = originalLabel == null || originalLabel.trim().isEmpty()
                             ? original : originalLabel;
                     if (label.length() > 4096) throw fail("Original application label is too long");
-                    element.setAttributeNS(ANDROID, "android:label", attributeString(label));
+                    element.setAttributeNS(ANDROID, "android:label", binary ? label : attributeString(label));
                     ++changedAttributes;
                 }
                 for (Attr attribute : attributes(element)) {
@@ -350,7 +370,7 @@ public final class ApkCoexistenceRewriter {
                     if (resolved.length() > MAX_IDENTIFIER_LENGTH) {
                         throw fail("Resolved Manifest identifier is too long: " + value);
                     }
-                    resolvedValues.put(value, attributeString(resolved));
+                    resolvedValues.put(value, binary ? resolved : attributeString(resolved));
                 }
                 value = resolvedValues.get(value);
             }

@@ -152,13 +152,13 @@ class AboutFragment : Fragment() {
                 R.string.about_component_bouncy_castle_summary, "https://www.bouncycastle.org/"
             ),
             Link(
-                R.drawable.file_apk_icon, R.string.about_component_apktool_title,
-                R.string.about_component_apktool_summary,
-                "https://github.com/anirudhmalik/apktool-android"
+                R.drawable.file_apk_icon, R.string.about_component_apkeditor_title,
+                R.string.about_component_apkeditor_summary,
+                "https://github.com/REAndroid/APKEditor"
             ),
             Link(
-                R.drawable.file_apk_icon, R.string.about_component_aapt2_title,
-                R.string.about_component_aapt2_summary, "https://developer.android.com/tools/aapt2"
+                R.drawable.file_apk_icon, R.string.about_component_arsclib_title,
+                R.string.about_component_arsclib_summary, "https://github.com/REAndroid/ARSCLib"
             )
         )
     }

@@ -8,6 +8,13 @@
 <notices>
 
     <notice>
+        <name>APKEditor / ARSCLib / JCommand</name>
+        <url>https://github.com/REAndroid/APKEditor</url>
+        <copyright>Copyright REAndroid and contributors; Android framework data Copyright The Android Open Source Project. Bundled license texts: META-INF/materialfiles-apkeditor/</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+
+    <notice>
         <name>Android apksig</name>
         <url>https://android.googlesource.com/platform/tools/apksig/</url>
         <copyright>Copyright The Android Open Source Project</copyright>
@@ -21,14 +28,7 @@
         <license>Bouncy Castle Licence</license>
     </notice>
 
-    <notice>
-        <name>Apktool Android 1.0.0</name>
-        <url>https://github.com/anirudhmalik/apktool-android/tree/f0ed422f89f37276a55e464d208b0eeb91d1ca0b</url>
-        <copyright>Copyright Ryszard Wiśniewski, Connor Tumbleson, Anirudh Malik and the Apktool contributors</copyright>
-        <license>Apache Software License 2.0</license>
-    </notice>
-
-    <notice>
+<notice>
         <name>Android aapt2 and framework resources</name>
         <url>https://android.googlesource.com/platform/frameworks/base/</url>
         <copyright>Copyright The Android Open Source Project and contributors. aapt2 includes third-party code; full notices are provided with the vendored source.</copyright>
@@ -37,19 +37,12 @@
 
     <notice>
         <name>smali / baksmali / dexlib2</name>
-        <url>https://github.com/iBotPeaches/smali/tree/b6365a84f40c8355af14004dcf7b8324ee050b9f</url>
+        <url>https://github.com/REAndroid/smali-lib</url>
         <copyright>Copyright Ben Gruver, The Android Open Source Project and contributors</copyright>
         <license>BSD 3-Clause License</license>
     </notice>
 
-    <notice>
-        <name>libsepol (included in aapt2)</name>
-        <url>https://android.googlesource.com/platform/external/selinux/+/refs/tags/platform-tools-35.0.2/libsepol/</url>
-        <copyright>Copyright the SELinux contributors. The full license is included in the APK at META-INF/materialfiles-apktool/libsepol-LICENSE.txt.</copyright>
-        <license>GNU Lesser General Public License 2.1</license>
-    </notice>
-
-    <notice>
+<notice>
         <name>ANTLR 3</name>
         <url>https://www.antlr3.org/</url>
         <copyright>Copyright Terence Parr and contributors</copyright>
@@ -70,28 +63,14 @@
         <license>Apache Software License 2.0</license>
     </notice>
 
-    <notice>
-        <name>pngj</name>
-        <url>https://github.com/leonbloy/pngj</url>
-        <copyright>Copyright Hernán J. González</copyright>
-        <license>Apache Software License 2.0</license>
-    </notice>
-
-    <notice>
+<notice>
         <name>Apache Commons Compress</name>
         <url>https://commons.apache.org/proper/commons-compress/</url>
         <copyright>Copyright The Apache Software Foundation</copyright>
         <license>Apache Software License 2.0</license>
     </notice>
 
-    <notice>
-        <name>Apache Commons Text</name>
-        <url>https://commons.apache.org/proper/commons-text/</url>
-        <copyright>Copyright The Apache Software Foundation</copyright>
-        <license>Apache Software License 2.0</license>
-    </notice>
-
-    <notice>
+<notice>
         <name>Material Files</name>
         <url>https://github.com/zhanghai/MaterialFiles</url>
         <copyright>Copyright 2018 Hai Zhang</copyright>

@@ -69,7 +69,7 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
         val savedForm = savedInstanceState?.getState<SavedForm>()
         viewModel.initialize(
             requireContext(), savedForm?.toForm()
-                ?: ApkSigningForm(args.input, coexistence = args.coexistence),
+                ?: ApkSigningForm(args.input, inputs = args.inputs, editMode = args.editMode, coexistence = args.coexistence),
             savedForm?.wasRunning == true, savedForm?.hadInspection == true
         )
         ApkKeyManagementDialogFragment.setResultListener(this) { result ->
@@ -167,7 +167,7 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
         }
         val coexistence = viewModel.state.value?.form?.coexistence == true
         return builder
-            .setTitle(if (coexistence) R.string.apk_coexistence_title else R.string.apk_signing_title)
+            .setTitle(if (coexistence) R.string.apk_coexistence_title else editorTitle())
             .setView(binding.root)
             .setPositiveButton(
                 if (coexistence) R.string.apk_coexistence_start else R.string.apk_signing_start, null
@@ -416,7 +416,7 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
                     result != null && form.coexistence -> R.string.apk_coexistence_result
                     result != null -> R.string.apk_signing_result
                     form.coexistence -> R.string.apk_coexistence_title
-                    else -> R.string.apk_signing_title
+                    else -> editorTitle()
                 })
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.apply {
                     setText(when {
@@ -524,6 +524,11 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
 
     private fun formatDetails(state: ApkSigningUiState): String = buildString {
         append(getString(R.string.apk_signing_original))
+        if (state.form.inputs.size > 1) {
+            append("\n输入分包（${state.form.inputs.size}）：\n")
+            append(state.form.inputs.joinToString("\n"))
+            append("\n")
+        }
         append('\n')
         append(state.form.input.toUserFriendlyString())
         append("\n\n")
@@ -621,23 +626,40 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
         private val KEY_STORE_FORMATS = listOf("AUTO", "PKCS12", "JKS")
         private val TAG = ApkSigningDialogFragment::class.java.name
 
-        fun show(input: Path, fragment: Fragment, coexistence: Boolean = false) {
-            if (!fragment.isAdded) return
+        fun show(input: Path, fragment: Fragment, coexistence: Boolean = false) =
+            show(listOf(input), fragment, coexistence)
+
+        fun show(inputs: List<Path>, fragment: Fragment, coexistence: Boolean = false,
+                 editMode: ApkEditMode = ApkEditMode.NONE) {
+            if (!fragment.isAdded || inputs.isEmpty()) return
             val manager = fragment.childFragmentManager
             if (manager.isStateSaved || manager.findFragmentByTag(TAG) != null) return
-            ApkSigningDialogFragment().putArgs(Args(input, coexistence)).showNow(manager, TAG)
+            ApkSigningDialogFragment().putArgs(Args(inputs.first(), coexistence, inputs, editMode))
+                .showNow(manager, TAG)
         }
+    }
+
+    private fun editorTitle(): Int = when (viewModel.state.value?.form?.editMode) {
+        ApkEditMode.PROTECT -> R.string.apk_editor_protect
+        ApkEditMode.MERGE -> R.string.apk_editor_merge
+        ApkEditMode.REFACTOR -> R.string.apk_editor_refactor
+        ApkEditMode.BUILD -> R.string.apk_editor_build
+        else -> R.string.apk_signing_title
     }
 
     @Parcelize
     private class Args(
         val input: @WriteWith<ParcelableParceler> Path,
-        val coexistence: Boolean
+        val coexistence: Boolean,
+        val inputs: List<@WriteWith<ParcelableParceler> Path>,
+        val editMode: ApkEditMode
     ) : ParcelableArgs
 
     @Parcelize
     private class SavedForm(
         val input: @WriteWith<ParcelableParceler> Path,
+        val inputs: List<@WriteWith<ParcelableParceler> Path>,
+        val editMode: ApkEditMode,
         val outputName: String,
         val keyStore: @WriteWith<ParcelableParceler> Path?,
         val keyStoreFormat: String,
@@ -653,14 +675,14 @@ class ApkSigningDialogFragment : AppCompatDialogFragment() {
         val hadInspection: Boolean
     ) : ParcelableState {
         constructor(form: ApkSigningForm, wasRunning: Boolean, hadInspection: Boolean) : this(
-            form.input, form.outputName, form.keyStore, form.keyStoreFormat,
+            form.input, form.inputs, form.editMode, form.outputName, form.keyStore, form.keyStoreFormat,
             form.alias, form.v1, form.v2, form.v3, form.coexistence,
             form.targetPackageName,
             form.keyOptionsExpanded, form.useDifferentKeyPassword, wasRunning, hadInspection
         )
 
         fun toForm() = ApkSigningForm(
-            input = input, coexistence = coexistence, targetPackageName = targetPackageName,
+            input = input, inputs = inputs, editMode = editMode, coexistence = coexistence, targetPackageName = targetPackageName,
             outputName = outputName, keyStore = keyStore,
             keyStoreFormat = keyStoreFormat, alias = alias,
             v1 = v1, v2 = v2, v3 = v3,

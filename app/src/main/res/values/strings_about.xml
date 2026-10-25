@@ -36,10 +36,10 @@
     <string name="about_component_apksig_summary">APK 签名与验证</string>
     <string name="about_component_bouncy_castle_title" translatable="false">Bouncy Castle</string>
     <string name="about_component_bouncy_castle_summary">签名证书、加密与密钥库</string>
-    <string name="about_component_apktool_title" translatable="false">Apktool Android</string>
-    <string name="about_component_apktool_summary">APK Manifest 解码与重建</string>
-    <string name="about_component_aapt2_title" translatable="false">AAPT2</string>
-    <string name="about_component_aapt2_summary">APK Manifest 编译</string>
+    <string name="about_component_apkeditor_title" translatable="false">APKEditor</string>
+    <string name="about_component_apkeditor_summary">APK 反编译、回编译、合并、重构、保护与信息</string>
+    <string name="about_component_arsclib_title" translatable="false">ARSCLib</string>
+    <string name="about_component_arsclib_summary">Android 二进制资源与 Manifest 编辑</string>
 
     <string name="about_all_licenses_title">全部组件与许可证</string>
     <string name="about_all_licenses_summary">查看完整开源组件清单及许可声明</string>

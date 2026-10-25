@@ -1,3 +1,5 @@
+> 引擎更新：支持完整 APKS/XAPK/APKM 或多选 base 与同版本 split。签名时自动调用 APKEditor 分包合并，再统一对齐、签名和验签。六项 APK 工具及输入边界见 [APKEditor 工具](apk-editor.md)。
+
 # APK 签名
 
 长按选择一个普通 `.apk` 文件，在底部“更多”菜单选择“APK 签名”。支持读取原始签名、使用已有密钥重新签名、创建签名密钥、配置签名方案、验证并保存独立输出。同时提供基础“制作共存版”，支持范围见 [APK 共存说明](apk-coexistence.md)。本应用最低支持 Android 11（API 30）。

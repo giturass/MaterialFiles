@@ -142,7 +142,8 @@ class ApkSigningViewModel : ViewModel() {
                 val request = ApkSignRequest(
                     form.input, directory, form.outputName, keyStore, form.keyStoreFormat, form.alias,
                     storePassword, actualKeyPassword, inspection.minSdk, form.v1, form.v2, form.v3,
-                    targetPackageName = form.targetPackageName.takeIf { form.coexistence }
+                    targetPackageName = form.targetPackageName.takeIf { form.coexistence },
+                    inputs = form.inputs, editMode = form.editMode
                 )
                 ApkOperations.sign(context, request, ::onProgress)
             }
@@ -172,7 +173,7 @@ class ApkSigningViewModel : ViewModel() {
         val input = form.input
         runOperation(
             ApkSigningOperation.INSPECT, emptyList(),
-            { ApkOperations.inspect(context, input, ::onProgress, form.coexistence) }
+            { ApkOperations.inspect(context, input, ::onProgress, form.coexistence, form.inputs, form.editMode) }
         ) { inspection ->
             _state.update { state ->
                 state?.copy(
@@ -249,7 +250,7 @@ class ApkSigningViewModel : ViewModel() {
 
         fun suggestedOutputName(input: Path, coexistence: Boolean = false): String {
             val name = input.fileName.toString()
-            val baseName = if (name.endsWith(".apk", ignoreCase = true)) name.dropLast(4) else name
+            val baseName = name.substringBeforeLast('.', name)
             return baseName + if (coexistence) "-clone.apk" else "-signed.apk"
         }
     }
@@ -257,9 +258,17 @@ class ApkSigningViewModel : ViewModel() {
 
 data class ApkSigningForm(
     val input: Path,
+    val inputs: List<Path> = listOf(input),
+    val editMode: ApkEditMode = ApkEditMode.NONE,
     val coexistence: Boolean = false,
     val targetPackageName: String = "",
-    val outputName: String = ApkSigningViewModel.suggestedOutputName(input, coexistence),
+    val outputName: String = when (editMode) {
+        ApkEditMode.BUILD -> input.fileName.toString() + "-built.apk"
+        ApkEditMode.PROTECT -> input.fileName.toString().substringBeforeLast('.') + "-protected.apk"
+        ApkEditMode.REFACTOR -> input.fileName.toString().substringBeforeLast('.') + "-refactored.apk"
+        ApkEditMode.MERGE -> input.fileName.toString().substringBeforeLast('.') + "-merged.apk"
+        else -> ApkSigningViewModel.suggestedOutputName(input, coexistence)
+    },
     val keyStore: Path? = null,
     val keyStoreFormat: String = "AUTO",
     val alias: String = "",

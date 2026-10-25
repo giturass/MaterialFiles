@@ -58,7 +58,9 @@ class ApkSignRequest(
     val v1: Boolean,
     val v2: Boolean,
     val v3: Boolean,
-    val targetPackageName: String? = null
+    val targetPackageName: String? = null,
+    val inputs: List<Path> = listOf(input),
+    val editMode: ApkEditMode = ApkEditMode.NONE
 )
 
 data class ApkSignResult(
@@ -66,3 +68,6 @@ data class ApkSignResult(
     val inspection: ApkInspection,
     val coexistenceReport: String? = null
 )
+
+/** All modes except DECODE enter the existing signing and verified publication pipeline. */
+enum class ApkEditMode { NONE, MERGE, REFACTOR, BUILD, PROTECT }
