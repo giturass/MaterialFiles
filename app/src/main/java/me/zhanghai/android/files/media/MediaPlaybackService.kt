@@ -24,6 +24,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -224,13 +225,13 @@ class MediaPlaybackService : MediaSessionService() {
         override fun onCustomCommand(session: MediaSession, controller: MediaSession.ControllerInfo,
             customCommand: SessionCommand, args: Bundle): ListenableFuture<SessionResult> {
             if (controller.packageName != packageName) {
-                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_PERMISSION_DENIED))
+                return Futures.immediateFuture(SessionResult(SessionError.ERROR_PERMISSION_DENIED))
             }
             when (customCommand.customAction) {
                 COMMAND_DECODER -> {
                     val mode = args.getString("mode")
                     if (mode !in listOf("auto", "software", "hardware")) {
-                        return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_BAD_VALUE))
+                        return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
                     }
                     setDecoder(mode!!)
                 }

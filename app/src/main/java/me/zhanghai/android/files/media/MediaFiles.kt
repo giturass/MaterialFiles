@@ -4,12 +4,10 @@ import android.content.Intent
 import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.MimeTypes
 import java.util.Locale
 import java8.nio.file.Path
-import me.zhanghai.android.files.file.MimeType
 import me.zhanghai.android.files.file.fileProviderUri
-import me.zhanghai.android.files.file.isAudio
-import me.zhanghai.android.files.file.isVideo
 import me.zhanghai.android.files.util.extraPathList
 
 object MediaFiles {
@@ -23,12 +21,16 @@ object MediaFiles {
         "mp4", "m4v", "mkv", "webm", "mov", "avi", "3gp", "3g2", "ts", "m2ts", "mts",
         "mpeg", "mpg", "vob", "flv", "wmv", "ogv", "m3u8", "mpd"
     )
+    private val streamingMimeTypes = setOf(
+        MimeTypes.APPLICATION_MPD, MimeTypes.APPLICATION_M3U8, "application/x-mpegurl"
+    )
 
     fun isAudio(name: String, mimeType: String?) =
         mimeType?.startsWith("audio/") == true || extension(name) in audioExtensions
 
     fun isVideo(name: String, mimeType: String?) =
-        mimeType?.startsWith("video/") == true || extension(name) in videoExtensions
+        mimeType?.startsWith("video/") == true || mimeType in streamingMimeTypes
+            || extension(name) in videoExtensions
 
     fun isMedia(name: String, mimeType: String?) = isAudio(name, mimeType) || isVideo(name, mimeType)
 
@@ -43,8 +45,11 @@ object MediaFiles {
             .setMediaId(uri.toString())
             .setUri(uri)
             // Wildcard/unknown MIME types must be sniffed, not treated as containers.
-            .setMimeType(mimeType?.takeIf { it.startsWith("audio/") || it.startsWith("video/") }
-                ?.takeUnless { '*' in it })
+            .setMimeType(mimeType?.takeIf {
+                it.startsWith("audio/") || it.startsWith("video/") || it in streamingMimeTypes
+            }?.takeUnless { '*' in it }?.let {
+                if (it == "application/x-mpegurl") MimeTypes.APPLICATION_M3U8 else it
+            })
             .setMediaMetadata(MediaMetadata.Builder().setTitle(title)
                 .setMediaType(if (video) MediaMetadata.MEDIA_TYPE_MOVIE else MediaMetadata.MEDIA_TYPE_MUSIC)
                 .setIsPlayable(true).build())

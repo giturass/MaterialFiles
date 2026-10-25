@@ -158,12 +158,18 @@ class MediaPlayerActivity : AppActivity() {
         newIntentPending = false
         try {
             val paths = intent.extraPathList
+            val uri = intent.data
             val video = intent.getBooleanExtra(MediaFiles.EXTRA_VIDEO,
                 MediaFiles.isVideo(paths.firstOrNull()?.fileName?.toString()
                     ?: intent.data?.lastPathSegment.orEmpty(), intent.type))
-            val items = if (paths.isNotEmpty()) paths.map { MediaFiles.item(it, video) }
-                else listOf(MediaFiles.item(intent.data ?: return,
-                    intent.data?.lastPathSegment ?: getString(R.string.media_title), video, intent.type))
+            // extraPathList also returns ACTION_VIEW's data as a single fallback path. Keep that
+            // external URI intact so its read grant and streaming MIME reach the service.
+            val externalUri = uri != null && (paths.isEmpty()
+                || (paths.size == 1 && paths[0].toUri().toString() == uri.toString()))
+            val items = if (externalUri) listOf(MediaFiles.item(uri!!,
+                uri.lastPathSegment ?: getString(R.string.media_title), video, intent.type))
+                else paths.map { MediaFiles.item(it, video) }
+            if (items.isEmpty()) return
             val position = intent.getIntExtra(MediaFiles.EXTRA_POSITION, 0).coerceIn(items.indices)
             // Extend external ACTION_VIEW URI grants to the started playback service's lifetime.
             startService(Intent(this, MediaPlaybackService::class.java).apply {

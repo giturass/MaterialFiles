@@ -203,6 +203,7 @@ def main():
         min_sdk = verify_release_platform(badging, abis)
         bass_vendor = Path(__file__).resolve().parents[1] / "third_party/bass"
         bass_sources = json.loads((bass_vendor / "sources.json").read_text())
+        bass_libraries = {}
         for record in bass_sources:
             for source, checksum in record["files"].items():
                 if not source.endswith(".so"):
@@ -210,7 +211,12 @@ def main():
                 name = "lib/arm64-v8a/" + source.rsplit("/", 1)[-1]
                 if name not in names or hashlib.sha256(archive.read(name)).hexdigest() != checksum:
                     raise RuntimeError("Official BASS library missing or changed: " + name)
-        if "res/raw/license_bass.txt" not in names:
+                bass_libraries[name] = checksum
+        bass_notice = (bass_vendor.parent.parent / "app/src/main/res/raw/license_bass.txt").read_bytes()
+        # AAPT2 may shorten resource file paths in an optimized release APK.
+        if ":raw/license_bass" not in resources or not any(
+                archive.read(name) == bass_notice for name in names
+                if name.startswith("res/") and name.endswith(".txt")):
             raise RuntimeError("BASS offline license notice is missing")
         engine_libraries = {}
         property_libraries = {}
@@ -265,6 +271,10 @@ def main():
         "archive_property_bridge_libraries": property_libraries,
         "sora_activity_registered": True,
         "old_editor_activity_removed": True,
+        "media_player_components_registered": True,
+        "media_playback_foreground_permission_checked": True,
+        "bass_official_library_checksums": bass_libraries,
+        "bass_offline_notice_checked": True,
         "source_assets_verified": len(sources),
         "pinned_asset_checksums_verified": len(provenance["files"]),
         "jcodings_runtime_tables": tables,
