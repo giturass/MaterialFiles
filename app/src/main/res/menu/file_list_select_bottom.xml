@@ -66,7 +66,7 @@
         android:title="@string/share"
         app:showAsAction="never" />
 
-    <item android:id="@+id/action_decode_apk" android:orderInCategory="190"
+    <item android:id="@+id/action_decode_apk" android:orderInCategory="200"
         android:title="@string/apk_editor_decode" android:visible="false" app:showAsAction="never" />
 
     <item android:id="@+id/action_build_apk" android:orderInCategory="190"
@@ -75,14 +75,11 @@
     <item android:id="@+id/action_merge_apk" android:orderInCategory="190"
         android:title="@string/apk_editor_merge" android:visible="false" app:showAsAction="never" />
 
-    <item android:id="@+id/action_refactor_apk" android:orderInCategory="190"
+    <item android:id="@+id/action_refactor_apk" android:orderInCategory="200"
         android:title="@string/apk_editor_refactor" android:visible="false" app:showAsAction="never" />
 
-    <item android:id="@+id/action_protect_apk" android:orderInCategory="190"
+    <item android:id="@+id/action_protect_apk" android:orderInCategory="200"
         android:title="@string/apk_editor_protect" android:visible="false" app:showAsAction="never" />
-
-    <item android:id="@+id/action_info_apk" android:orderInCategory="190"
-        android:title="@string/apk_editor_info" android:visible="false" app:showAsAction="never" />
 
     <item
         android:id="@+id/action_sign_apk"
@@ -97,6 +94,9 @@
         android:title="@string/apk_coexistence_title"
         android:visible="false"
         app:showAsAction="never" />
+
+    <item android:id="@+id/action_info_apk" android:orderInCategory="200"
+        android:title="@string/apk_editor_info" android:visible="false" app:showAsAction="never" />
 
     <item
         android:id="@+id/action_copy_path"
