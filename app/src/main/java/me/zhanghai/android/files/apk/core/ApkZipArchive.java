@@ -152,6 +152,10 @@ final class ApkZipArchive {
         }
     }
 
+    void requireExpandedLimit(long maximum) throws IOException {
+        if (expandedSize > maximum) throw new IOException("ZIP expanded size exceeds the supported limit");
+    }
+
     void validateContents(File file, ApkOperationCallback callback) throws IOException {
         byte[] buffer = new byte[ApkIo.BUFFER_SIZE];
         long completed = 0;

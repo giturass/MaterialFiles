@@ -191,7 +191,10 @@ public final class ApkEditorService {
     }
 
     public void build(File directory, File output, ApkOperationCallback callback) throws IOException {
-        validateTree(directory, callback);
+        List<File> files = validateTree(directory, callback);
+        for (File file : files) {
+            if (file.isFile() && file.getName().endsWith(".xml")) validateProjectXml(file, callback);
+        }
         if (!new File(directory, "AndroidManifest.xml").isFile()) {
             throw new IOException("请选择 APKEditor 反编译得到、包含 AndroidManifest.xml 的项目目录。");
         }
@@ -209,6 +212,26 @@ public final class ApkEditorService {
             write(module, output, callback);
         } catch (Cancelled error) { throw error.io; }
         catch (OutOfMemoryError error) { throw new IOException("内存不足，无法回编译此项目。", error); }
+    }
+
+    private static void validateProjectXml(File file, ApkOperationCallback callback) throws IOException {
+        if (file.length() > 16L * 1024 * 1024) throw new IOException("项目 XML 超过 16 MiB：" + file.getName());
+        try (InputStream input = new FileInputStream(file)) {
+            org.xmlpull.v1.XmlPullParser parser = com.reandroid.xml.XMLFactory.newPullParser(input);
+            int count = 0, event;
+            while ((event = parser.nextToken()) != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
+                check(callback);
+                if (event == org.xmlpull.v1.XmlPullParser.DOCDECL) {
+                    throw new IOException("项目 XML 不支持 DTD 声明：" + file.getName());
+                }
+                if (event == org.xmlpull.v1.XmlPullParser.START_TAG
+                        && (++count > 50000 || parser.getDepth() > 128 || parser.getAttributeCount() > 1024)) {
+                    throw new IOException("项目 XML 结构超过处理上限：" + file.getName());
+                }
+            }
+        } catch (org.xmlpull.v1.XmlPullParserException error) {
+            throw new IOException("项目 XML 无效：" + file.getName(), error);
+        }
     }
 
     public void refactor(File input, File output, ApkOperationCallback callback) throws IOException {

@@ -175,6 +175,16 @@ public final class ApkEditorTest {
         File projectZip = new File(work,"project.zip");
         EDITOR.zipProject(project, projectZip, NONE);
         try (ZipFile zip = new ZipFile(projectZip)) { require(zip.getEntry("AndroidManifest.xml") != null, "project archive"); }
+        File unsafeProject = new File(work,"unsafe-project");
+        require(unsafeProject.mkdir(),"prepare hostile project fixture");
+        Files.writeString(new File(unsafeProject,"AndroidManifest.xml").toPath(),
+                "<!DOCTYPE manifest [<!ENTITY file SYSTEM 'file:///etc/passwd'>]>"
+                + "<manifest package='com.example.test'>&file;</manifest>");
+        fail(() -> EDITOR.build(unsafeProject,new File(work,"unsafe-project.apk"),NONE));
+        File linkedProject = new File(work,"linked-project");
+        require(linkedProject.mkdir(),"prepare symlink project fixture");
+        Files.createSymbolicLink(new File(linkedProject,"outside").toPath(),golden.toPath());
+        fail(() -> EDITOR.validateTree(linkedProject,NONE));
         File keyFile = new File(work,"key.p12");
         char[] password = "public-test-password".toCharArray();
         try (SigningKeyStoreService.SigningKey key = new SigningKeyStoreService().generate(keyFile,

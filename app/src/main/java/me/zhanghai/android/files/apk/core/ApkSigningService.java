@@ -25,7 +25,9 @@ public final class ApkSigningService {
 
     public void validateContainer(File input, ApkOperationCallback callback) throws IOException {
         callback = ApkIo.callback(callback);
-        ApkZipArchive.inspect(ApkIo.input(input), callback, false).validateContents(input, callback);
+        ApkZipArchive archive = ApkZipArchive.inspect(ApkIo.input(input), callback, false);
+        archive.requireExpandedLimit(1024L * 1024 * 1024);
+        archive.validateContents(input, callback);
     }
 
     public void validateInput(File input, ApkOperationCallback callback) throws IOException {
