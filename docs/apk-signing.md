@@ -20,7 +20,7 @@
 
 重新签名不会保留原开发者的数字签名身份。使用不同密钥一般不能更新已安装的原版，还可能影响签名权限、证书自检、第三方登录或服务端登记。签名验证通过不能证明应用已经安装或能够正常运行。
 
-首期只处理自包含的单体 APK。读取二进制 Manifest 检查 `split`、`configForSplit`、`isFeatureSplit`、`isSplitRequired`、`requiredSplitTypes`、`uses-split` 及 Play 的 splits-required 元数据，拒绝需要其他拆分包的输入；APKS/XAPK/APKM 等容器不是单体 APK。Android 无法解析其应用信息、损坏的 ZIP、异常路径、重复/重叠条目、符号链接、ZIP64 和分卷包也会在发布前失败。这里不验证 DEX/JNI 的业务逻辑。
+支持自包含的单体 APK，以及完整 APKS/XAPK/APKM 容器或多选的同版本 base/split。分包先由 APKEditor 合并，再统一签名；只选缺少依赖的 base/split 会提示补齐。读取二进制 Manifest 检查 `split`、`configForSplit`、`isFeatureSplit`、`isSplitRequired`、`requiredSplitTypes`、`uses-split` 及 Play 的 splits-required 元数据，合并输出仍包含分包依赖时会拒绝发布。Android 无法解析其应用信息、损坏的 ZIP、异常路径、重复/重叠条目、符号链接、ZIP64 和分卷包也会在发布前失败。这里不验证 DEX/JNI 的业务逻辑。
 
 APK 使用流式复制与摘要；文件受 ZIP32 的约 4 GiB 上限约束，Manifest 上限 16 MiB，ZIP 元数据上限 32 MiB，展开条目总量上限 8 GiB。密钥库上限 16 MiB / 1024 项，JKS 证书链和口令派生参数另有上限；不支持的格式会有错误信息。输入需提供已知文件大小，本地符号链接不能直接作为输入。
 
