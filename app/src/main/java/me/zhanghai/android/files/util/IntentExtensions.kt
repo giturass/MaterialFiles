@@ -23,6 +23,8 @@ import me.zhanghai.android.files.file.fileProviderUri
 import me.zhanghai.android.files.file.intentType
 import me.zhanghai.android.files.filejob.OpenCacheManager
 import me.zhanghai.android.files.viewer.text.SoraEditorActivity
+import me.zhanghai.android.files.media.MediaFiles
+import me.zhanghai.android.files.media.MediaPlayerActivity
 import kotlin.reflect.KClass
 
 fun <T : Context> KClass<T>.createIntent(): Intent = Intent(application, java)
@@ -179,7 +181,10 @@ fun Path.createViewIntent(mimeType: MimeType, useInternalEditor: Boolean = true)
             extraPath = this@createViewIntent
             if (useInternalEditor) {
                 val name = this@createViewIntent.fileName?.toString().orEmpty()
-                if (name.endsWith(".txt", ignoreCase = true)
+                if (MediaFiles.isMedia(name, mimeType.value)) {
+                    setClass(application, MediaPlayerActivity::class.java)
+                    putExtra(MediaFiles.EXTRA_VIDEO, MediaFiles.isVideo(name, mimeType.value))
+                } else if (name.endsWith(".txt", ignoreCase = true)
                     || name.endsWith(".md", ignoreCase = true)) {
                     setClass(application, SoraEditorActivity::class.java)
                 }

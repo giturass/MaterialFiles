@@ -2,7 +2,7 @@ name: Release APK
 
 on:
   push:
-    branches: [master, codex/apkeditor]
+    branches: [master, codex/apkeditor, codex/media-player]
   workflow_dispatch:
 
 permissions:
@@ -30,6 +30,9 @@ jobs:
 
       - name: Test HTTP management page behavior
         run: node --test tests/http-server-page.test.cjs
+
+      - name: Verify pinned media libraries
+        run: python3 tools/verify_media_vendor.py
 
       - name: Set up JDK 21
         uses: actions/setup-java@v5

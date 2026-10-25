@@ -1,0 +1,45 @@
+<resources>
+    <string name="media_title">媒体播放器</string>
+    <string name="about_component_media3_title">Media3 / ExoPlayer</string>
+    <string name="about_component_media3_summary">视频、音频播放与系统媒体控制。</string>
+    <string name="about_component_bass_title">BASS 音频库</string>
+    <string name="about_component_bass_summary">ALAC、APE 等音频的解码兜底；专有库，非商业免费。</string>
+    <string name="media_notification_channel">媒体播放</string>
+    <string name="media_video_title">视频播放器</string>
+    <string name="media_audio_title">音频播放器</string>
+    <string name="media_speed">倍速播放</string>
+    <string name="media_loop">循环播放</string>
+    <string name="media_rotate">旋转屏幕</string>
+    <string name="media_aspect">画幅调节</string>
+    <string name="media_decoder">解码方式</string>
+    <string name="media_audio_track">音轨</string>
+    <string name="media_subtitles">字幕</string>
+    <string name="media_add_subtitle">加载外部字幕</string>
+    <string name="media_background">后台播放</string>
+    <string name="media_pip">画中画</string>
+    <string name="media_playlist">播放列表</string>
+    <string name="media_close">停止播放并关闭</string>
+    <string name="media_play">播放</string>
+    <string name="media_pause">暂停</string>
+    <string name="media_previous">上一首</string>
+    <string name="media_next">下一首</string>
+    <string name="media_expand">展开</string>
+    <string name="media_collapse">收起</string>
+    <string name="media_cover">专辑封面</string>
+    <string name="media_track_auto">自动选择</string>
+    <string name="media_track_off">关闭字幕</string>
+    <string name="media_track_number">轨道 %1$d</string>
+    <string name="media_connect_error">无法连接播放服务</string>
+    <string name="media_open_error">无法打开媒体：%1$s</string>
+    <string name="media_play_error">播放失败：%1$s。点击重试。</string>
+    <string name="media_subtitle_unsupported">请选择 SRT、WebVTT、ASS、SSA 或 TTML 字幕。</string>
+    <string-array name="media_loop_modes">
+        <item>关闭循环</item><item>单曲循环</item><item>列表循环</item>
+    </string-array>
+    <string-array name="media_aspect_modes">
+        <item>原始画幅</item><item>裁剪铺满</item><item>拉伸铺满</item><item>16:9</item><item>4:3</item>
+    </string-array>
+    <string-array name="media_decoder_modes">
+        <item>自动（优先硬解）</item><item>软件解码</item><item>硬件解码</item>
+    </string-array>
+</resources>

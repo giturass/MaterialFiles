@@ -8,6 +8,19 @@
 <notices>
 
     <notice>
+        <name>AndroidX Media3 / ExoPlayer</name>
+        <url>https://github.com/androidx/media</url>
+        <copyright>Copyright The Android Open Source Project</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+    <notice>
+        <name>BASS / BASSALAC / BASSAPE / BASSWV / BASSFLAC / BASSOPUS / BASSDSD</name>
+        <url>https://www.un4seen.com/</url>
+        <copyright>Copyright Un4seen Developments and codec authors. Proprietary; free for non-commercial use. This library is not covered by the application GPL license.</copyright>
+        <license>BASS non-commercial license</license>
+    </notice>
+
+    <notice>
         <name>APKEditor / ARSCLib / JCommand</name>
         <url>https://github.com/REAndroid/APKEditor</url>
         <copyright>Copyright REAndroid and contributors; Android framework data Copyright The Android Open Source Project. Bundled license texts: META-INF/materialfiles-apkeditor/</copyright>

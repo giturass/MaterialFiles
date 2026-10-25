@@ -123,6 +123,14 @@ class AboutFragment : Fragment() {
 
         private val COMPONENT_LINKS = listOf(
             Link(
+                R.drawable.video_icon_white_24dp, R.string.about_component_media3_title,
+                R.string.about_component_media3_summary, "https://github.com/androidx/media"
+            ),
+            Link(
+                R.drawable.media_music, R.string.about_component_bass_title,
+                R.string.about_component_bass_summary, "https://www.un4seen.com/"
+            ),
+            Link(
                 R.drawable.file_code_icon, R.string.about_component_sora_title,
                 R.string.about_component_sora_summary, "https://github.com/Rosemoe/sora-editor"
             ),

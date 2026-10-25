@@ -30,6 +30,7 @@ class LicensesDialogFragment : AppCompatDialogFragment() {
         LicenseResolver.registerLicense(BouncyCastleLicense())
         LicenseResolver.registerLicense(EclipsePublicLicense20())
         LicenseResolver.registerLicense(SevenZipLicense())
+        LicenseResolver.registerLicense(BassLicense())
         notices = if (savedInstanceState != null) {
             savedInstanceState.getState<State>().notices
         } else {

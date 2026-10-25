@@ -1,0 +1,59 @@
+[
+  {
+    "url": "https://www.un4seen.com/files/bass24-android.zip",
+    "archiveSha256": "236c9017728a910dfe74e79d36d98ad6784f3558c21e8812cfcbafe9bd0fef41",
+    "files": {
+      "libs/arm64-v8a/libbass.so": "9a761481e30d44a2a96df1f0986f2aab629be469a6b2fcfdf043923a1f18e365",
+      "bass.txt": "e2a6a97c41892f9df78c367e7901cbe2262843e80edd23882b721f50f7a9de4b",
+      "java/com/un4seen/bass/BASS.java": "d35e0bef968f9bd82e8cec1db03e8ac18342fa047aea81c4a7ce537cfc0ea0de"
+    }
+  },
+  {
+    "url": "https://www.un4seen.com/files/bassalac24-android.zip",
+    "archiveSha256": "8ca58d4f3d1cf85557bb7a77e36288b1e45ef152dfed10e58db7cfed62c47a46",
+    "files": {
+      "libs/arm64-v8a/libbassalac.so": "522744ddad085762bf76b69c7e5c39a9b770d18c23e206732eb2263ff3c833b3",
+      "bassalac.txt": "57df6bfd0b31dd4f963aa4c2a71872e632f73741190d7387e8ddb6d60ea26660"
+    }
+  },
+  {
+    "url": "https://www.un4seen.com/files/bassape24-android.zip",
+    "archiveSha256": "b0e3ea16204defcb2df4bc638ed1d195c0d9fb1608ce1dc3b31e334a28291b87",
+    "files": {
+      "libs/arm64-v8a/libbassape.so": "f783fa2b56360ebfe523d1f3c09982fbc6b4c1d6d206393009c08190e1698b6d",
+      "bassape.txt": "34fbf1952a5bab9748a44846635d555252e23f6e1cbabd39dc5b6107b2f9cd57"
+    }
+  },
+  {
+    "url": "https://www.un4seen.com/files/bassdsd24-android.zip",
+    "archiveSha256": "96745aab0ef141b1a113454254082be433aeb3b6f5ae691c5f86c6c7d195ba64",
+    "files": {
+      "libs/arm64-v8a/libbassdsd.so": "80a647e7f5ed30eb9269875c9b9b9b7d26234f1de253a2fa355d8d94f19124aa",
+      "bassdsd.txt": "06ab33aaaca00b45b254ce44a5c0174685a2b092f559e8ffe8fb86982ce58da1"
+    }
+  },
+  {
+    "url": "https://www.un4seen.com/files/bassflac24-android.zip",
+    "archiveSha256": "59c62fd60185450e157e727910be2460a0f66dedd2d6ea1bb3f1c80657dd0da8",
+    "files": {
+      "libs/arm64-v8a/libbassflac.so": "67441c26167bc5619aa145a8e011f87a69384974f772a5773fe3622b1fce8ceb",
+      "bassflac.txt": "228227cb203ccff945f18cf5e1240681103e4beaf26aa0e8fb0bef1932b81b49"
+    }
+  },
+  {
+    "url": "https://www.un4seen.com/files/bassopus24-android.zip",
+    "archiveSha256": "76d3cb4ae8799d12d5c8f0138453b8834df7173a66d88e56b47c75a5e4518945",
+    "files": {
+      "libs/arm64-v8a/libbassopus.so": "789309efbdc193913ea09c9a94cc1aece7164b3bec0cfe92df2b2532a379044b",
+      "bassopus.txt": "61f4bec13162e133c6d029eb3bc10075a412dab4ebb94d7c21bc5468fe9204ca"
+    }
+  },
+  {
+    "url": "https://www.un4seen.com/files/basswv24-android.zip",
+    "archiveSha256": "32fe950ece5a6d1ea4f3c52e19f89841e6625331381708a8d7e8558c10a58fba",
+    "files": {
+      "libs/arm64-v8a/libbasswv.so": "20fbf5101cc94c1dcd704de67d9abf14d2e0c7d18baef9c321cd23c9174b23a5",
+      "basswv.txt": "7ed46ed1f088ba834e150dafdf28ed9904aac1e0de5615152eddd163f6df8922"
+    }
+  }
+]

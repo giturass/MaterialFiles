@@ -187,6 +187,11 @@ def main():
         raise RuntimeError("Sora editor activity is missing from the APK manifest")
     if "me.zhanghai.android.files.viewer.text.TextEditorActivity" in tree:
         raise RuntimeError("The old text editor activity is still registered")
+    for component in ("MediaPlayerActivity", "MediaPlaybackService"):
+        if "me.zhanghai.android.files.media." + component not in tree:
+            raise RuntimeError("Media player component missing: " + component)
+    if "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" not in tree:
+        raise RuntimeError("Media playback foreground service permission is missing")
 
     assets = Path(__file__).resolve().parents[1] / "app/src/main/assets/sora"
     provenance = json.loads((assets / "sources.json").read_text(encoding="utf-8"))
@@ -196,6 +201,17 @@ def main():
         abis = sorted({name.split("/")[1] for name in names
                        if name.startswith("lib/") and name.endswith(".so")})
         min_sdk = verify_release_platform(badging, abis)
+        bass_vendor = Path(__file__).resolve().parents[1] / "third_party/bass"
+        bass_sources = json.loads((bass_vendor / "sources.json").read_text())
+        for record in bass_sources:
+            for source, checksum in record["files"].items():
+                if not source.endswith(".so"):
+                    continue
+                name = "lib/arm64-v8a/" + source.rsplit("/", 1)[-1]
+                if name not in names or hashlib.sha256(archive.read(name)).hexdigest() != checksum:
+                    raise RuntimeError("Official BASS library missing or changed: " + name)
+        if "res/raw/license_bass.txt" not in names:
+            raise RuntimeError("BASS offline license notice is missing")
         engine_libraries = {}
         property_libraries = {}
         for abi in abis:

@@ -2,6 +2,8 @@
 
 基于 [Material Files](https://github.com/zhanghai/MaterialFiles) 的 `c9b29cb3`（1.7.5）。
 
+- 新增 Media3 1.11.1 内置视频/音频播放器，支持同目录播放列表、软硬解选择、循环、倍速、横竖屏、画幅、音轨、内置/外部字幕、画中画与后台播放。音频先使用 ExoPlayer，不支持时由官方 BASS 及 ALAC/APE/WavPack/FLAC/Opus/DSD 插件解码为 PCM，继续复用 ExoPlayer 输出与控制。ColorOS 音乐流体云参考 VLC 使用标准 MediaSession + MediaStyle，由系统媒体控制器显示；应用内提供可收起音频胶囊。范围、依赖许可和验证见 [媒体播放器](docs/media-player.md)。
+
 - 文件浏览仅保留列表，移除网格入口、布局和视图类型设置；原有全局和各文件夹的排序设置继续可用。
 - 打开 Android/data、Android/obb 及其子目录时优先使用 Root，其次请求 Shizuku 授权；不可用或被拒绝时转到系统 DocumentsUI，普通模式也使用此流程。移除“添加存储空间”中的 Android/data、Android/obb 项；已有快捷方式继续使用相同的访问流程。
 - 文件与文件夹名称显示在第一行；第二行左侧显示文件夹的直接子项数量或文件大小，右侧按本地时区显示 `yyyy/MM/dd HH:mm`。文件夹项数在后台读取并缓存，无法读取时显示“—”。

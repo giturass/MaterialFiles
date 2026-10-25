@@ -83,3 +83,6 @@
 # The optional upstream JF smali engine includes desktop-only ANTLR debugging tools.
 -dontwarn java.awt.**
 -dontwarn javax.swing.**
+
+# BASS resolves the official Java API and its nested classes from JNI.
+-keep class com.un4seen.bass.** { *; }

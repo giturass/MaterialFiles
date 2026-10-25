@@ -1516,7 +1516,28 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
             FileJobService.open(path, mimeType, withChooser, requireContext())
         } else {
             val intent = path.createViewIntent(mimeType, useInternalEditor = !withChooser)
-                .apply { maybeAddImageViewerActivityExtras(this, path, mimeType) }
+                .apply {
+                    maybeAddImageViewerActivityExtras(this, path, mimeType)
+                    if (!withChooser && component?.className ==
+                        me.zhanghai.android.files.media.MediaPlayerActivity::class.java.name) {
+                        val video = me.zhanghai.android.files.media.MediaFiles.isVideo(
+                            path.fileName?.toString().orEmpty(), mimeType.value)
+                        val paths = (0 until adapter.itemCount).map { adapter.getItem(it) }
+                            .filter { !it.attributes.isDirectory &&
+                                (if (video) me.zhanghai.android.files.media.MediaFiles.isVideo(
+                                    it.path.fileName?.toString().orEmpty(), it.mimeType.value)
+                                else me.zhanghai.android.files.media.MediaFiles.isAudio(
+                                    it.path.fileName?.toString().orEmpty(), it.mimeType.value)) }
+                            .map { it.path }
+                        val index = paths.indexOf(path)
+                        if (index >= 0) {
+                            val start = (index - 100).coerceIn(0, (paths.size - 200).coerceAtLeast(0))
+                            val end = (start + 200).coerceAtMost(paths.size)
+                            me.zhanghai.android.files.media.MediaFiles.putPlaylist(
+                                this, paths.subList(start, end), index - start, video)
+                        }
+                    }
+                }
                 .let {
                     if (withChooser) {
                         it.withChooser(
