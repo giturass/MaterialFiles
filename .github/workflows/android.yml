@@ -2,7 +2,7 @@ name: Release APK
 
 on:
   push:
-    branches: [master]
+    branches: [master, codex/apkeditor]
   workflow_dispatch:
 
 permissions:

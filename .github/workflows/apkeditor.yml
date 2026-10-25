@@ -1,0 +1,46 @@
+name: APKEditor validation
+on:
+  push:
+    branches: [master, codex/apkeditor]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify APKEditor source and dependencies
+        run: python3 third_party/apkeditor/verify_vendor.py
+      - name: Test binary edits, split merges, XML and Smali round trips and signatures
+        run: python3 tools/verify_apk_signing.py
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-37.2 build-tools;37.0.0'
+      - name: Prepare device regression harness without building on the device
+        run: |
+          python3 tools/verify_apk_signing_android.py \
+            --prepare-minified-harness "$HOME/tmp/materialfiles-apk-harness" \
+            --android-jar "$ANDROID_HOME/platforms/android-37.2/android.jar" \
+            --d8-jar "$ANDROID_HOME/build-tools/37.0.0/lib/d8.jar"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: apk-verification-art-harness-${{ github.sha }}
+          path: |
+            ~/tmp/materialfiles-apk-harness/minified-verification-test-dex.jar
+            ~/tmp/materialfiles-apk-harness/harness.json
+            ~/tmp/materialfiles-apk-harness/fixtures/
+          retention-days: 30
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: apkeditor-engine-fixtures-${{ github.sha }}
+          path: ~/tmp/materialfiles-apk-tools/test-runs/
+          if-no-files-found: ignore
+          retention-days: 7

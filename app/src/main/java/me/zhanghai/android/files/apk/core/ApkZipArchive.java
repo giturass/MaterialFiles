@@ -6,6 +6,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
@@ -19,30 +20,39 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.zip.CRC32;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
+import java.util.zip.Inflater;
+import java.util.zip.InflaterInputStream;
 
 /**
  * Bounded ZIP32 validation and raw-entry alignment. Compressed entry bytes are never recompressed.
  * APK signing blocks disappear when the local records and central directory are rewritten.
  */
-final class ApkZipArchive {
+public final class ApkZipArchive {
     private static final long UINT32_MAX = 0xffffffffL;
     private static final long MAX_EXPANDED_SIZE = 8L * 1024 * 1024 * 1024;
     private static final int ALIGNMENT_EXTRA_ID = 0xd935;
     private static final int NATIVE_ALIGNMENT = 16 * 1024;
 
-    final List<Entry> entries;
+    public final List<Entry> entries;
     private final byte[] endRecord;
     private final long expandedSize;
 
     private ApkZipArchive(List<Entry> entries, byte[] endRecord, long expandedSize) {
-        this.entries = entries;
+        this.entries = Collections.unmodifiableList(entries);
         this.endRecord = endRecord;
         this.expandedSize = expandedSize;
     }
 
-    static ApkZipArchive inspect(File file, ApkOperationCallback callback) throws IOException {
+    public static ApkZipArchive inspect(File file, ApkOperationCallback callback) throws IOException {
+        return inspect(file, callback, true);
+    }
+
+    static ApkZipArchive inspectContainer(File file, ApkOperationCallback callback) throws IOException {
+        return inspect(file, callback, false);
+    }
+
+    private static ApkZipArchive inspect(File file, ApkOperationCallback callback, boolean requireManifest)
+            throws IOException {
         ApkIo.check(callback);
         try (RandomAccessFile input = new RandomAccessFile(file, "r")) {
             long length = input.length();
@@ -93,7 +103,12 @@ final class ApkZipArchive {
                 byte[] nameBytes = new byte[nameLength];
                 input.readFully(nameBytes);
                 String name = decodeName(nameBytes);
-                checkName(name);
+                if (name.isEmpty() || name.indexOf('\0') != -1) {
+                    throw new IOException("APK contains an invalid entry name");
+                }
+                // APK resource names are ZIP keys, not paths to extract. APKEditor deliberately
+                // uses absolute names, repeated separators and backslashes. Preserve them verbatim.
+                if (!requireManifest) checkExtractionName(name);
                 if (!names.add(name)) throw new IOException("APK contains duplicate entry: " + name);
                 byte[] extra = new byte[extraLength];
                 input.readFully(extra);
@@ -131,7 +146,7 @@ final class ApkZipArchive {
                 position = nextPosition;
             }
             if (position != endFileOffset) throw new IOException("APK directory length is inconsistent");
-            if (!names.contains("AndroidManifest.xml")) {
+            if (requireManifest && !names.contains("AndroidManifest.xml")) {
                 throw new IOException("Input is not a standalone APK: AndroidManifest.xml is missing");
             }
             List<Entry> byOffset = new ArrayList<>(entries);
@@ -147,39 +162,83 @@ final class ApkZipArchive {
         }
     }
 
+    void requireExpandedLimit(long maximum) throws IOException {
+        if (expandedSize > maximum) throw new IOException("ZIP expanded size exceeds the supported limit");
+    }
+
     void validateContents(File file, ApkOperationCallback callback) throws IOException {
-        byte[] buffer = new byte[ApkIo.BUFFER_SIZE];
         long completed = 0;
-        try (ZipFile zip = new ZipFile(file)) {
+        try (RandomAccessFile input = new RandomAccessFile(file, "r")) {
             for (Entry entry : entries) {
                 ApkIo.check(callback);
-                ZipEntry zipEntry = zip.getEntry(entry.name);
-                if (zipEntry == null || zipEntry.getSize() != entry.size
-                        || zipEntry.getCompressedSize() != entry.compressedSize
-                        || zipEntry.getCrc() != entry.crc || zipEntry.getMethod() != entry.method) {
-                    throw new IOException("Ambiguous ZIP entry: " + entry.name);
-                }
-                CRC32 crc = new CRC32();
-                long actualSize = 0;
-                try (InputStream input = zip.getInputStream(zipEntry)) {
-                    int count;
-                    while ((count = input.read(buffer)) != -1) {
-                        ApkIo.check(callback);
-                        actualSize += count;
-                        if (actualSize > entry.size) {
-                            throw new IOException("APK entry expands beyond its declared size: " + entry.name);
-                        }
-                        crc.update(buffer, 0, count);
-                        completed += count;
-                        callback.onProgress("inspect", completed, expandedSize);
-                    }
-                }
-                if (actualSize != entry.size || crc.getValue() != entry.crc) {
-                    throw new IOException("APK entry data is corrupt: " + entry.name);
-                }
+                completed = readContents(input, entry, null, callback, completed);
             }
         }
         ApkIo.check(callback);
+    }
+
+    /** Read bounded metadata without Android ZipFile's filesystem-path policy for entry names. */
+    public byte[] readEntry(File file, String name, int maximum, ApkOperationCallback callback)
+            throws IOException {
+        for (Entry entry : entries) {
+            if (!entry.name.equals(name)) continue;
+            if (entry.size > maximum) throw new IOException("Oversized APK entry: " + name);
+            try (RandomAccessFile input = new RandomAccessFile(file, "r");
+                    ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+                readContents(input, entry, output, callback, 0);
+                return output.toByteArray();
+            }
+        }
+        throw new IOException("Missing APK entry: " + name);
+    }
+
+    private long readContents(RandomAccessFile input, Entry entry, OutputStream output,
+            ApkOperationCallback callback, long completed) throws IOException {
+        ApkIo.check(callback);
+        input.seek(entry.dataOffset);
+        InputStream raw = new InputStream() {
+            private long remaining = entry.compressedSize;
+            @Override public int read() throws IOException {
+                byte[] value = new byte[1];
+                return read(value, 0, 1) == -1 ? -1 : value[0] & 255;
+            }
+            @Override public int read(byte[] bytes, int offset, int length) throws IOException {
+                if (length == 0) return 0;
+                if (remaining == 0) return -1;
+                int count = (int) Math.min(length, remaining);
+                input.readFully(bytes, offset, count);
+                remaining -= count;
+                return count;
+            }
+        };
+        Inflater inflater = entry.method == 8 ? new Inflater(true) : null;
+        CRC32 crc = new CRC32();
+        long actualSize = 0;
+        byte[] buffer = new byte[ApkIo.BUFFER_SIZE];
+        try (InputStream contents = inflater == null ? raw
+                : new InflaterInputStream(raw, inflater, ApkIo.BUFFER_SIZE)) {
+            int count;
+            while ((count = contents.read(buffer)) != -1) {
+                ApkIo.check(callback);
+                actualSize += count;
+                if (actualSize > entry.size) {
+                    throw new IOException("APK entry expands beyond its declared size: " + entry.name);
+                }
+                crc.update(buffer, 0, count);
+                if (output != null) output.write(buffer, 0, count);
+                completed += count;
+                callback.onProgress("inspect", completed, expandedSize);
+            }
+            if (actualSize != entry.size || crc.getValue() != entry.crc
+                    || (inflater != null && (!inflater.finished()
+                    || inflater.getBytesRead() != entry.compressedSize))) {
+                throw new IOException("APK entry data is corrupt: " + entry.name);
+            }
+        } finally {
+            if (inflater != null) inflater.end();
+        }
+        ApkIo.check(callback);
+        return completed;
     }
 
     void writeAligned(File source, File destination, ApkOperationCallback callback) throws IOException {
@@ -272,7 +331,7 @@ final class ApkZipArchive {
         }
     }
 
-    private static void checkName(String name) throws IOException {
+    private static void checkExtractionName(String name) throws IOException {
         if (name.isEmpty() || name.startsWith("/") || name.indexOf('\\') != -1
                 || name.indexOf(':') != -1 || name.indexOf('\0') != -1) {
             throw new IOException("APK contains an unsafe entry path");
@@ -325,8 +384,8 @@ final class ApkZipArchive {
         put16(bytes, offset + 2, (int) (value >>> 16));
     }
 
-    static final class Entry {
-        final String name;
+    public static final class Entry {
+        public final String name;
         final byte[] nameBytes;
         final byte[] centralHeader;
         final byte[] centralExtra;
@@ -335,7 +394,7 @@ final class ApkZipArchive {
         final int method;
         final long crc;
         final long compressedSize;
-        final long size;
+        public final long size;
         final long localOffset;
         byte[] localHeader;
         byte[] localExtra;

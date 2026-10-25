@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="apk_editor_decode">APK 反编译</string>
+    <string name="apk_editor_merge">APK 分包合并</string>
+    <string name="apk_editor_refactor">APK 资源重构</string>
+    <string name="apk_editor_build">APK 回编译</string>
+    <string name="apk_editor_merging">正在合并 APK 分包…</string>
+    <string name="apk_editor_refactoring">正在重构资源名称…</string>
+    <string name="apk_editor_decode_description">反编译资源 XML 和 Smali，保存到原目录的 ZIP 文件。解压编辑后，选择项目文件夹即可回编译。</string>
+    <string name="apk_editor_output">输出 ZIP 文件名</string>
+    <string name="apk_editor_decode_done">反编译完成：\n%1$s</string>
+    <string name="apk_editor_inputs">已选择 %1$d 个文件</string>
+    <string name="apk_editor_protect">APK 资源保护</string>
+    <string name="apk_editor_info">APK 信息</string>
+    <string name="apk_editor_protecting">正在保护 APK 资源…</string>
+</resources>

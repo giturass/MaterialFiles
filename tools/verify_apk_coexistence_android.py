@@ -1,18 +1,9 @@
 #!/usr/bin/env python3
-"""Build a real small APK and test the production coexistence code on Android ART.
+"""Test the packaged ARSCLib coexistence engine on Android ART.
 
-Only the test harness is converted to DEX. The implementation, Apktool, crypto
-libraries, native aapt2 and runtime resources come from the actual built debug
-APK. No dependencies are downloaded. Generated files, disposable test keys and
-diagnostics stay below ~/tmp. Original/clone APKs are retained for inspection.
-The fixture carries small ELF libraries copied from the tested APK only to check
-byte preservation; no fixture native library is loaded or functionally tested.
-
-ART uses an extracted copy of the APK's aapt2 in the Termux test workspace. This
-does not test installed-app nativeLibraryDir execution or the Android app UI.
-Installation, cold startup and provider operations are explicitly not-run unless
---adb is supplied. That opt-in checks a disposable fixture on the chosen device,
-refuses existing fixture packages, and uninstalls only verified APKs it installed.
+An external --fixture-aapt2 builds only the controlled fixture. The production
+engine runs in-process from the supplied APK; no native APK compiler is used.
+Installation/startup/provider checks remain opt-in via --adb.
 """
 
 import argparse
@@ -32,10 +23,9 @@ from verify_apk_signing import SHA256
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests/fixtures/apk-coexistence"
-VENDOR = ROOT / "third_party/apktool-android"
+VENDOR = ROOT / "third_party/apkeditor"
 PACKAGE = "com.example.materialfiles.coexistence.fixture"
 CLONE = PACKAGE + ".clone"
-LIFECYCLE_TEST = VENDOR / "tests/ApktoolRuntimeLifecycleTest.java"
 ABI_BY_MACHINE = {"aarch64": "arm64-v8a", "arm64": "arm64-v8a", "armv7l": "armeabi-v7a",
                   "armv8l": "armeabi-v7a", "x86_64": "x86_64", "amd64": "x86_64"}
 
@@ -80,24 +70,6 @@ def classes_jar(path, directory):
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED, allowZip64=False) as archive:
         for entry in sorted(directory.rglob("*.class")):
             archive.write(entry, entry.relative_to(directory).as_posix())
-
-
-def extract_aapt(apk, abi, work):
-    relative = f"brut.apktool/apktool-android/src/main/jniLibs/{abi}/libaapt2.so"
-    expected = json.loads((VENDOR / "UPSTREAM.json").read_text(encoding="utf-8"))["files"][relative]
-    native = work / "native tools"
-    native.mkdir()
-    binary = native / "libaapt2.so"
-    with zipfile.ZipFile(apk) as archive:
-        entry = archive.getinfo(f"lib/{abi}/libaapt2.so")
-        if entry.file_size <= 0 or entry.file_size > 64 * 1024 * 1024:
-            raise RuntimeError("Unexpected packaged aapt2 size")
-        with archive.open(entry) as source, binary.open("xb") as output:
-            shutil.copyfileobj(source, output, 128 * 1024)
-    if sha256(binary) != expected:
-        raise RuntimeError("Packaged aapt2 differs from its pinned source artifact")
-    binary.chmod(0o500)
-    return binary
 
 
 def build_fixture(aapt, java, javac, args, work, commands, compile_env, native_env, runtime_apk, report):
@@ -160,7 +132,7 @@ def build_fixture(aapt, java, javac, args, work, commands, compile_env, native_e
 
 
 def build_harness(java, javac, args, work, commands, env, apksig):
-    tests = [ROOT / "tests/ApkCoexistenceAndroidTest.java", LIFECYCLE_TEST]
+    tests = [ROOT / "tests/ApkCoexistenceAndroidTest.java"]
     classes = work / "harness-classes"
     classes.mkdir()
     run([javac, f"-J-Djava.io.tmpdir={work}", "--release", "17", "-encoding", "UTF-8",
@@ -312,8 +284,8 @@ def main():
                         default=ROOT / "app/build/intermediates/runtime_symbol_list/debug/processDebugResources/R.txt")
     parser.add_argument("--app-process", type=Path, default=Path("/system/bin/app_process"))
     parser.add_argument("--abi", choices=("arm64-v8a", "armeabi-v7a", "x86_64"))
-    parser.add_argument("--fixture-aapt2", type=Path,
-                        help="Optional local fixture compiler; rebuild always uses aapt2 from the actual APK")
+    parser.add_argument("--fixture-aapt2", type=Path, required=True,
+                        help="External compiler for the test fixture only")
     parser.add_argument("--adb", type=Path, help="Opt in to actual installation/startup/provider checks with this adb")
     parser.add_argument("--adb-serial", help="Device serial used with the optional --adb checks")
     args = parser.parse_args()
@@ -336,13 +308,13 @@ def main():
         parser.error("--fixture-aapt2 must name an existing local compiler")
     abi = args.abi or ABI_BY_MACHINE.get(os.uname().machine.lower())
     if abi is None:
-        parser.error("Cannot select a supported packaged aapt2 ABI; specify --abi")
+        parser.error("Cannot select a supported fixture ABI; specify --abi")
     apksig = args.dependencies / "apksig-9.4.1.jar"
     if not apksig.is_file() or sha256(apksig) != SHA256[apksig.name]:
         parser.error("Missing pinned apksig compile API; prepare verify_apk_signing.py dependencies first")
     runtime_sources = sorted((ROOT / "app/src/main/java/me/zhanghai/android/files/apk").rglob("*.java"))
     runtime_sources += sorted((ROOT / "app/src/main/java/me/zhanghai/android/files/apk").glob("*.kt"))
-    vendor_sources = [path for module in VENDOR.glob("brut.*") for path in module.rglob("*.java")]
+    vendor_sources = list((VENDOR / "src/main/java").rglob("*.java"))
     runtime_sources += sorted(vendor_sources)
     if any(args.apk.stat().st_mtime < source.stat().st_mtime for source in runtime_sources):
         parser.error("The APK predates its coexistence/runtime sources; rebuild :app:assembleDebug")
@@ -366,14 +338,14 @@ def main():
     work = Path(tempfile.mkdtemp(prefix="run-", dir=args.work_dir)).resolve()
     print("Coexistence test workspace:", work, flush=True)
     commands = []
-    tests = [ROOT / "tests/ApkCoexistenceAndroidTest.java", LIFECYCLE_TEST]
+    tests = [ROOT / "tests/ApkCoexistenceAndroidTest.java"]
     report = {"status": "running", "mode": "actual-packaged-apk", "apk_source": str(args.apk.resolve()),
               "apk_sha256": sha256(args.apk), "abi": abi, "apksig_compile_api_sha256": sha256(apksig),
               "sources": {str(path.relative_to(ROOT)): sha256(path) for path in runtime_sources},
               "tests": {str(path.relative_to(ROOT)): sha256(path) for path in tests},
               "fixture_sources": {str(path.relative_to(FIXTURE)): sha256(path)
                                   for path in sorted(FIXTURE.rglob("*")) if path.is_file()},
-              "native_execution_scope": "Extracted binary in ART/Termux; not installed-app nativeLibraryDir",
+              "engine": "APKEditor / ARSCLib",
               "device_validation": {"status": "not-run", "installation": "not-run", "cold_start": "not-run",
                                     "provider_self_test": "not-run", "reason": "ART phase has not completed"}}
     compile_env = os.environ.copy()
@@ -386,11 +358,9 @@ def main():
         runtime_apk = work / "materialfiles-under-test.apk"
         shutil.copyfile(args.apk, runtime_apk)
         runtime_apk.chmod(0o400)
-        aapt = extract_aapt(runtime_apk, abi, work)
-        report["aapt2_sha256"] = sha256(aapt)
-        fixture_aapt = args.fixture_aapt2.resolve() if args.fixture_aapt2 else aapt
+        fixture_aapt = args.fixture_aapt2.resolve()
         report["fixture_aapt2"] = {"path": str(fixture_aapt), "sha256": sha256(fixture_aapt)}
-        fixture_env = compile_env if args.fixture_aapt2 else native_env
+        fixture_env = compile_env
         unsigned = build_fixture(fixture_aapt, java, javac, args, work, commands, compile_env,
                                  fixture_env, runtime_apk, report)
         report["unsigned_fixture_sha256"] = sha256(unsigned)
@@ -399,24 +369,13 @@ def main():
         runtime_env["CLASSPATH"] = os.pathsep.join((str(runtime_apk), str(dex)))
         report["runtime_classpath"] = runtime_env["CLASSPATH"]
         output = run([args.app_process, "/system/bin", "ApkCoexistenceAndroidTest", work,
-                      unsigned, runtime_apk, aapt, expected_title],
+                      unsigned, runtime_apk, expected_title],
                      work, "art-coexistence", commands, runtime_env, timeout=600)
         print(output, end="", flush=True)
         art = json.loads((work / "art-summary.json").read_text(encoding="utf-8"))
         report["art"] = art
         if art["status"] != "passed" or art["passed"] != art["checks"]:
             raise RuntimeError("ART coexistence checks did not report complete success")
-        lifecycle = work / "lifecycle"
-        lifecycle.mkdir()
-        lifecycle_output = run([args.app_process, "/system/bin",
-                                "me.zhanghai.android.files.apk.tests.ApktoolRuntimeLifecycleTest", lifecycle],
-                               work, "art-lifecycle", commands, runtime_env, timeout=240)
-        print(lifecycle_output, end="", flush=True)
-        lifecycle_summary = re.search(r"APKTOOL_RUNTIME_LIFECYCLE passed=(\d+) checks=(\d+)", lifecycle_output)
-        if not lifecycle_summary or lifecycle_summary[1] != lifecycle_summary[2]:
-            raise RuntimeError("ART process/worker lifecycle checks did not report complete success")
-        report["lifecycle"] = {"status": "passed", "passed": int(lifecycle_summary[1]),
-                               "checks": int(lifecycle_summary[2])}
         validate_installed(args, work, commands, compile_env, art, report)
         report["status"] = "passed"
     except BaseException as error:

@@ -5,7 +5,6 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.os.Build;
 import android.util.DisplayMetrics;
-import brut.androlib.Config;
 import com.android.apksig.ApkVerifier;
 import com.android.apksig.internal.apk.AndroidBinXmlParser;
 import dalvik.system.PathClassLoader;
@@ -48,7 +47,6 @@ import org.json.JSONObject;
  * Loads production code from the actual app APK. Only this harness is separately compiled to DEX.
  * Uses disposable public test keys. Resource inspection and DEX constant checks are not a substitute
  * for the runner's separately reported, optional real installation/startup/provider checks.
- * The extracted aapt2 path exercises ART/Termux, not installed-app nativeLibraryDir/SELinux policy.
  */
 public final class ApkCoexistenceAndroidTest {
     private static final String ORIGINAL = "com.example.materialfiles.coexistence.fixture";
@@ -59,7 +57,6 @@ public final class ApkCoexistenceAndroidTest {
     private static final JSONArray CHECKS = new JSONArray();
     private static final JSONObject REPORT = new JSONObject();
     private static File work;
-    private static File aapt;
     private static int passed;
 
     public static void main(String[] arguments) {
@@ -69,19 +66,17 @@ public final class ApkCoexistenceAndroidTest {
         });
         boolean success = false;
         try {
-            require(arguments.length == 5, "Pass work, unsigned fixture, actual app APK, aapt2, and title ID");
+            require(arguments.length == 4, "Pass work, unsigned fixture, actual app APK, and title ID");
             work = new File(arguments[0]).getCanonicalFile();
             require(work.isDirectory(), "Missing runner workspace");
-            aapt = new File(arguments[3]).getCanonicalFile();
             require(Build.VERSION.SDK_INT >= 30 && "Dalvik".equals(System.getProperty("java.vm.name")),
                     "Android ART API 30 or later is required");
             REPORT.put("android_api", Build.VERSION.SDK_INT).put("android_release", Build.VERSION.RELEASE)
                     .put("supported_abis", new JSONArray(Arrays.asList(Build.SUPPORTED_ABIS)))
-                    .put("aapt2", aapt.getPath()).put("aapt2_sha256", digest(aapt))
                     .put("installation", "not-run").put("startup", "not-run").put("provider_self_test", "not-run")
-                    .put("native_execution_scope", "Extracted packaged binary in ART/Termux; not installed nativeLibraryDir");
+                    .put("engine", "APKEditor / ARSCLib");
             System.out.println("ANDROID_RUNTIME api=" + Build.VERSION.SDK_INT + " release=" + Build.VERSION.RELEASE);
-            run(new File(arguments[1]), new File(arguments[2]), Integer.decode(arguments[4]));
+            run(new File(arguments[1]), new File(arguments[2]), Integer.decode(arguments[3]));
             success = true;
         } catch (Throwable error) {
             error.printStackTrace(System.err);
@@ -103,7 +98,7 @@ public final class ApkCoexistenceAndroidTest {
     }
 
     private static void run(File unsigned, File appApk, int expectedTitle) throws Exception {
-        check("production APK contains the linked UI resources and Apktool framework", () -> {
+        check("production APK contains the linked UI resources and ARSCLib resources", () -> {
             int actualTitle = Class.forName("me.zhanghai.android.files.R$string")
                     .getField("apk_coexistence_title").getInt(null);
             require(actualTitle == expectedTitle && (actualTitle >>> 24) == 0x7f, "Stale or placeholder R ID");
@@ -112,8 +107,8 @@ public final class ApkCoexistenceAndroidTest {
                         && !resources.resources.getString(actualTitle).trim().isEmpty(),
                         "Packaged UI resource mismatch");
             }
-            require(ApkCoexistenceService.class.getClassLoader().getResource("prebuilt/android-framework.jar") != null,
-                    "Apktool framework is missing from the actual APK classpath");
+            require(ApkCoexistenceService.class.getClassLoader().getResource("arsclib.properties") != null,
+                    "ARSCLib resources is missing from the actual APK classpath");
             REPORT.put("apk_sha256", digest(appApk)).put("title_resource_id", actualTitle);
         });
         check("real compiled fixture is a valid standalone API 30 APK", () -> {
@@ -141,9 +136,9 @@ public final class ApkCoexistenceAndroidTest {
             File input = new File(job, "原始 input.apk");
             copy(original, input);
             File rebuilt = new File(job, "重建 output.apk");
-            check("production Apktool service decodes, rewrites and rebuilds the real fixture", () -> {
+            check("production ARSCLib service decodes, rewrites and rebuilds the real fixture", () -> {
                 ApkCoexistenceRewriter.Report report = new ApkCoexistenceService().rebuild(
-                        input, rebuilt, job, config(aapt), CLONE, progress());
+                        input, rebuilt, job, CLONE, progress());
                 assertManifest(rebuilt, CLONE);
                 require(originalDigest.equals(digest(input)) && originalDigest.equals(digest(original)),
                         "Rebuild changed original APK bytes");
@@ -265,11 +260,11 @@ public final class ApkCoexistenceAndroidTest {
                     File source = new File(rejected, "input.apk");
                     copy(original, source);
                     File output = new File(rejected, "output.apk");
-                    expectIOException(() -> new ApkCoexistenceService().rebuild(source, output, rejected, config(aapt), target, NONE));
+                    expectIOException(() -> new ApkCoexistenceService().rebuild(source, output, rejected, target, NONE));
                     require(!output.exists() && originalDigest.equals(digest(source)), "Rejected request changed APK bytes");
                 }
             });
-            check("cancellation before native rebuild returns without a partial output", () -> {
+            check("cancellation before binary rebuild returns without a partial output", () -> {
                 File canceled = directory(work, "cancel before build");
                 File source = new File(canceled, "input.apk");
                 copy(original, source);
@@ -277,7 +272,7 @@ public final class ApkCoexistenceAndroidTest {
                 final boolean[] observed = {false};
                 try {
                     expectIOException(() -> new ApkCoexistenceService().rebuild(source, output, canceled,
-                            config(aapt), CLONE, new ApkOperationCallback() {
+                            CLONE, new ApkOperationCallback() {
                                 @Override public void checkCancelled() throws InterruptedIOException {
                                     if (Thread.currentThread().isInterrupted()) throw new InterruptedIOException("Canceled");
                                 }
@@ -287,18 +282,6 @@ public final class ApkCoexistenceAndroidTest {
                             }));
                 } finally { Thread.interrupted(); }
                 require(observed[0] && !output.exists() && originalDigest.equals(digest(source)), "Cancellation left output or changed input");
-            });
-            check("aapt2 failure does not publish or leave a rebuilt APK", () -> {
-                File failed = directory(work, "native build failure");
-                File source = new File(failed, "input.apk");
-                copy(original, source);
-                File output = new File(failed, "output.apk");
-                File failingAapt = new File(failed, "failing-aapt2");
-                Files.write(failingAapt.toPath(), "#!/system/bin/sh\nexit 27\n".getBytes(StandardCharsets.UTF_8));
-                require(failingAapt.setExecutable(true, true), "Cannot prepare failing native command");
-                expectIOException(() -> new ApkCoexistenceService().rebuild(source, output, failed,
-                        config(failingAapt), CLONE, NONE));
-                require(!output.exists() && originalDigest.equals(digest(source)), "Failed native build changed input or left output");
             });
             REPORT.put("original", original.getPath()).put("original_sha256", digest(original))
                     .put("clone", clone.getPath()).put("clone_sha256", digest(clone))
@@ -414,13 +397,6 @@ public final class ApkCoexistenceAndroidTest {
             transfer(input, output);
             return output.toByteArray();
         }
-    }
-
-    private static Config config(File executable) throws IOException {
-        Config config = new Config("3.0.3-SNAPSHOT");
-        config.setAaptBinary(executable.getPath());
-        config.setFrameworkDirectory(directory(work, "private framework").getPath());
-        return config;
     }
 
     private static ApkOperationCallback progress() {

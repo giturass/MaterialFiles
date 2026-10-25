@@ -202,13 +202,22 @@ public final class ApkSigningCoreTest {
                 flipEntryByte(signed, "AndroidManifest.xml");
                 require(!VERIFIER.verify(signed, 23, NONE).verified, "Modified signed payload verified");
             });
-            check("unsafe APK entry paths are rejected before output", () -> {
-                for (String path : Arrays.asList("../escape", "/absolute", "folder/../../escape", "C:/windows", "back\\slash")) {
+            check("APK signing preserves ZIP keys while container extraction rejects unsafe paths", () -> {
+                for (String path : Arrays.asList("../escape", "/absolute", "folder/../../escape", "C:/windows", "back\\slash", "res///file")) {
                     File source = new File(work, "unsafe-" + Math.abs(path.hashCode()) + ".apk");
                     derive(input, source, path, new byte[]{1, 2, 3}, false);
                     File output = new File(work, source.getName() + ".signed.apk");
-                    expect(IOException.class, () -> SIGNER.sign(source, output, cache, signingKey, ApkSigningService.Options.forMinSdk(23), NONE));
-                    require(!output.exists(), "Unsafe APK left output");
+                    expect(IOException.class, () -> SIGNER.validateContainer(source, NONE));
+                    require(SIGNER.sign(source, output, cache, signingKey,
+                            ApkSigningService.Options.forMinSdk(23), NONE).verified,
+                            "APK resource ZIP key could not be signed");
+                    try (ZipFile zip = new ZipFile(output)) {
+                        require(zip.getEntry(path) != null, "Signing renamed the APK entry");
+                        try (InputStream contents = zip.getInputStream(zip.getEntry(path))) {
+                            require(Arrays.equals(contents.readAllBytes(), new byte[]{1, 2, 3}),
+                                    "Signing changed the APK entry bytes");
+                        }
+                    }
                 }
                 emptyCache();
             });

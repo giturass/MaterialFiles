@@ -13,7 +13,7 @@
 - 删除 Firebase Analytics、Crashlytics、Google Services 配置和初始化，调试/发行构建均无跟踪；关于页提供离线隐私说明，发布 APK 校验拒绝包含这些 SDK 的产物。
 - 关于页改为 Material 3 分组卡片，区分 [应用主仓库](https://github.com/giturass/MaterialFiles) 与 [上游项目](https://github.com/zhanghai/MaterialFiles)。作者显示张海与 Eric Lee，仅保留姓名同行的 X 入口，使用 X 品牌矢量图标。展示 Sora / TextMate、7-Zip / JBinding、apksig、Bouncy Castle、Apktool Android 与 AAPT2 的用途及项目链接，补全开源许可声明；推荐 VLC 播放媒体、RSAF 通过外部存储空间接入网盘，并保留离线许可证和隐私说明。
 - 点击 APK 文件后的操作弹窗按“取消、查看、安装”顺序等宽、等距排列按钮。
-- 单选普通 APK 时，底部“更多”增加“APK 签名”和“制作共存版”。签名使用官方 apksig 9.4.1；基础共存使用固定版本的 apktool-android 修改 Manifest 安装包名并重建、签名，保留原 DEX 和资源。复用密钥管理、ZIP 对齐、验签和独立输出。最低系统调整为 Android 11，安装包仅保留 arm64-v8a，移除签名模块旧系统 API 兼容分支。具体支持范围和验证见 [APK 签名](docs/apk-signing.md)及 [APK 共存](docs/apk-coexistence.md)。
+- 单选普通 APK 时，底部“更多”增加“APK 签名”和“制作共存版”。签名使用官方 apksig 9.4.1；基础共存使用固定版本的 APKEditor / ARSCLib 直接修改二进制 Manifest 安装包名并签名，保留原 DEX 和资源。复用密钥管理、ZIP 对齐、验签和独立输出。最低系统调整为 Android 11，安装包仅保留 arm64-v8a，移除签名模块旧系统 API 兼容分支。具体支持范围和验证见 [APK 签名](docs/apk-signing.md)及 [APK 共存](docs/apk-coexistence.md)。
 - 签名及共存窗口直接使用列表选中的 APK：蓝色信息卡以文件名为主标题（最多两行），路径以小字号单行中间省略，包名单行显示，大小与原签名状态并排显示。状态区分读取中、未验证、读取失败、签名验证通过和未通过，通过状态使用绿色背景和白字，状态框随文字收紧；操作中保留信息卡，完成后显示输出文件与输出签名。最低签名 API 自动取 APK 声明值，输出默认保存至当前目录，仅提供输出文件名。底部按“详情 / 关闭 / 签名”（共存时为“确定”）顺序等宽、等距排列；共存仍执行改包名、重建与签名。“详情”可复制完整路径、原始与输出信息、精确字节数、密钥库路径和证书，读取中或取消后也可打开。界面不显示风险提示及验签警告，错误继续显示。
 - 密钥区提供“选择已有 / 更换密钥”和“新建密钥 / 取消新建”两个入口，未选择时只显示入口和简短提示。已有密钥来源为“系统文件选择器”和“已创建的密钥”。选择后显示文件名、单行小字号路径、库密码与别名，读取/刷新按钮与别名同行；格式及独立私钥密码收在“格式与私钥密码”选项中。私有密钥列表显示修改时间和“当前使用”，空列表可直接新建。新建使用独立别名草稿、库密码框与确认密码，密码至少 8 个字符；成功自动选中，可沿用当前窗口密码继续签名，取消或失败保留旧密钥和别名。
 - 属性对话框顶部标签等宽平分、居中显示；书签和存储项编辑弹窗的“隐藏/显示或移除、取消、确定”按钮按顺序等宽、等距排列。
@@ -56,3 +56,6 @@ Termux / MDTerm 首次使用需要授予本应用“在 Termux 环境中运行�
 - [Android NDK 与其他构建系统](https://developer.android.com/ndk/guides/other_build_systems)
 - [Material 文本输入与格式下拉框](https://github.com/material-components/material-components-android/blob/1.14.0/docs/components/TextField.md)
 - [Android 自适应图标图层实现](https://github.com/aosp-mirror/platform_frameworks_base/blob/master/graphics/java/android/graphics/drawable/AdaptiveIconDrawable.java)
+
+- APK 引擎迁移至 APKEditor 1.4.9 / ARSCLib，移除应用内 Apktool 与 AAPT2。底部更多提供反编译、回编译、合并、资源重构、资源保护、信息查看六项功能；普通 APK 菜单在“分享”下方依次排列反编译、资源重构、资源保护、签名、制作共存版和信息。签名和共存对分包输入自动调用同一合并服务；反编译输出可编辑的 XML/Smali ZIP，回编译、重构、保护、合并复用密钥、验签和另存流程。详见 [APKEditor 工具](docs/apk-editor.md)。
+- 资源保护使用 APKEditor 上游默认流程与字典，恢复 Manifest 和资源表保护；签名保留特殊资源路径和保护内容，分包容器继续执行解压路径校验。

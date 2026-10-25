@@ -1,10 +1,10 @@
 # APK 共存
 
-应用支持 Android 11（API 30）及以上的 arm64-v8a 设备，处理单体 APK。基础流程为**修改安装包名 → 重建 Manifest → 对齐 → 重新签名 → 验证并另存**。原文件始终保留。
+应用支持 Android 11（API 30）及以上的 arm64-v8a 设备，处理单体 APK 和完整分包集合。基础流程为**修改安装包名 → 重建 Manifest → 对齐 → 重新签名 → 验证并另存**。原文件始终保留。
 
 ## 使用
 
-1. 长按选择一个普通 `.apk` 文件，在底部“更多”中选择“制作共存版”。对话框直接使用所选文件，不再提供“选择 APK”按钮。
+1. 长按选择一个 `.apk`、完整 APKS/XAPK/APKM 容器，或多选 base 和同版本分包，在底部“更多”中选择“制作共存版”。对话框直接使用所选文件，不再提供“选择 APK”按钮。
 2. 输入目标包名，默认是原包名加 `.clone`，也可以自行修改。
 3. 选择或创建签名密钥，设置签名方案和新的输出文件名。最低签名 API 自动使用原 APK 的声明值，输出默认保存到所选 APK 所在的当前目录；不再显示最低 API 输入项、输出目录和目录选择按钮。
 4. 点击“确定”，执行改包名、重建和签名。完成后可以打开 APK、安装、分享或进入输出目录。
@@ -32,61 +32,25 @@ DEX、`resources.arsc`、资源文件、assets 和原生库内容保持原样。
 
 这是一项基础改包名功能。代码中固定的包名、Provider URI、权限、资源包名或证书身份不会自动迁移；依赖这些信息、共享 UID、服务端登记、App Links 或加固校验的应用可能不能正常使用。输出页只报告实际完成的重建和验签，不能据此认定两个应用都能安装、启动和正常工作。
 
-只接受自包含的单体 APK；Split APK、依赖其他 split 的 base APK 和 APKS/XAPK/APKM 容器不在范围内。输入上限 512 MiB，展开体积上限 1 GiB，资源表上限 16 MiB；文件与目录总数、路径层级及 XML 解析另有边界检查。无效 ZIP、越界路径、重复条目和符号链接会明确失败。
+普通 APK 直接处理；完整分包集合或 APKS/XAPK/APKM 先调用与“APK 分包合并”相同的合并能力，再进行共存与签名。只选依赖其他分包的 base/split 会提示补齐输入。不同包名、版本、重复 split、缺失 uses-split/configForSplit/requiredSplitTypes 均被拒绝。容器内多设备变体须先选择同一变体，含 OBB 的 XAPK 不会丢弃 OBB 后生成不完整安装包。输入上限 512 MiB，展开体积上限 1 GiB，资源表上限 16 MiB；文件与目录总数、路径层级及 XML 解析另有边界检查。无效 ZIP、越界路径、重复条目和符号链接会明确失败。
 
 ## Android 实现
 
-使用固定的 [apktool-android v1.0.0](https://github.com/anirudhmalik/apktool-android/tree/f0ed422f89f37276a55e464d208b0eeb91d1ca0b)，提交 `f0ed422f89f37276a55e464d208b0eeb91d1ca0b`。其 Java 基线为 `3.0.3-SNAPSHOT`，并非后来正式发布的官方 Apktool 3.0.3。源码、原生工具、依赖版本、补丁与许可证记录在 [third_party/apktool-android](../third_party/apktool-android/README.md)。
+使用 [APKEditor 1.4.9](https://github.com/REAndroid/APKEditor/tree/5d94bc08565e30e3e3bb7accbd83138e4d6a8e45)
+及其随附 ARSCLib，通过 Java API 在进程内执行。固定源码、JAR 摘要与许可证见
+[third_party/apkeditor](../third_party/apkeditor/README.md)。
 
-[ApkCoexistenceService](../app/src/main/java/me/zhanghai/android/files/apk/ApkCoexistenceService.java) 使用 `ONLY_MANIFEST` / `DecodeSources.NONE`。解析原资源表以还原 Manifest 中的资源符号，编译时将原 APK 作为资源依赖，只重建 Manifest，然后复制原资源和代码。集成修复了该模式未加载资源表、存在原 `resources.arsc` 时跳过 Manifest 重建的上游路径。
+共存服务直接读取二进制 Manifest，将属性投影给既有改写规则，再把发生变化的属性写回原二进制树。
+未修改的资源引用保持类型和资源 ID；`resources.arsc`、DEX、assets、原生库及其他资源的解压后字节按原样复制。
+不再打包 Apktool、libaapt2.so 或启动 APK 资源编译子进程。Gradle 构建应用自身仍正常使用 Android SDK AAPT2。
 
-aapt2 随应用内置于 `nativeLibraryDir/libaapt2.so`，原生目标 API 30。构建仅打包 arm64-v8a，包括文件管理本地库和 aapt2；这不限制待处理 APK 内原生库的架构，因为不会加载或改写它们。运行功能不依赖 Termux、Root、外部桌面工具或在线下载。缺少工具时会在处理前报错。
-
-最终通过官方 apksig Java API 完成对齐、签名与独立验签，复核目标包名和应用元数据，再保存到所选 APK 所在的当前本地目录。详情见 [APK 签名](apk-signing.md)。
-
-后台处理沿用签名任务的串行锁、私有工作目录、可取消 IO 和输出日志；密码不保存。原生子进程有超时、取消与输出收集回收机制。取消或失败后等待工作停止再清理临时目录，进程重启不会重放带有密码的任务。
+分包合并会改变资源表、合并 DEX 和 Manifest，单体 APK 的字节保留承诺仅适用于**合并完成后的共存步骤**。
+合并功能不能保证所有动态特性应用都可转为单体；依赖代码固定包名、证书及服务端身份的限制仍然存在。
 
 ## 验证
 
-```sh
-python3 -B third_party/apktool-android/verify_vendor.py
-python3 -B tools/verify_apk_signing.py
-```
+- `python3 third_party/apkeditor/verify_vendor.py`：固定源码、资源和依赖摘要检查，不触发编译。
+- GitHub Actions `APKEditor validation`：`tools/verify_apk_signing.py` 编译并运行现有签名/语义规则检查及新二进制编辑、分包合并、反编译/回编译、保护、重构检查。
+- `tools/verify_apk_coexistence_android.py --fixture-aapt2 /path/to/aapt2 ...`：从实际 APK 加载生产代码在 ART 运行，外部 AAPT2 仅用于创建测试夹具。可选 `--adb` 验证夹具安装、冷启动和 Provider。
 
-第一条核对固定的第三方文件和补丁摘要。第二条编译实际 Java 核心，检查 Manifest 改写、签名、密钥库、输入边界与取消行为。
-
-构建 Debug APK 后，在 Android / Termux 中运行实际 APK 的 ART 联合验证：
-
-```sh
-python3 -B tools/verify_apk_coexistence_android.py \
-  --android-jar "$HOME/tmp/materialfiles-check/sdk/platforms/android-37.2/android.jar" \
-  --java-home "$PREFIX/lib/jvm/java-21-openjdk"
-```
-
-路径可按本机 SDK/JDK 调整。脚本只编译测试入口，生产代码、资源、加密库和 aapt2 均从待测 APK 加载。自有单体夹具包含 Activity、多个 Provider、自定义权限、资源与持久化操作；核对重建和签名后二进制 Manifest 中的全部 authorities（含分号列表和非包名前缀）、新旧 authority 集合无交集、Provider 查询声明保留，以及新包名、有效签名和未修改 payload，并检查取消、构建失败和子进程生命周期。命令、输入摘要、逐项日志和两个测试 APK 保存在 `~/tmp/materialfiles-apk-coexistence-check/run-*/`。
-
-脚本默认将同时安装、冷启动和 Provider 功能测试分别记录为 `not-run`。有已连接设备的 adb 时可通过 `--adb /path/to/adb` 启用这些项目；脚本拒绝覆盖已存在的同名测试应用，只清理由本轮安装并验证身份的夹具。ART 中运行解压的 aapt2 不等于已验证安装后 `nativeLibraryDir` 的执行路径。
-
-本轮密钥界面和底栏文案的 Debug 构建、Lint、产物摘要及验证范围见 [密钥界面与图标验证](apk-signing.md#密钥界面与图标验证2026-10-16)。之前的记录见 [紧凑信息卡验证](apk-signing.md#紧凑信息卡验证2026-10-16)及 [界面精简验证](apk-signing.md#界面精简验证2026-10-16)。
-
-## Provider authorities 验证（2026-10-16）
-
-- 主机回归 70 项通过：共存 Manifest 改写 28 项、二进制 Manifest 读取 22 项、签名与密钥库 20 项。新增用例覆盖多个 Provider、命名空间别名和新旧 authority 冲突；冲突检查不依赖声明顺序，失败时文件内容保持不变。
-- Debug 构建通过；Android 15 / API 35 的实际 APK 共存 ART 检查 12/12 通过，验证 3 个 Provider、5 个 authority 在重建及签名后的二进制 Manifest 中均按预期改写，且与原版无交集。
-- 原生进程与工作线程生命周期检查 106/106 通过。第三方 151 个文件的摘要校验通过。
-
-本次待测 `app/build/outputs/apk/debug/app-debug.apk` 的 SHA-256 为 `b31bc863283e0e3ee5cd6477370bdfacefa93a5a1919436a7260adff461b734f`。报告保存在 `~/tmp/materialfiles-apk-coexistence-check/run-bril157o/report.json`，包含改写前后的完整 authority 集合。未启用 adb，同时安装、冷启动和 Provider 业务读写记录为 `not-run`。
-
-## 界面精简前的功能验证（2026-10-16）
-
-以下为界面精简前的历史验证记录，对应的 APK 摘要见下方链接。
-
-- 主机回归：68 项通过，其中基础共存 Manifest 改写 26 项、二进制 Manifest 22 项、签名与密钥库 20 项。
-- 该次 arm64 APK 在 Android 15 / API 35 的共存 ART 检查 11/11 通过：真实夹具完成改包名、Manifest 重建、独立密钥签名和 v2/v3 验证；所有非 Manifest/签名 payload 的名称与内容不变，图标/标签/资源 ID 保留，取消及构建失败没有输出成品。
-- 原生进程与工作线程生命周期 99 条断言通过，包括超时、取消、回收、16 KiB 输出保留上限和临时目录隔离。
-- 签名与输出恢复 ART 检查 29/29 通过，同样使用该次 APK 的生产代码。
-- 该次 Debug 构建、Lint（0 错误、616 警告）和 Release R8 检查通过；APK 中仅含 arm64-v8a 本地库。第三方 151 个文件的摘要校验通过。
-
-报告分别保存在 `~/tmp/materialfiles-apk-coexistence-check/run-l1zxil_a/report.json` 和 `~/tmp/materialfiles-apk-art-check/run-5kwp2l9i/report.json`，两者记录的待测 APK SHA-256 一致。对应的历史产物信息见 [界面精简前的签名验证](apk-signing.md#界面精简前的功能验证2026-10-16)。
-
-该次验证时本机没有 adb；同时安装、冷启动、Provider 业务读写以及安装后 nativeLibraryDir 的执行均未实测。Android 11 真机、其他页大小设备和完整 UI 交互也未覆盖。以上 ART 成功仅证明当时已经执行的项目，不代表任意输入应用都能正常共存。
+主机生成和验签成功不能代替 Android 安装与运行验证；尚未执行的设备检查应报告为未验证。

@@ -10,7 +10,6 @@ import android.provider.DocumentsContract
 import android.system.ErrnoException
 import android.system.Os
 import android.system.OsConstants
-import brut.androlib.android.ApktoolAndroid
 import java8.nio.file.LinkOption
 import java8.nio.file.Path
 import java8.nio.file.Paths
@@ -62,12 +61,12 @@ object ApkOperations {
         context: Context,
         input: Path,
         progress: (ApkProgress) -> Unit = {},
-        coexistence: Boolean = false
+        coexistence: Boolean = false,
+        inputs: List<Path> = listOf(input),
+        editMode: ApkEditMode = ApkEditMode.NONE
     ): ApkInspection = withWorkspace(context, progress) { directory ->
         val callback = callback(context, progress)
-        val apk = stage(context, input, File(directory, "input.apk"),
-            if (coexistence) ApkCoexistenceService.MAX_INPUT_BYTES else MAX_APK_BYTES, callback)
-        if (coexistence) ApkCoexistenceService.validateInput(apk, directory, callback)
+        val apk = prepareInput(context, inputs, directory, editMode, coexistence, callback)
         ApkSigningService().validateInput(apk, callback)
         inspectFile(context, apk, callback)
     }
@@ -242,16 +241,9 @@ object ApkOperations {
             val target = outputFile(context, request)
             val callback = callback(context, progress)
             val options = ApkSigningService.Options(request.minSdk, request.v1, request.v2, request.v3)
-            val input = stage(
-                context, request.input, File(directory, "input.apk"),
-                if (request.targetPackageName != null) ApkCoexistenceService.MAX_INPUT_BYTES
-                else MAX_APK_BYTES, callback,
-                reservedCopies = 4
-            )
+            val input = prepareInput(context, request.inputs, directory, request.editMode,
+                request.targetPackageName != null, callback)
             val signingService = ApkSigningService()
-            if (request.targetPackageName != null) {
-                ApkCoexistenceService.validateInput(input, directory, callback)
-            }
             signingService.validateInput(input, callback)
             val original = inspectFile(context, input, callback)
             val keyStore = stage(
@@ -264,16 +256,18 @@ object ApkOperations {
                 keyStore, request.keyStoreFormat, request.storePassword, request.alias,
                 request.keyPassword
             ).use { key ->
+                // Preview and compare metadata against the original bytes. Resource edits
+                // invalidate that signature and belong only in the explicit signing operation.
+                val edited = editResources(input, directory, request.editMode, callback)
                 val signingInput = request.targetPackageName?.let { targetPackage ->
                     val rebuilt = File(directory, "rebuilt.apk")
-                    val config = ApktoolAndroid.configure(context)
                     val report = ApkCoexistenceService().rebuild(
-                        input, rebuilt, directory, config, targetPackage, original.label,
-                        manifestValueResolver(context, input, original.packageName), callback
+                        edited, rebuilt, directory, targetPackage, original.label,
+                        manifestValueResolver(context, edited, original.packageName), callback
                     )
                     coexistenceReport = report.summary
                     rebuilt
-                } ?: input
+                } ?: edited
                 signingService.sign(signingInput, signed, directory, key, options, callback)
             }
             checkCanceled()
@@ -295,6 +289,126 @@ object ApkOperations {
     } finally {
         request.storePassword.fill('\u0000')
         request.keyPassword.fill('\u0000')
+    }
+
+    private fun prepareInput(
+        context: Context, inputs: List<Path>, workspace: File, mode: ApkEditMode,
+        coexistence: Boolean, callback: ApkOperationCallback
+    ): File {
+        if (inputs.isEmpty() || inputs.size > 256) throw IOException("请选择 1 至 256 个输入文件。")
+        val engine = ApkEditorService()
+        if (mode == ApkEditMode.BUILD) {
+            if (inputs.size != 1 || !inputs.single().isLinuxPath) {
+                throw IOException("回编译需要本地 APKEditor 项目目录。")
+            }
+            val source = inputs.single().toFile()
+            val tree = ApkEditorService.validateTree(source, callback)
+            val copy = File(workspace, "project")
+            requireSpace(context, workspace, tree.filter { it.isFile }.sumOf { it.length() } * 4)
+            ensureDirectory(copy)
+            for (file in tree) {
+                checkCanceled()
+                val relative = source.toPath().relativize(file.toPath()).toString()
+                if (relative.isEmpty()) continue
+                val target = File(copy, relative)
+                if (file.isDirectory) ensureDirectory(target)
+                else stage(context, Paths.get(file.path), target, ApkEditorService.MAX_EXPANDED, callback)
+            }
+            return File(workspace, "built.apk").also {
+                engine.build(copy, it, callback)
+                ApkCoexistenceService.validateInput(it, workspace, callback)
+            }
+        }
+        val container = inputs.size == 1 && inputs.single().fileName.toString()
+            .substringAfterLast('.').lowercase() in setOf("apks", "xapk", "apkm")
+        val needsEditor = coexistence || container || inputs.size > 1 || mode != ApkEditMode.NONE
+        if (needsEditor) {
+            var bytes = 0L
+            for (path in inputs) {
+                val size = path.readAttributes(BasicFileAttributes::class.java).size()
+                if (size < 0 || size > ApkEditorService.MAX_BYTES - bytes) {
+                    throw IOException("所选 APK 的总大小超过 512 MiB。")
+                }
+                bytes += size
+            }
+            requireSpace(context, workspace, bytes * 6)
+        }
+        val files = inputs.mapIndexed { index, path ->
+            stage(context, path, File(workspace, "input-$index.apk"),
+                if (needsEditor) ApkEditorService.MAX_BYTES else MAX_APK_BYTES, callback, reservedCopies = 4)
+        }
+        val modules = if (container) engine.extractContainer(files.single(), File(workspace, "splits"), callback)
+            else files
+        val apk = if (modules.size > 1 || mode == ApkEditMode.MERGE) {
+            File(workspace, "merged.apk").also { engine.merge(modules, it, workspace, callback) }
+        } else modules.single()
+        if (needsEditor) ApkCoexistenceService.validateInput(apk, workspace, callback)
+        ApkSigningService().validateInput(apk, callback)
+        if (ApkManifestReader.read(apk).requiresSplits) {
+            throw IOException("缺少分包：请多选 base 和所需 split，或选择完整 APKS/XAPK/APKM 容器。")
+        }
+        return apk
+    }
+
+    private fun editResources(
+        input: File, workspace: File, mode: ApkEditMode, callback: ApkOperationCallback
+    ): File {
+        if (mode != ApkEditMode.REFACTOR && mode != ApkEditMode.PROTECT) return input
+        val original = ApkManifestReader.read(input)
+        val engine = ApkEditorService()
+        val output = File(workspace, "edited.apk")
+        if (mode == ApkEditMode.PROTECT) engine.protect(input, output, callback)
+        else engine.refactor(input, output, callback)
+        ApkCoexistenceService.validateInput(output, workspace, callback)
+        val result = ApkManifestReader.read(output)
+        if (original.packageName != result.packageName || original.versionCode != result.versionCode
+            || original.minSdk != result.minSdk || original.targetSdk != result.targetSdk) {
+            throw IOException("处理结果改变了应用的包名、版本或 SDK。")
+        }
+        return output
+    }
+
+    fun editorInfo(context: Context, inputs: List<Path>, progress: (ApkProgress) -> Unit): String =
+        withWorkspace(context, progress) { directory ->
+            val callback = callback(context, progress)
+            val engine = ApkEditorService()
+            buildString {
+                for ((index, path) in inputs.withIndex()) {
+                    val source = stage(context, path, File(directory, "info-$index.apk"),
+                        ApkEditorService.MAX_BYTES, callback)
+                    val files = if (path.fileName.toString().substringAfterLast('.').lowercase()
+                        in setOf("apks", "xapk", "apkm")) {
+                        engine.extractContainer(source, File(directory, "info-$index"), callback)
+                    } else listOf(source)
+                    append(path.fileName.toString()).append("\n")
+                    for (file in files) {
+                        ApkCoexistenceService.validateInput(file, directory, callback)
+                        ApkSigningService().validateInput(file, callback)
+                        append(engine.info(file, callback)).append("\n")
+                        if (length > 262144) throw IOException("APK 信息过多，请减少所选分包数量。")
+                    }
+                }
+            }
+        }
+
+    /** A ZIP makes the decoded project use the same crash-safe publication as signed APKs. */
+    fun decode(context: Context, inputs: List<Path>, outputName: String,
+               progress: (ApkProgress) -> Unit): Path = withWorkspace(context, progress) { directory ->
+        val source = inputs.first()
+        val parentPath = source.parent ?: throw IOException("没有输出目录。")
+        if (!parentPath.isLinuxPath || !outputName.endsWith(".zip", true)
+            || outputName.any { it == '/' || it == '\\' || it.code < 32 }
+            || outputName.toByteArray(Charsets.UTF_8).size > 255) throw IOException("请输入有效的 ZIP 文件名。")
+        val target = File(parentPath.toFile().canonicalFile, outputName)
+        if (statOrNull(target) != null) throw IOException("输出文件已存在。")
+        val callback = callback(context, progress)
+        val apk = prepareInput(context, inputs, directory, ApkEditMode.NONE, true, callback)
+        ApkSigningService().validateInput(apk, callback)
+        val project = File(directory, "decoded")
+        ApkEditorService().decode(apk, project, callback)
+        val zip = File(directory, "project.zip")
+        ApkEditorService.zipProject(project, zip, callback)
+        publish(context, zip, target, callback)
     }
 
     private fun inspectFile(
@@ -944,6 +1058,9 @@ object ApkOperations {
                     "decode" -> R.string.apk_operation_decode
                     "rewrite", "coexist_rewrite" -> R.string.apk_operation_rewrite
                     "rebuild" -> R.string.apk_operation_rebuild
+                    "merge" -> R.string.apk_editor_merging
+                    "refactor" -> R.string.apk_editor_refactoring
+                    "protect" -> R.string.apk_editor_protecting
                     else -> R.string.apk_signing_inspecting
                 }
                 progress(ApkProgress(context.getString(resource), completed, total))

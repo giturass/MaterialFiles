@@ -1,3 +1,5 @@
+> 引擎更新：支持完整 APKS/XAPK/APKM 或多选 base 与同版本 split。签名时自动调用 APKEditor 分包合并，再统一对齐、签名和验签。六项 APK 工具及输入边界见 [APKEditor 工具](apk-editor.md)。
+
 # APK 签名
 
 长按选择一个普通 `.apk` 文件，在底部“更多”菜单选择“APK 签名”。支持读取原始签名、使用已有密钥重新签名、创建签名密钥、配置签名方案、验证并保存独立输出。同时提供基础“制作共存版”，支持范围见 [APK 共存说明](apk-coexistence.md)。本应用最低支持 Android 11（API 30）。
@@ -18,7 +20,7 @@
 
 重新签名不会保留原开发者的数字签名身份。使用不同密钥一般不能更新已安装的原版，还可能影响签名权限、证书自检、第三方登录或服务端登记。签名验证通过不能证明应用已经安装或能够正常运行。
 
-首期只处理自包含的单体 APK。读取二进制 Manifest 检查 `split`、`configForSplit`、`isFeatureSplit`、`isSplitRequired`、`requiredSplitTypes`、`uses-split` 及 Play 的 splits-required 元数据，拒绝需要其他拆分包的输入；APKS/XAPK/APKM 等容器不是单体 APK。Android 无法解析其应用信息、损坏的 ZIP、异常路径、重复/重叠条目、符号链接、ZIP64 和分卷包也会在发布前失败。这里不验证 DEX/JNI 的业务逻辑。
+支持自包含的单体 APK，以及完整 APKS/XAPK/APKM 容器或多选的同版本 base/split。分包先由 APKEditor 合并，再统一签名；只选缺少依赖的 base/split 会提示补齐。读取二进制 Manifest 检查 `split`、`configForSplit`、`isFeatureSplit`、`isSplitRequired`、`requiredSplitTypes`、`uses-split` 及 Play 的 splits-required 元数据，合并输出仍包含分包依赖时会拒绝发布。Android 无法解析其应用信息、损坏的 ZIP、重复/重叠条目、符号链接、ZIP64 和分卷包也会在发布前失败。APK 内的特殊资源路径按原始 ZIP 条目名保留，签名时不解压到磁盘；分包容器继续拒绝不安全的解压路径。这里不验证 DEX/JNI 的业务逻辑。
 
 APK 使用流式复制与摘要；文件受 ZIP32 的约 4 GiB 上限约束，Manifest 上限 16 MiB，ZIP 元数据上限 32 MiB，展开条目总量上限 8 GiB。密钥库上限 16 MiB / 1024 项，JKS 证书链和口令派生参数另有上限；不支持的格式会有错误信息。输入需提供已知文件大小，本地符号链接不能直接作为输入。
 
@@ -84,6 +86,17 @@ python3 -B tools/verify_apk_signing_android.py --minified \
 ```
 
 该模式从待测 APK 的 DEX 方法签名和诊断字符串定位生产验签入口、从结果构造器定位验证字段，不需要 mapping、未混淆类或资源 ID。只将[反射测试入口](../tests/ApkSigningMinifiedAndroidTest.java) 单独编译为 DEX；运行时的验签代码和依赖全部来自待测 APK，不替换 apksig。测试核对固定 AOSP 样本的 SHA-256，验证有效签名在多个最低 API 下的结果，并检查未签名、篡改和损坏输入；报告保存实际 APK 的 SHA-256、定位结果和逐项错误。此模式只覆盖验签，不替代密钥创建、重新签名、输出恢复或界面测试。
+
+`APKEditor validation` 工作流也会发布 `apk-verification-art-harness-<提交>`，包含已编译的
+测试入口、来源摘要和 AOSP 样本。下载解压后，可直接在 Termux 运行以下命令，不在本机编译：
+
+```sh
+python3 tools/verify_apk_signing_android.py --minified --apk /path/to/release.apk \
+  --harness-dir "$HOME/tmp/apk-verification-art-harness"
+```
+
+资源重构和资源保护在打开窗口时读取原 APK 的签名；资源改写只在点击开始、加载密钥后执行，
+然后签名及验证输出。不能把改写后的未签名中间 APK 当作原文件进行签名状态预览。
 
 [签名 ART 测试](../tests/ApkSigningAndroidTest.java) 覆盖真实签名、密钥库、中文/空格路径、取消、32 MiB 样本以及重新签名 Material Files 自身，并比对实际 APK 的资源 ID。[输出恢复 ART 测试](../tests/ApkOutputRecoveryAndroidTest.java) 调用实际 `OwnedOutput` 和 Android 文件系统 API，检查未完成输出清理、同 inode 改写/替换文件保护、缺失或变化的私有副本、符号链接、恢复取消及日志。脚本在 `~/tmp/materialfiles-apk-art-check/run-*` 保存命令、源码与依赖摘要、APK 摘要、系统版本和逐项结果。
 

@@ -75,9 +75,11 @@
 -keep class * implements net.sf.sevenzipjbinding.ISequentialInStream { *; }
 -keep class * implements net.sf.sevenzipjbinding.ISequentialOutStream { *; }
 
-# Apktool's generated smali grammars and their ANTLR runtime use reflective members.
--keep class com.android.tools.smali.** { *; }
--keep class org.antlr.runtime.** { *; }
--keep class brut.androlib.meta.** { *; }
-# Class-relative resource lookups must retain the framework resource path.
--keepnames class brut.androlib.res.Framework
+# APKEditor: retain paths used by Class.getResourceAsStream().
+-keepnames class com.reandroid.arsc.ARSCLib
+-keepnames class com.reandroid.apk.AndroidFrameworks
+-keepnames class com.reandroid.apkeditor.APKEditor
+-keepnames class com.reandroid.apkeditor.refactor.HtmlColor
+# The optional upstream JF smali engine includes desktop-only ANTLR debugging tools.
+-dontwarn java.awt.**
+-dontwarn javax.swing.**
