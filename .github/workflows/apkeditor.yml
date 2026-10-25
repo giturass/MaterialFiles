@@ -1,7 +1,8 @@
 name: APKEditor validation
 on:
   push:
-    branches: [codex/apkeditor]
+    branches: [master, codex/apkeditor]
+  pull_request:
   workflow_dispatch:
 permissions:
   contents: read
