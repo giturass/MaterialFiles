@@ -213,10 +213,12 @@ def main():
                     raise RuntimeError("Official BASS library missing or changed: " + name)
                 bass_libraries[name] = checksum
         bass_notice = (bass_vendor.parent.parent / "app/src/main/res/raw/license_bass.txt").read_bytes()
-        # AAPT2 may shorten resource file paths in an optimized release APK.
-        if ":raw/license_bass" not in resources or not any(
-                archive.read(name) == bass_notice for name in names
-                if name.startswith("res/") and name.endswith(".txt")):
+        # Optimized builds may shorten paths and collapse resource names. Verify the original
+        # complete notice bytes instead of requiring the source resource name to survive.
+        bass_notice_paths = [name for name in names if name.startswith("res/")
+                             and archive.getinfo(name).file_size == len(bass_notice)
+                             and archive.read(name) == bass_notice]
+        if not bass_notice_paths:
             raise RuntimeError("BASS offline license notice is missing")
         engine_libraries = {}
         property_libraries = {}
@@ -275,6 +277,7 @@ def main():
         "media_playback_foreground_permission_checked": True,
         "bass_official_library_checksums": bass_libraries,
         "bass_offline_notice_checked": True,
+        "bass_offline_notice_paths": sorted(bass_notice_paths),
         "source_assets_verified": len(sources),
         "pinned_asset_checksums_verified": len(provenance["files"]),
         "jcodings_runtime_tables": tables,
