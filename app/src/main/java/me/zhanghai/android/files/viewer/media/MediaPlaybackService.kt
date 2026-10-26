@@ -36,7 +36,7 @@ class MediaPlaybackService : MediaSessionService() {
     @Volatile private var decoderMode = 0
     private var background = true
     private val leases = mutableMapOf<String, Closeable>()
-    private var fallbackLyrics: Pair<String, String>? = null
+    private val fallbackLyrics = mutableMapOf<String, String>()
 
     override fun onCreate() {
         super.onCreate()
@@ -89,11 +89,8 @@ class MediaPlaybackService : MediaSessionService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        if (!background || !player.playWhenReady || player.mediaItemCount == 0
-            || player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) {
-            player.pause()
-            stopSelf()
-        }
+        if (!background) pauseAllPlayersAndStopSelf()
+        else super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
@@ -109,15 +106,18 @@ class MediaPlaybackService : MediaSessionService() {
         val item = player.currentMediaItem ?: return
         val config = item.localConfiguration ?: return
         val groups = player.currentTracks.groups
-        val audioOnly = item.mediaMetadata.mediaType == MediaMetadata.MEDIA_TYPE_MUSIC ||
-            (groups.any { it.type == C.TRACK_TYPE_AUDIO } && groups.none { it.type == C.TRACK_TYPE_VIDEO })
-        if (!audioOnly
-            || config.uri.scheme == BassPcmDataSource.SCHEME
-            || !PlaybackPolicy.canFallback(error.errorCode)) return
+        if (!PlaybackPolicy.canFallback(
+                code = error.errorCode,
+                scheme = config.uri.scheme,
+                isMusic = item.mediaMetadata.mediaType == MediaMetadata.MEDIA_TYPE_MUSIC,
+                hasAudioTrack = groups.any { it.type == C.TRACK_TYPE_AUDIO },
+                hasVideoTrack = groups.any { it.type == C.TRACK_TYPE_VIDEO },
+                hasDrm = config.drmConfiguration != null
+            )) return
         val index = player.currentMediaItemIndex
         val position = player.currentPosition
         val play = player.playWhenReady
-        fallbackLyrics = EmbeddedLyrics.read(player.currentTracks)?.let { item.mediaId to it }
+        EmbeddedLyrics.read(player.currentTracks)?.let { fallbackLyrics[item.mediaId] = it }
         val fallback = item.buildUpon().setUri(BassPcmDataSource.wrap(config.uri))
             .setMimeType(MimeTypes.AUDIO_WAV)
             .setMediaMetadata(player.mediaMetadata.buildUpon().setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC).build())
@@ -130,9 +130,11 @@ class MediaPlaybackService : MediaSessionService() {
 
     private fun updateCacheLeases() {
         val active = mutableSetOf<String>()
+        val fallbackIds = mutableSetOf<String>()
         for (index in 0 until player.mediaItemCount) {
             val config = player.getMediaItemAt(index).localConfiguration ?: continue
             val uri = if (config.uri.scheme == BassPcmDataSource.SCHEME) {
+                fallbackIds += player.getMediaItemAt(index).mediaId
                 android.net.Uri.parse(config.uri.getQueryParameter("uri"))
             } else config.uri
             if (uri.authority != BuildConfig.FILE_PROVIDIER_AUTHORITY) continue
@@ -149,6 +151,7 @@ class MediaPlaybackService : MediaSessionService() {
         }
         val removed = leases.keys - active
         removed.forEach { leases.remove(it)?.close() }
+        fallbackLyrics.keys.retainAll(fallbackIds)
     }
 
     private fun settings() = Bundle().apply {
@@ -193,7 +196,7 @@ class MediaPlaybackService : MediaSessionService() {
                 }
                 // Format.metadata is not serialized through MediaController, so read it here.
                 val lyrics = EmbeddedLyrics.read(player.currentTracks)
-                    ?: fallbackLyrics?.takeIf { it.first == mediaId }?.second
+                    ?: fallbackLyrics[mediaId]
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, Bundle().apply {
                     putString("media_id", mediaId)
                     putString("lyrics", lyrics)

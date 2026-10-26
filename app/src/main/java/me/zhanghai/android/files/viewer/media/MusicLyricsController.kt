@@ -65,7 +65,9 @@ internal class MusicLyricsController(root: View, private val scope: CoroutineSco
             holder.text.text = lyrics!!.lines[position].text
             val selected = position == active
             holder.text.isSelected = selected
-            holder.text.setTextColor(context.getColorByAttr(if (selected) MaterialR.attr.colorPrimary else MaterialR.attr.colorOnSurfaceVariant))
+            holder.text.setTextColor(context.getColorByAttr(
+                if (selected) androidx.appcompat.R.attr.colorPrimary else MaterialR.attr.colorOnSurfaceVariant
+            ))
             holder.text.setTypeface(null, if (selected) Typeface.BOLD else Typeface.NORMAL)
         }
     }

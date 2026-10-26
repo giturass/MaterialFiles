@@ -64,9 +64,11 @@
 ## BASS 兜底
 
 每项音频首先由 ExoPlayer 直接播放。只在容器或解码错误时尝试一次 BASS；权限、网络、
-DRM、音频输出设备错误不触发兜底。识别为视频的内容不会因为音频轨道失败而丢弃视频。
+DRM、音频输出设备错误不触发兜底。仅接受 `content` / `file` 来源，拒绝有 DRM 配置的内容；
+检测到视频轨道时，即使文件被误标为音乐也不进行纯音频兜底。
 
-`BassPcmDataSource` 使用 BASS no-sound device 和 `BASS_STREAM_DECODE | BASS_SAMPLE_FLOAT`，
+`BassPcmDataSource` 使用 BASS no-sound device 和
+`BASS_STREAM_DECODE | BASS_SAMPLE_FLOAT | BASS_STREAM_PRESCAN`，
 通过 Android `AssetFileDescriptor` 读取文件。BASSALAC、BASSFLAC、BASSWV 补充 ALAC、FLAC、
 WavPack 解码，其他格式取决于 BASS 核心能力；没有打包的插件格式不承诺支持。
 
@@ -74,6 +76,9 @@ WavPack 解码，其他格式取决于 BASS 核心能力；没有打包的插件
 不把整首音频解码到内存或临时文件，PCM 缓冲约 64 KiB；RF64 支持超过 4 GiB 的解码结果。
 定位映射回 BASS 解码字节位置，保留非整帧字节范围。BASS 不创建独立 AudioTrack，不争用
 音频焦点或媒体会话。浮点处理保留 24 位整数音频精度，但不宣称全链路位完美输出。
+MP3 等格式预扫描后再生成 RF64 头，避免将估算长度当作精确长度而提前结束；大文件或慢速
+存储的首次打开和重新打开可能因此变慢。范围请求遵循 Media3 `DataSource` 约定：固定长度
+请求返回请求长度、读取受实际 EOF 限制，越界定位使用 `ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE`。
 
 原生引擎按使用计数管理，同步创建/释放 no-sound device 和插件；不同 Media3 loader
 重叠时不会互相释放引擎。提前遇到解码 EOF 作为失败返回，避免把截断文件视为播放完成。
@@ -104,9 +109,9 @@ Fluid Cloud 支持指定服务和应用，功能因国家、地区而异。另�
 `:app:assembleRelease :app:testReleaseUnitTest :app:lintRelease`，并验证签名、无跟踪 SDK、
 三个媒体组件、BASS JNI 桥和四个 ARM64 库的 16 KiB 对齐。
 
-单元测试覆盖 RF64 大文件头、无效帧参数、兜底错误边界和扩展名识别。
+单元测试覆盖 RF64 大文件头、无效帧参数、兜底错误边界、视频误分类、来源与 DRM 限制和扩展名识别。
 歌词测试新增多时间戳、offset、前后定位、译文合并、空歌词、编码、ID3 USLT 及异常输入；
-本地仅检查资源 XML、引用和差异格式，新增测试待 GitHub Actions 编译运行。歌词滚动与
+本地仅检查资源 XML、引用和差异格式，单元测试由 GitHub Actions 编译运行。歌词滚动与
 下滑退出仍需 APK 实机交互验收。
 Termux 上通过 `python3 tools/verify_media_android.py <样本...>` 执行仓库实际 ARM64 BASS 库，
 不播放声音、不编译。使用 Media3 `1.11.1` 官方测试资源：
@@ -116,8 +121,29 @@ Termux 上通过 `python3 tools/verify_media_android.py <样本...>` 执行仓�
 | ALAC | `mp4/sample_alac.mp4` | `db8755b5b4d866b9776b69a8db21bdc312656d9478428a0bea5095577c874065` | 180224 |
 | FLAC | `flac/bear.flac` | `8929048a502b463041181daaa6c990d695e4a651e99b63d03b24cd16c5155be2` | 1052544 |
 
-两份样本完整解码，并各在 4 个位置重新定位，与顺序解码得到的 PCM 逐字节一致。
+两份样本完整解码，并各在 4 个位置重新创建未播放的流后定位，与顺序解码得到的 PCM 逐字节一致。
 上游用于解析测试的 `sample_alac_20bit.mp4` 在 BASS 中提前结束，不能作为已通过的播放样本。
+
+2026-10-27 复查增加 MP3 回归：官方 `mp3/bear-vbr-no-seek-table.mp3`
+（SHA-256 `a52e1caccd56a6a3b0e583be016f0c411b45e540949920de5c12469f18ef00d9`）
+原样解码得到 1074040 字节；将完整 MPEG-1 Layer III 帧重复 24 次得到较长的有效 VBR 流，
+旧配置声明 25616248 字节，实际解码 25874296 字节，预扫描后声明长度与实际一致，4 处定位均通过。
+回归工具会一直解码到真实 EOF，并在全新的流上检查定位，避免旧工具按声明长度停止或顺序解码
+顺带建立定位表而掩盖问题。复现命令（样本放在 `$HOME/tmp/materialfiles-media/`）：
+
+```sh
+python3 tools/verify_media_android.py --repeat-mp3 24 "$HOME/tmp/materialfiles-media/bear-vbr-no-seek-table.mp3"
+# 以下旧配置对照应报 incorrect declared length：
+python3 tools/verify_media_android.py --repeat-mp3 24 --no-prescan "$HOME/tmp/materialfiles-media/bear-vbr-no-seek-table.mp3"
+```
+
+官方 `bear-cbr-no-seek-table-trailing-garbage.mp3` 在预扫描后仍不能完整解码到声明长度，
+保持失败处理；预扫描不等于允许损坏或无法完整解码的文件通过。
+
+同次复查修复：歌词高亮引用 AppCompat 的 `colorPrimary`；将调用方提供的 MIME 类型传入
+MediaItem，使无扩展名的 HLS / DASH 地址选择正确的媒体源；播放错误后从列表选曲先重新
+`prepare()`；移除任务时沿用 MediaSessionService 的前台状态判断，禁用后台播放时调用
+`pauseAllPlayersAndStopSelf()`；按曲目保留 BASS 切换前的内嵌歌词，移出列表后清理。
 
 尚需安装 APK 后交互验收：横竖屏、PiP、外挂字幕、不同存储提供方、熄屏后台播放、
 耳机/蓝牙控制、音频焦点，以及该 ROM 上的流体云展示。上述原生测试不等于这些交互已通过。
@@ -132,3 +158,8 @@ Termux 上通过 `python3 tools/verify_media_android.py <样本...>` 执行仓�
 - [Media3 1.11.1 WAV/RF64 读取实现](https://github.com/androidx/media/blob/1.11.1/libraries/extractor/src/main/java/androidx/media3/extractor/wav/WavHeaderReader.java)
 - [BASS StreamCreateFile](https://www.un4seen.com/doc/bass/BASS_StreamCreateFile.html)
 - [BASS ChannelGetData](https://www.un4seen.com/doc/bass/BASS_ChannelGetData.html)
+- [BASS ChannelGetLength：估算长度与预扫描](https://www.un4seen.com/doc/bass/BASS_ChannelGetLength.html)
+- [BASS ChannelSetPosition：精确定位](https://www.un4seen.com/doc/bass/BASS_ChannelSetPosition.html)
+- [Media3 1.11.1 DataSource：范围请求约定](https://github.com/androidx/media/blob/1.11.1/libraries/datasource/src/main/java/androidx/media3/datasource/DataSource.java)
+- [Media3 1.11.1 DefaultMediaSourceFactory：URI 与 MIME 选择](https://github.com/androidx/media/blob/1.11.1/libraries/exoplayer/src/main/java/androidx/media3/exoplayer/source/DefaultMediaSourceFactory.java)
+- [Media3 1.11.1 MediaSessionService：移除任务与停止前台服务](https://github.com/androidx/media/blob/1.11.1/libraries/session/src/main/java/androidx/media3/session/MediaSessionService.java)

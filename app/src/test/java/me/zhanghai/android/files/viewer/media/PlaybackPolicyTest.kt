@@ -5,15 +5,39 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PlaybackPolicyTest {
+    private fun canFallback(
+        code: Int = PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
+        scheme: String? = "content",
+        isMusic: Boolean = true,
+        hasAudioTrack: Boolean = false,
+        hasVideoTrack: Boolean = false,
+        hasDrm: Boolean = false
+    ) = PlaybackPolicy.canFallback(code, scheme, isMusic, hasAudioTrack, hasVideoTrack, hasDrm)
+
     @Test fun unsupportedAudioCanFallbackButNetworkAndOutputFailuresCannot() {
-        assertTrue(PlaybackPolicy.canFallback(PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED))
-        assertTrue(PlaybackPolicy.canFallback(PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED))
+        assertTrue(canFallback())
+        assertTrue(canFallback(PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED))
         for (code in listOf(PlaybackException.ERROR_CODE_IO_NO_PERMISSION,
             PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
             PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED,
             PlaybackException.ERROR_CODE_DRM_LICENSE_ACQUISITION_FAILED)) {
-            assertFalse(PlaybackPolicy.canFallback(code))
+            assertFalse(canFallback(code))
         }
+    }
+
+    @Test fun detectedVideoPreventsAudioOnlyFallbackEvenWhenMislabeledAsMusic() {
+        assertFalse(canFallback(hasAudioTrack = true, hasVideoTrack = true))
+        assertFalse(canFallback(isMusic = false, hasVideoTrack = true))
+        assertFalse(canFallback(isMusic = false))
+        assertTrue(canFallback(isMusic = false, hasAudioTrack = true))
+    }
+
+    @Test fun fallbackRequiresLocalUnencryptedSourceAndCannotRecurse() {
+        assertTrue(canFallback(scheme = "file"))
+        for (scheme in listOf("http", "https", "basspcm", null)) {
+            assertFalse(canFallback(scheme = scheme))
+        }
+        assertFalse(canFallback(hasDrm = true))
     }
     @Test fun losslessExtensionsWorkWhenProvidersReturnOctetStream() {
         for (name in listOf("歌曲.ALAC", "recording.m4a", "lossless.wv", "track.flac")) {

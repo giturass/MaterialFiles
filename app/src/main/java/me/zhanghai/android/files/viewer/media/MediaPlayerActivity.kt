@@ -328,8 +328,10 @@ class MediaPlayerActivity : AppActivity() {
                     val paths = source.extraPathList
                     uris.mapIndexed { index, uri ->
                         val name = displayName(uri)
-                        val mime = if (uri == source.data) source.type else contentResolver.getType(uri)
+                        val mime = if (uri == source.data && source.type != null) source.type
+                            else if (uri.scheme == "content") contentResolver.getType(uri) else null
                         MediaItem.Builder().setUri(uri).setMediaId(uri.toString())
+                            .setMimeType(mime)
                             .setMediaMetadata(MediaMetadata.Builder().setTitle(name)
                                 .setExtras(Bundle().apply {
                                     paths.getOrNull(index)?.let { putString(MusicLyricsController.SOURCE_PATH, it.toUri().toString()) }
@@ -670,6 +672,7 @@ class MediaPlayerActivity : AppActivity() {
                     player.getMediaItemAt(it).mediaId == item.mediaId
                 } ?: return@MediaOption
                 player.seekToDefaultPosition(currentIndex)
+                if (player.playbackState == Player.STATE_IDLE) player.prepare()
                 player.play()
             }
         }

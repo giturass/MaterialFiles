@@ -4,9 +4,11 @@ import android.content.Context
 import android.content.res.AssetFileDescriptor
 import android.net.Uri
 import androidx.media3.common.C
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.BaseDataSource
 import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSourceException
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.TransferListener
@@ -43,7 +45,8 @@ internal class BassPcmDataSource(private val context: Context) : BaseDataSource(
             val file = checkNotNull(descriptor)
             stream = BASS.BASS_StreamCreateFile(
                 file.parcelFileDescriptor, file.startOffset, file.length.coerceAtLeast(0),
-                BASS.BASS_STREAM_DECODE or BASS.BASS_SAMPLE_FLOAT
+                // RF64 requires the exact decoded length and byte-accurate seeks.
+                BASS.BASS_STREAM_DECODE or BASS.BASS_SAMPLE_FLOAT or BASS.BASS_STREAM_PRESCAN
             )
             if (stream == 0) throw bassError("无法解码音频")
             val info = BASS.BASS_CHANNELINFO()
@@ -54,7 +57,9 @@ internal class BassPcmDataSource(private val context: Context) : BaseDataSource(
             header = PcmWaveHeader.create(info.freq, info.chans, length)
             val total = length + header.size
             position = dataSpec.position
-            if (position > total) throw IOException("音频定位超出文件末尾")
+            if (position > total) throw DataSourceException(
+                "音频定位超出文件末尾", PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE
+            )
             remaining = total - position
             if (dataSpec.length != C.LENGTH_UNSET.toLong()) remaining = minOf(remaining, dataSpec.length)
             val pcmPosition = (position - header.size).coerceAtLeast(0)
@@ -75,7 +80,7 @@ internal class BassPcmDataSource(private val context: Context) : BaseDataSource(
             sourceUri = dataSpec.uri
             opened = true
             transferStarted(dataSpec)
-            return remaining
+            return if (dataSpec.length != C.LENGTH_UNSET.toLong()) dataSpec.length else remaining
         } catch (e: Exception) {
             close()
             throw if (e is IOException) e else IOException("BASS 解码失败", e)

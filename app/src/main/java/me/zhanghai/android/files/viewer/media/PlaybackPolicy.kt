@@ -4,7 +4,15 @@ import androidx.media3.common.PlaybackException
 
 internal object PlaybackPolicy {
     // Decoder/container failures may be retried once. Access, network, DRM and output errors may not.
-    fun canFallback(code: Int): Boolean = code in setOf(
+    fun canFallback(
+        code: Int,
+        scheme: String?,
+        isMusic: Boolean,
+        hasAudioTrack: Boolean,
+        hasVideoTrack: Boolean,
+        hasDrm: Boolean
+    ): Boolean = scheme in setOf("content", "file") && !hasVideoTrack && !hasDrm
+        && (isMusic || hasAudioTrack) && code in setOf(
         PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
         PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
         PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
