@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/media_music_lyrics" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:visibility="gone">
+    <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+        <androidx.recyclerview.widget.RecyclerView android:id="@+id/media_lyrics_list"
+            android:layout_width="match_parent" android:layout_height="match_parent"
+            android:clipToPadding="false" android:nestedScrollingEnabled="false" />
+        <TextView android:id="@+id/media_lyrics_status" android:layout_width="match_parent" android:layout_height="match_parent"
+            android:gravity="center" android:padding="16dp" android:text="@string/media_lyrics_empty"
+            android:textAppearance="?attr/textAppearanceBodyLarge" android:textColor="?attr/colorOnSurfaceVariant" />
+    </FrameLayout>
+    <com.google.android.material.button.MaterialButton android:id="@+id/media_load_lyrics"
+        style="@style/Widget.Material3.Button.TextButton" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal" android:minHeight="48dp" android:text="@string/media_load_lyrics" />
+</LinearLayout>

@@ -24,7 +24,7 @@
         <item name="backgroundTint">?attr/colorPrimary</item>
         <item name="iconTint">?attr/colorOnPrimary</item>
         <item name="iconSize">44dp</item>
-        <item name="cornerRadius">28dp</item>
+        <item name="cornerRadius">40dp</item>
     </style>
     <style name="Widget.MaterialFiles.Media.VideoIconButton" parent="Widget.MaterialFiles.Media.IconButton">
         <item name="iconTint">@android:color/white</item>

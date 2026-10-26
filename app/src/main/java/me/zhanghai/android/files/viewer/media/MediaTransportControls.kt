@@ -58,8 +58,8 @@ internal class MediaTransportControls(
 
     init {
         play.setOnClickListener { player?.let(Util::handlePlayPauseButtonAction); onInteraction(false) }
-        previous?.setOnClickListener { player?.seekToPrevious(); onInteraction(false) }
-        next?.setOnClickListener { player?.seekToNext(); onInteraction(false) }
+        previous?.setOnClickListener { player?.seekToPreviousMediaItem(); onInteraction(false) }
+        next?.setOnClickListener { player?.seekToNextMediaItem(); onInteraction(false) }
         rewind?.setOnClickListener { player?.seekBack(); onInteraction(false) }
         forward?.setOnClickListener { player?.seekForward(); onInteraction(false) }
         shuffle?.setOnClickListener {
@@ -118,8 +118,8 @@ internal class MediaTransportControls(
         play.setIconResource(if (playing) R.drawable.media_pause_icon else R.drawable.media_play_icon)
         play.contentDescription = root.context.getString(if (playing) R.string.media_pause else R.string.media_play)
         enable(play, player != null && player.mediaItemCount > 0 && player.isCommandAvailable(Player.COMMAND_PLAY_PAUSE))
-        enable(previous, player?.isCommandAvailable(Player.COMMAND_SEEK_TO_PREVIOUS) == true)
-        enable(next, player?.isCommandAvailable(Player.COMMAND_SEEK_TO_NEXT) == true)
+        enable(previous, player?.isCommandAvailable(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM) == true)
+        enable(next, player?.isCommandAvailable(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM) == true)
         enable(rewind, player?.isCommandAvailable(Player.COMMAND_SEEK_BACK) == true)
         enable(forward, player?.isCommandAvailable(Player.COMMAND_SEEK_FORWARD) == true)
         enable(shuffle, player?.isCommandAvailable(Player.COMMAND_SET_SHUFFLE_MODE) == true)

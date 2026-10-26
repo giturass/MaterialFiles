@@ -11,7 +11,6 @@ import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
-import android.provider.Settings
 import android.util.Rational
 import android.util.TypedValue
 import android.view.View
@@ -65,7 +64,11 @@ import com.google.android.material.R as MaterialR
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class MediaPlayerActivity : AppActivity() {
     private lateinit var playerView: AspectPlayerView
-    private lateinit var music: View
+    private lateinit var music: MusicPlayerLayout
+    private lateinit var musicLyrics: MusicLyricsController
+    private lateinit var lyricsToggle: MenuItem
+    private var showLyrics = false
+    private var lyricsMediaId: String? = null
     private lateinit var video: View
     private lateinit var videoChrome: View
     private lateinit var musicTransport: MediaTransportControls
@@ -86,6 +89,7 @@ class MediaPlayerActivity : AppActivity() {
     private var background = true
     private var decoder = 0
     private var aspect = 0
+    private var aspectToast: Toast? = null
     private var rotation = 0
     private var subtitleSize = 20f
     private var isStarted = false
@@ -100,6 +104,18 @@ class MediaPlayerActivity : AppActivity() {
     }
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) { updateUi() }
+    }
+    private val lyricsPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val target = lyricsMediaId
+        if (uri != null && target != null) {
+            try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            catch (_: SecurityException) { }
+            lifecycleScope.launch {
+                val name = withContext(Dispatchers.IO) { displayName(uri) }
+                if (name.substringAfterLast('.', "").lowercase() in setOf("lrc", "txt")) musicLyrics.loadFile(uri, target)
+                else toast(getString(R.string.media_lyrics_error))
+            }
+        }
     }
     private val subtitlePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -130,6 +146,8 @@ class MediaPlayerActivity : AppActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.media_player_activity)
         music = findViewById(R.id.media_music)
+        musicLyrics = MusicLyricsController(music, lifecycleScope)
+        music.onDismiss = { if (!videoMode) finish() }
         video = findViewById(R.id.media_video)
         videoChrome = findViewById(R.id.media_video_chrome)
         playerView = findViewById(R.id.media_player)
@@ -141,8 +159,23 @@ class MediaPlayerActivity : AppActivity() {
         }
         fullscreen = savedInstanceState?.getBoolean("fullscreen") ?: false
         subtitleMediaId = savedInstanceState?.getString("subtitle_media_id")
+        lyricsMediaId = savedInstanceState?.getString("lyrics_media_id")
+        showLyrics = savedInstanceState?.getBoolean("show_lyrics") ?: false
         onBackPressedDispatcher.addCallback(this, fullscreenBack)
-        findViewById<MaterialToolbar>(R.id.media_music_toolbar).setNavigationOnClickListener { finish() }
+        val musicToolbar = findViewById<MaterialToolbar>(R.id.media_music_toolbar)
+        musicToolbar.setNavigationOnClickListener { finish() }
+        lyricsToggle = musicToolbar.menu.add(R.string.media_lyrics).apply {
+            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+            setOnMenuItemClickListener {
+                showLyrics = !showLyrics
+                applyLyricsVisibility()
+                true
+            }
+        }
+        findViewById<View>(R.id.media_load_lyrics).setOnClickListener {
+            lyricsMediaId = controller?.currentMediaItem?.mediaId
+            if (lyricsMediaId != null) lyricsPicker.launch(arrayOf("*/*"))
+        }
         val videoToolbar = findViewById<MaterialToolbar>(R.id.media_video_toolbar)
         videoToolbar.setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
         if (packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
@@ -164,6 +197,8 @@ class MediaPlayerActivity : AppActivity() {
         findViewById<View>(R.id.media_music_queue).setOnClickListener { showQueue() }
         findViewById<View>(R.id.media_music_settings).setOnClickListener { showSettings() }
         findViewById<View>(R.id.media_video_speed).setOnClickListener { chooseSpeed() }
+        findViewById<View>(R.id.media_video_rotate).setOnClickListener { toggleRotation() }
+        findViewById<View>(R.id.media_video_aspect).setOnClickListener { cycleAspect() }
         findViewById<View>(R.id.media_video_subtitles).setOnClickListener { chooseSubtitles() }
         findViewById<View>(R.id.media_video_queue).setOnClickListener { showQueue() }
         findViewById<View>(R.id.media_video_fullscreen).setOnClickListener {
@@ -192,6 +227,11 @@ class MediaPlayerActivity : AppActivity() {
         }
         videoChrome.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
             if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) updateVideoLayout()
+        }
+        for (id in intArrayOf(R.id.media_video_bottom, R.id.media_video_speed)) {
+            findViewById<View>(id).addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+                if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) updateVideoLayout()
+            }
         }
         val prefs = getSharedPreferences(MediaPlaybackService.PREFERENCES, MODE_PRIVATE)
         background = prefs.getBoolean(MediaPlaybackService.BACKGROUND, true)
@@ -240,10 +280,14 @@ class MediaPlayerActivity : AppActivity() {
         isStarted = false
         openJob?.cancel()
         dialog?.dismiss()
+        aspectToast?.cancel()
+        aspectToast = null
         videoChrome.removeCallbacks(hideVideoControls)
         if (!background && !isChangingConfigurations && !isInPictureInPictureMode) controller?.pause()
         playerView.player = null
         musicTransport.player = null
+        musicLyrics.update(null)
+        music.resetSwipe()
         videoTransport.player = null
         controller?.removeListener(listener)
         controller = null
@@ -261,7 +305,15 @@ class MediaPlayerActivity : AppActivity() {
         outState.putBoolean("fullscreen", fullscreen)
         outState.putBoolean("video_mode", videoMode)
         outState.putString("subtitle_media_id", subtitleMediaId)
+        outState.putString("lyrics_media_id", lyricsMediaId)
+        outState.putBoolean("show_lyrics", showLyrics)
         super.onSaveInstanceState(outState)
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        music.resetSwipe()
+        updateRotationButton()
     }
 
     private fun openIntent() {
@@ -273,11 +325,15 @@ class MediaPlayerActivity : AppActivity() {
                 val items = withContext(Dispatchers.IO) {
                     val uris = source.getStringArrayListExtra(EXTRA_URIS)?.take(100)
                         ?.map(Uri::parse) ?: listOfNotNull(source.data)
-                    uris.map { uri ->
+                    val paths = source.extraPathList
+                    uris.mapIndexed { index, uri ->
                         val name = displayName(uri)
                         val mime = if (uri == source.data) source.type else contentResolver.getType(uri)
                         MediaItem.Builder().setUri(uri).setMediaId(uri.toString())
                             .setMediaMetadata(MediaMetadata.Builder().setTitle(name)
+                                .setExtras(Bundle().apply {
+                                    paths.getOrNull(index)?.let { putString(MusicLyricsController.SOURCE_PATH, it.toUri().toString()) }
+                                })
                                 .setIsPlayable(true).setIsBrowsable(false)
                                 .setMediaType(if (PlaybackPolicy.isAudio(name, mime))
                                     MediaMetadata.MEDIA_TYPE_MUSIC else MediaMetadata.MEDIA_TYPE_VIDEO)
@@ -318,6 +374,7 @@ class MediaPlayerActivity : AppActivity() {
         }
         playerView.player = if (videoMode) player else null
         musicTransport.player = if (videoMode) null else player
+        musicLyrics.update(if (videoMode) null else player)
         videoTransport.player = if (videoMode) player else null
         val metadata = player.mediaMetadata
         val title = metadata.title?.takeIf { it.isNotBlank() } ?: getString(
@@ -383,7 +440,7 @@ class MediaPlayerActivity : AppActivity() {
         body.setPadding(padding, dp(12), padding, dp(24))
         val size = if (wide) minOf((width * 0.4f).toInt(), height - dp(36), dp(400))
             else minOf(width - padding * 2, (height * 0.43f).toInt().coerceAtLeast(dp(180)), dp(400))
-        findViewById<View>(R.id.media_artwork).layoutParams = LinearLayout.LayoutParams(size, size)
+        findViewById<View>(R.id.media_music_visual).layoutParams = LinearLayout.LayoutParams(size, size)
         findViewById<View>(R.id.media_music_details).apply {
             layoutParams = if (wide) LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
                 else LinearLayout.LayoutParams(minOf(width - padding * 2, dp(480)), LinearLayout.LayoutParams.WRAP_CONTENT)
@@ -392,10 +449,20 @@ class MediaPlayerActivity : AppActivity() {
     }
 
     private fun applyMediaMode() {
+        music.resetSwipe()
         music.isVisible = !videoMode
         video.isVisible = videoMode
+        applyLyricsVisibility()
+        applyRotation()
         setVideoControlsVisible(true)
         applyFullscreen()
+    }
+
+    private fun applyLyricsVisibility() {
+        findViewById<View>(R.id.media_music_lyrics).isVisible = showLyrics
+        findViewById<View>(R.id.media_artwork).isVisible = !showLyrics
+        lyricsToggle.setTitle(if (showLyrics) R.string.media_artwork else R.string.media_lyrics)
+        musicLyrics.visible = showLyrics && !videoMode
     }
 
     private fun updateVideoLayout() {
@@ -409,10 +476,26 @@ class MediaPlayerActivity : AppActivity() {
         }
         val transport = findViewById<View>(R.id.media_video_transport)
         val bottom = findViewById<View>(R.id.media_video_bottom)
+        val actions = findViewById<LinearLayout>(R.id.media_video_actions)
+        val displayActions = findViewById<LinearLayout>(R.id.media_video_display_actions)
+        val speed = findViewById<View>(R.id.media_video_speed)
+        val availableWidth = videoChrome.width - videoChrome.paddingLeft - videoChrome.paddingRight
+            - bottom.paddingLeft - bottom.paddingRight
+        // Keep all six controls reachable on narrow screens and with larger text.
+        val stacked = availableWidth < speed.measuredWidth.coerceAtLeast(dp(64)) + dp(5 * 48)
+        val orientation = if (stacked) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+        if (actions.orientation != orientation) {
+            actions.orientation = orientation
+            displayActions.layoutParams = LinearLayout.LayoutParams(
+                if (stacked) LinearLayout.LayoutParams.MATCH_PARENT else 0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, if (stacked) 0f else 1f)
+        }
         (transport.layoutParams as FrameLayout.LayoutParams).apply {
-            topMargin = toolbarHeight
-            bottomMargin = bottom.height
-            transport.layoutParams = this
+            if (topMargin != toolbarHeight || bottomMargin != bottom.height) {
+                topMargin = toolbarHeight
+                bottomMargin = bottom.height
+                transport.layoutParams = this
+            }
         }
         val play = transport.findViewById<MaterialButton>(R.id.media_play_pause)
         val size = dp(if (compact) 64 else 80)
@@ -453,20 +536,12 @@ class MediaPlayerActivity : AppActivity() {
     }
 
     private fun showSettings() {
-        val player = controller ?: return
+        if (controller == null) return
         val options = mutableListOf<MediaOption>()
         fun option(icon: Int, label: Int, value: String = "", action: () -> Unit) {
             options += MediaOption(icon, getString(label), value, action = action)
         }
-        option(R.drawable.media_speed_icon, R.string.media_speed,
-            player.playbackParameters.speed.toString().removeSuffix(".0") + "×", ::chooseSpeed)
-        option(R.drawable.media_repeat_icon, R.string.media_repeat,
-            resources.getStringArray(R.array.media_repeat_modes)[player.repeatMode], ::chooseRepeat)
         if (videoMode) {
-            option(R.drawable.media_rotate_icon, R.string.media_rotation,
-                resources.getStringArray(R.array.media_rotation_modes)[rotation], ::chooseRotation)
-            option(R.drawable.media_aspect_icon, R.string.media_aspect,
-                resources.getStringArray(R.array.media_aspect_modes)[aspect], ::chooseAspect)
             option(R.drawable.audio_icon_white_24dp, R.string.media_audio_track) { chooseTrack(C.TRACK_TYPE_AUDIO) }
             option(R.drawable.media_subtitles_icon, R.string.media_subtitle, action = ::chooseSubtitles)
             option(R.drawable.media_tune_icon, R.string.media_decoder,
@@ -474,14 +549,6 @@ class MediaPlayerActivity : AppActivity() {
         }
         option(R.drawable.media_pip_icon, R.string.media_background,
             getString(if (background) R.string.media_on else R.string.media_off), ::chooseBackground)
-        option(R.drawable.notification_icon_white_24dp, R.string.media_live_alerts, action = ::showSystemControls)
-        option(R.drawable.reset_icon_white_24dp, R.string.media_retry) { player.prepare(); player.play() }
-        option(R.drawable.stop_icon_white_24dp, R.string.media_stop) {
-            player.stop()
-            player.clearMediaItems()
-            stopService(Intent(this, MediaPlaybackService::class.java))
-            finish()
-        }
         showDialog(MediaOptionsSheet(playerContext, getString(R.string.media_settings),
             getString(if (videoMode) R.string.media_video_title else R.string.media_music_title), options,
             findViewById<View>(R.id.media_root).height))
@@ -495,21 +562,34 @@ class MediaPlayerActivity : AppActivity() {
         choose(R.string.media_speed, speeds.map { "$it×" }.toTypedArray(),
             speeds.indexOfFirst { it == player.playbackParameters.speed }) { player.setPlaybackSpeed(speeds[it]) }
     }
-    private fun chooseRepeat() {
-        val player = controller ?: return
-        choose(R.string.media_repeat, resources.getStringArray(R.array.media_repeat_modes), player.repeatMode) { player.repeatMode = it }
+    private fun toggleRotation() {
+        rotation = if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) 2 else 1
+        applyRotation()
+        setVideoControlsVisible(true)
     }
-    private fun chooseRotation() = choose(R.string.media_rotation,
-        resources.getStringArray(R.array.media_rotation_modes), rotation) {
-        rotation = it
-        requestedOrientation = when (it) {
+    private fun applyRotation() {
+        requestedOrientation = when (if (videoMode) rotation else 0) {
             1 -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             2 -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
             else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
+        updateRotationButton()
     }
-    private fun chooseAspect() = choose(R.string.media_aspect,
-        resources.getStringArray(R.array.media_aspect_modes), aspect) { aspect = it; applyAspect() }
+    private fun updateRotationButton() {
+        val landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        findViewById<View>(R.id.media_video_rotate).apply {
+            contentDescription = getString(if (landscape) R.string.media_rotate_to_portrait else R.string.media_rotate_to_landscape)
+            tooltipText = contentDescription
+        }
+    }
+    private fun cycleAspect() {
+        aspect = (aspect + 1) % resources.getStringArray(R.array.media_aspect_modes).size
+        applyAspect()
+        aspectToast?.cancel()
+        aspectToast = Toast.makeText(this, getString(R.string.media_aspect_value,
+            resources.getStringArray(R.array.media_aspect_modes)[aspect]), Toast.LENGTH_SHORT).also { it.show() }
+        setVideoControlsVisible(true)
+    }
     private fun applyAspect() {
         playerView.resizeMode = when (aspect) {
             1 -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
@@ -517,6 +597,10 @@ class MediaPlayerActivity : AppActivity() {
             else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
         }
         playerView.forcedAspect = when (aspect) { 3 -> 16f / 9; 4 -> 4f / 3; else -> 0f }
+        findViewById<View>(R.id.media_video_aspect).apply {
+            stateDescription = resources.getStringArray(R.array.media_aspect_modes)[aspect]
+            tooltipText = getString(R.string.media_aspect_value, stateDescription)
+        }
     }
     private fun chooseDecoder() = choose(R.string.media_decoder,
         resources.getStringArray(R.array.media_decoder_modes), decoder) {
@@ -627,13 +711,6 @@ class MediaPlayerActivity : AppActivity() {
             else show(WindowInsetsCompat.Type.systemBars())
         }
         ViewCompat.requestApplyInsets(findViewById(R.id.media_root))
-    }
-    private fun showSystemControls() {
-        showDialog(MaterialAlertDialogBuilder(playerContext).setTitle(R.string.media_live_alerts)
-            .setMessage(R.string.media_live_alerts_info)
-            .setPositiveButton(R.string.media_notification_settings) { _, _ ->
-                startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
-            }.setNegativeButton(android.R.string.cancel, null).create())
     }
     private fun sendSettings(args: Bundle) {
         val player = controller ?: return

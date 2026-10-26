@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
+<me.zhanghai.android.files.viewer.media.MusicPlayerLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/media_music" android:layout_width="match_parent" android:layout_height="match_parent"
     android:background="?attr/colorSurface" android:orientation="vertical">
     <com.google.android.material.appbar.MaterialToolbar android:id="@+id/media_music_toolbar"
@@ -12,10 +12,13 @@
         <LinearLayout android:id="@+id/media_music_body" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:gravity="center" android:orientation="vertical" android:paddingHorizontal="24dp"
             android:paddingTop="12dp" android:paddingBottom="24dp">
-            <com.google.android.material.imageview.ShapeableImageView android:id="@+id/media_artwork"
-                android:layout_width="280dp" android:layout_height="280dp" android:importantForAccessibility="no"
-                android:scaleType="centerCrop" android:src="@drawable/media_album_placeholder"
-                app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.MaterialFiles.Media.Artwork" />
+            <FrameLayout android:id="@+id/media_music_visual" android:layout_width="280dp" android:layout_height="280dp">
+                <com.google.android.material.imageview.ShapeableImageView android:id="@+id/media_artwork"
+                    android:layout_width="match_parent" android:layout_height="match_parent" android:importantForAccessibility="no"
+                    android:scaleType="centerCrop" android:src="@drawable/media_album_placeholder"
+                    app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.MaterialFiles.Media.Artwork" />
+                <include layout="@layout/media_music_lyrics" />
+            </FrameLayout>
             <LinearLayout android:id="@+id/media_music_details" android:layout_width="match_parent"
                 android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="28dp">
                 <TextView android:id="@+id/media_music_title" android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -45,4 +48,4 @@
             </LinearLayout>
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
-</LinearLayout>
+</me.zhanghai.android.files.viewer.media.MusicPlayerLayout>

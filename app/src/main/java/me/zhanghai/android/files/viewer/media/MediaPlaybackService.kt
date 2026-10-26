@@ -36,6 +36,7 @@ class MediaPlaybackService : MediaSessionService() {
     @Volatile private var decoderMode = 0
     private var background = true
     private val leases = mutableMapOf<String, Closeable>()
+    private var fallbackLyrics: Pair<String, String>? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -116,6 +117,7 @@ class MediaPlaybackService : MediaSessionService() {
         val index = player.currentMediaItemIndex
         val position = player.currentPosition
         val play = player.playWhenReady
+        fallbackLyrics = EmbeddedLyrics.read(player.currentTracks)?.let { item.mediaId to it }
         val fallback = item.buildUpon().setUri(BassPcmDataSource.wrap(config.uri))
             .setMimeType(MimeTypes.AUDIO_WAV)
             .setMediaMetadata(player.mediaMetadata.buildUpon().setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC).build())
@@ -160,7 +162,10 @@ class MediaPlaybackService : MediaSessionService() {
                 return MediaSession.ConnectionResult.reject()
             }
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
-            if (controller.packageName == packageName) commands.add(SessionCommand(SETTINGS, Bundle.EMPTY))
+            if (controller.packageName == packageName) {
+                commands.add(SessionCommand(SETTINGS, Bundle.EMPTY))
+                commands.add(SessionCommand(GET_LYRICS, Bundle.EMPTY))
+            }
             val playerCommands = MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon()
             if (controller.packageName != packageName) {
                 playerCommands.remove(Player.COMMAND_SET_MEDIA_ITEM).remove(Player.COMMAND_CHANGE_MEDIA_ITEMS)
@@ -178,7 +183,23 @@ class MediaPlaybackService : MediaSessionService() {
 
         override fun onCustomCommand(session: MediaSession, controller: MediaSession.ControllerInfo,
             customCommand: SessionCommand, args: Bundle): ListenableFuture<SessionResult> {
-            if (controller.packageName != packageName || customCommand.customAction != SETTINGS) {
+            if (controller.packageName != packageName) {
+                return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
+            }
+            if (customCommand.customAction == GET_LYRICS) {
+                val mediaId = player.currentMediaItem?.mediaId
+                if (mediaId == null || mediaId != args.getString("media_id")) {
+                    return Futures.immediateFuture(SessionResult(SessionError.ERROR_INVALID_STATE))
+                }
+                // Format.metadata is not serialized through MediaController, so read it here.
+                val lyrics = EmbeddedLyrics.read(player.currentTracks)
+                    ?: fallbackLyrics?.takeIf { it.first == mediaId }?.second
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, Bundle().apply {
+                    putString("media_id", mediaId)
+                    putString("lyrics", lyrics)
+                }))
+            }
+            if (customCommand.customAction != SETTINGS) {
                 return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
             }
             if (args.containsKey(DECODER)) {
@@ -233,6 +254,7 @@ class MediaPlaybackService : MediaSessionService() {
 
     companion object {
         const val SETTINGS = "me.zhanghai.android.files.media.SETTINGS"
+        const val GET_LYRICS = "me.zhanghai.android.files.media.GET_LYRICS"
         const val DECODER = "decoder"
         const val BACKGROUND = "background"
         const val PREFERENCES = "media_playback"
