@@ -122,8 +122,9 @@ class MediaPlayerActivity : AppActivity() {
         pendingOpen = savedInstanceState?.getBoolean("pending_open") ?: (intent.data != null)
         val row = findViewById<LinearLayout>(R.id.media_controls)
         fun button(label: Int, action: () -> Unit) {
-            row.addView(MaterialButton(this, null, com.google.android.material.R.attr.borderlessButtonStyle).apply {
+            row.addView(MaterialButton(this, null, com.google.android.material.R.attr.materialButtonStyle).apply {
                 setText(label); setTextColor(0xFFFFFFFF.toInt())
+                backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.TRANSPARENT)
                 setOnClickListener { action() }
             })
         }
@@ -260,7 +261,7 @@ class MediaPlayerActivity : AppActivity() {
         val player = controller ?: return
         val speeds = floatArrayOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f)
         choose(R.string.media_speed, speeds.map { "$it×" }.toTypedArray(),
-            speeds.indexOf(player.playbackParameters.speed)) { player.setPlaybackSpeed(speeds[it]) }
+            speeds.indexOfFirst { it == player.playbackParameters.speed }) { player.setPlaybackSpeed(speeds[it]) }
     }
     private fun chooseRepeat() {
         val player = controller ?: return

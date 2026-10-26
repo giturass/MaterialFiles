@@ -184,7 +184,7 @@ internal class PlaybackDataSource(private val context: Context) : DataSource {
     override fun open(dataSpec: DataSpec): Long {
         val source = if (dataSpec.uri.scheme == BassPcmDataSource.SCHEME) {
             BassPcmDataSource(context)
-        } else DefaultDataSource(context)
+        } else DefaultDataSource.Factory(context).createDataSource()
         delegate = source
         listeners.forEach(source::addTransferListener)
         return source.open(dataSpec)
