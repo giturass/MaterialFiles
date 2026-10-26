@@ -7,6 +7,10 @@ third_party/sevenzip/jbinding-*/** -text -whitespace
 third_party/sevenzip/licenses/** -text -whitespace
 third_party/sevenzip/7z2604-src.tar.xz -text
 
+# Preserve official BASS APIs/notices and the bundled offline notice without normalization.
+third_party/bass/** -text -whitespace
+app/src/main/res/raw/license_bass.txt -text -whitespace
+
 # These upstream files intentionally retain their original whitespace/line endings.
 app/src/main/assets/sora/config/kotlin.json whitespace=-blank-at-eol
 app/src/main/assets/sora/licenses/sora-editor-LICENSE.txt whitespace=cr-at-eol
