@@ -418,7 +418,7 @@
             android:supportsPictureInPicture="true"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:label="@string/media_player_title"
-            android:theme="@style/Theme.MaterialFiles.Immersive" />
+            android:theme="@style/Theme.MaterialFiles" />
 
         <activity
             android:name=".viewer.media.OpenMediaActivity"

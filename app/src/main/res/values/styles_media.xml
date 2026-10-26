@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="ShapeAppearanceOverlay.MaterialFiles.Media.Artwork" parent="">
+        <item name="cornerSize">32dp</item>
+    </style>
+    <style name="Widget.MaterialFiles.Media.IconButton" parent="Widget.Material3.Button.TextButton">
+        <item name="android:layout_width">48dp</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:minHeight">0dp</item>
+        <item name="android:padding">8dp</item>
+        <item name="android:insetTop">0dp</item>
+        <item name="android:insetBottom">0dp</item>
+        <item name="iconPadding">0dp</item>
+        <item name="iconGravity">textStart</item>
+        <item name="iconSize">24dp</item>
+        <item name="iconTint">?attr/colorOnSurface</item>
+        <item name="cornerRadius">24dp</item>
+    </style>
+    <style name="Widget.MaterialFiles.Media.PlayButton" parent="Widget.MaterialFiles.Media.IconButton">
+        <item name="android:layout_width">80dp</item>
+        <item name="android:layout_height">80dp</item>
+        <item name="android:padding">18dp</item>
+        <item name="backgroundTint">?attr/colorPrimary</item>
+        <item name="iconTint">?attr/colorOnPrimary</item>
+        <item name="iconSize">44dp</item>
+        <item name="cornerRadius">28dp</item>
+    </style>
+    <style name="Widget.MaterialFiles.Media.VideoIconButton" parent="Widget.MaterialFiles.Media.IconButton">
+        <item name="iconTint">@android:color/white</item>
+        <item name="rippleColor">@color/media_video_button</item>
+    </style>
+    <style name="Widget.MaterialFiles.Media.Action" parent="Widget.Material3.Button.TonalButton">
+        <item name="android:minHeight">48dp</item>
+        <item name="android:paddingHorizontal">16dp</item>
+        <item name="iconSize">20dp</item>
+        <item name="cornerRadius">24dp</item>
+    </style>
+    <style name="Widget.MaterialFiles.Media.Time" parent="">
+        <item name="android:textAppearance">?attr/textAppearanceLabelMedium</item>
+        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+        <item name="android:importantForAccessibility">no</item>
+    </style>
+    <color name="media_video_secondary">#DDE2E7</color>
+    <color name="media_video_button">#33FFFFFF</color>
+</resources>

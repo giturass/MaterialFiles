@@ -6,6 +6,26 @@
 按界面排序形成播放列表，最多传入选中项周围的 100 项。压缩包中的媒体沿用提取预览流程。
 播放器服务持有缓存租约，退出界面后后台播放和循环时不会提前清理预览文件。
 
+## 播放界面
+
+音乐与视频使用独立的 Material Design 3 布局，切换媒体时自动选择对应界面。
+
+- 音乐页跟随应用的浅色、深色与系统动态配色。大圆角封面支持媒体内嵌图片，缺少封面时
+  显示随主题着色的唱片插画；歌名、歌手、专辑、进度和播放状态分层展示。
+- 音乐播放区提供大号播放按钮、前后曲、随机和循环状态；倍速与播放列表位于下方。
+  宽屏时封面与控制区并排，小屏或大字体时内容可滚动。
+- 视频页使用独立深色主题、渐变遮罩、中央播放及前后 10 秒控制，底部提供时间轴、
+  倍速、字幕、列表和全屏。点击画面唤出控制，播放中闲置 3.5 秒后隐藏；拖动进度、
+  打开设置或启用触摸探索时不自动隐藏。
+- 播放列表和设置使用圆角底部面板。视频面板包含旋转、画幅、音轨、字幕及解码选项；
+  音乐面板集中显示音频播放选项。两者均保留后台播放、系统控制、重试和停止入口。
+- 进度条支持触摸、键盘和无障碍定位；不可定位的媒体禁用拖动。拖动期间换曲时，
+  松手不会把上一首的拖动位置应用到新曲目。页面停止时释放控制监听和进度刷新任务。
+
+界面使用现有 Material Components 1.14.0、Media3 1.11.1 和 Coil 2.7.0，未增加播放引擎或
+界面依赖。布局/资源静态检查不等同于设备验收；仍需在 APK 上确认横竖屏、动态配色、
+封面、TalkBack、全屏与画中画的实际显示和交互。
+
 ## 功能与边界
 
 | 功能 | 实现 |
@@ -91,6 +111,8 @@ Termux 上通过 `python3 tools/verify_media_android.py <样本...>` 执行仓�
 - [Media3 支持格式](https://developer.android.com/media/media3/exoplayer/supported-formats)
 - [MediaSessionService 后台播放](https://developer.android.com/media/media3/session/background-playback)
 - [Media3 轨道选择](https://developer.android.com/media/media3/exoplayer/track-selection)
+- [Media3 播放控制行为](https://github.com/androidx/media/blob/1.11.1/libraries/common/src/main/java/androidx/media3/common/util/Util.java)
+- [Material Slider 属性](https://github.com/material-components/material-components-android/blob/1.14.0/lib/java/com/google/android/material/slider/res/values/attrs.xml)
 - [Media3 1.11.1 WAV/RF64 读取实现](https://github.com/androidx/media/blob/1.11.1/libraries/extractor/src/main/java/androidx/media3/extractor/wav/WavHeaderReader.java)
 - [BASS StreamCreateFile](https://www.un4seen.com/doc/bass/BASS_StreamCreateFile.html)
 - [BASS ChannelGetData](https://www.un4seen.com/doc/bass/BASS_ChannelGetData.html)

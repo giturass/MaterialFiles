@@ -1,6 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="media_player_title">媒体播放器</string>
+    <string name="media_music_title">音乐播放器</string>
+    <string name="media_video_title">视频播放器</string>
+    <string name="media_now_playing">正在播放</string>
+    <string name="media_local_audio">本地音频</string>
+    <string name="media_close_player">返回文件列表</string>
+    <string name="media_settings">播放设置</string>
+    <string name="media_play">播放</string>
+    <string name="media_pause">暂停</string>
+    <string name="media_previous">上一首</string>
+    <string name="media_next">下一首</string>
+    <string name="media_shuffle">随机播放</string>
+    <string name="media_rewind">后退 10 秒</string>
+    <string name="media_forward">快进 10 秒</string>
+    <string name="media_seek">播放进度</string>
+    <string name="media_fullscreen">进入全屏</string>
+    <string name="media_exit_fullscreen">退出全屏</string>
+    <string name="media_show_controls">显示播放控制</string>
+    <string name="media_normal_speed">1×</string>
+    <string name="media_speed_value">播放速度，%1$s</string>
+    <string name="media_zero_time">0:00</string>
+    <string name="media_unknown_time">--:--</string>
+    <string name="media_live">直播</string>
+    <string name="media_playing">播放中</string>
+    <string name="media_paused">已暂停</string>
+    <string name="media_buffering">正在缓冲</string>
+    <string name="media_finished">播放完毕</string>
+    <string name="media_queue_position">%1$d / %2$d</string>
+    <string name="media_queue_count">共 %1$d 项</string>
+    <string name="media_queue_item">第 %1$d 项</string>
+    <string name="media_playback_info">%1$s · %2$s</string>
+    <string name="media_video_info">%1$d × %2$d · %3$s</string>
     <string name="media_notification_channel">媒体播放</string>
     <string name="media_speed">倍速</string>
     <string name="media_repeat">循环</string>

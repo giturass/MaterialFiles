@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/media_music" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="?attr/colorSurface" android:orientation="vertical">
+    <com.google.android.material.appbar.MaterialToolbar android:id="@+id/media_music_toolbar"
+        android:layout_width="match_parent" android:layout_height="64dp" android:background="@android:color/transparent"
+        app:navigationIcon="@drawable/expand_more_icon_control_normal_24dp" app:navigationContentDescription="@string/media_close_player"
+        app:title="@string/media_now_playing" app:titleCentered="true" app:titleTextAppearance="?attr/textAppearanceTitleMedium" />
+    <androidx.core.widget.NestedScrollView android:id="@+id/media_music_scroll"
+        android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
+        android:fillViewport="true" android:clipToPadding="false" android:scrollbars="none">
+        <LinearLayout android:id="@+id/media_music_body" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:gravity="center" android:orientation="vertical" android:paddingHorizontal="24dp"
+            android:paddingTop="12dp" android:paddingBottom="24dp">
+            <com.google.android.material.imageview.ShapeableImageView android:id="@+id/media_artwork"
+                android:layout_width="280dp" android:layout_height="280dp" android:importantForAccessibility="no"
+                android:scaleType="centerCrop" android:src="@drawable/media_album_placeholder"
+                app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.MaterialFiles.Media.Artwork" />
+            <LinearLayout android:id="@+id/media_music_details" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="28dp">
+                <TextView android:id="@+id/media_music_title" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:ellipsize="end" android:maxLines="2" android:text="@string/media_music_title"
+                    android:textAppearance="?attr/textAppearanceHeadlineSmall" android:textColor="?attr/colorOnSurface" android:textStyle="bold" />
+                <TextView android:id="@+id/media_music_artist" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp" android:ellipsize="end" android:maxLines="2" android:text="@string/media_local_audio"
+                    android:textAppearance="?attr/textAppearanceBodyLarge" android:textColor="?attr/colorOnSurfaceVariant" />
+                <TextView android:id="@+id/media_music_info" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp" android:textAppearance="?attr/textAppearanceLabelMedium"
+                    android:textColor="?attr/colorPrimary" android:accessibilityLiveRegion="polite" />
+                <include android:id="@+id/media_music_transport" layout="@layout/media_music_controls"
+                    android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" />
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="28dp" android:gravity="center" android:orientation="horizontal">
+                    <com.google.android.material.button.MaterialButton android:id="@+id/media_music_speed"
+                        style="@style/Widget.MaterialFiles.Media.Action" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:minWidth="64dp" android:text="@string/media_normal_speed" android:contentDescription="@string/media_speed" />
+                    <com.google.android.material.button.MaterialButton android:id="@+id/media_music_queue"
+                        style="@style/Widget.MaterialFiles.Media.Action" android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:minWidth="0dp" android:layout_marginHorizontal="8dp"
+                        android:text="@string/media_queue" app:icon="@drawable/media_queue_icon" />
+                    <com.google.android.material.button.MaterialButton android:id="@+id/media_music_settings"
+                        style="@style/Widget.MaterialFiles.Media.IconButton" android:contentDescription="@string/media_settings"
+                        app:icon="@drawable/media_tune_icon" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</LinearLayout>
