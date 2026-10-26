@@ -43,7 +43,11 @@
 
     <string name="about_all_licenses_title">全部组件与许可证</string>
     <string name="about_all_licenses_summary">查看完整开源组件清单及许可声明</string>
-    <string name="about_licenses_title">开源许可证</string>
+    <string name="about_licenses_title">第三方组件许可证</string>
+    <string name="about_component_media_title">Media3 · ExoPlayer</string>
+    <string name="about_component_media_summary">视频、音频播放，轨道选择与后台媒体会话</string>
+    <string name="about_component_bass_title">BASS · 音频解码</string>
+    <string name="about_component_bass_summary">ALAC、FLAC、WavPack 等音频格式兜底解码</string>
     <string name="about_privacy_policy_title">隐私权政策</string>
     <string name="about_privacy_policy_summary">查看隐私说明</string>
 </resources>

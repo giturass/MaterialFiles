@@ -179,7 +179,9 @@ fun Path.createViewIntent(mimeType: MimeType, useInternalEditor: Boolean = true)
             extraPath = this@createViewIntent
             if (useInternalEditor) {
                 val name = this@createViewIntent.fileName?.toString().orEmpty()
-                if (name.endsWith(".txt", ignoreCase = true)
+                if (me.zhanghai.android.files.viewer.media.PlaybackPolicy.isMedia(name, mimeType.value)) {
+                    setClass(application, me.zhanghai.android.files.viewer.media.MediaPlayerActivity::class.java)
+                } else if (name.endsWith(".txt", ignoreCase = true)
                     || name.endsWith(".md", ignoreCase = true)) {
                     setClass(application, SoraEditorActivity::class.java)
                 }

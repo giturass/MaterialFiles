@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/media_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#000000">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/media_toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="#161616"
+        app:titleTextColor="#FFFFFF"
+        app:navigationIconTint="#FFFFFF"
+        app:navigationIcon="?attr/homeAsUpIndicator"
+        app:title="@string/media_player_title" />
+
+    <me.zhanghai.android.files.viewer.media.AspectPlayerView
+        android:id="@+id/media_player"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:keepScreenOn="false"
+        app:show_buffering="when_playing"
+        app:show_subtitle_button="true"
+        app:show_shuffle_button="true"
+        app:repeat_toggle_modes="one|all"
+        app:use_artwork="true" />
+
+    <TextView
+        android:id="@+id/media_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="8dp"
+        android:textColor="#FFFFFF"
+        android:visibility="gone"
+        android:accessibilityLiveRegion="polite" />
+
+    <HorizontalScrollView
+        android:id="@+id/media_controls_scroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#161616"
+        android:fillViewport="true"
+        android:scrollbars="none">
+        <LinearLayout
+            android:id="@+id/media_controls"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="8dp" />
+    </HorizontalScrollView>
+</LinearLayout>

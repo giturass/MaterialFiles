@@ -21,6 +21,9 @@
 #-renamesourcefileattribute SourceFile
 
 # Native methods
+# BASS uses JNI lookups for its nested callback and channel-info classes.
+-keep class com.un4seen.bass.** { *; }
+-keep class me.zhanghai.android.files.viewer.media.AspectPlayerView { public <init>(...); }
 # https://www.guardsquare.com/en/products/proguard/manual/examples#native
 -keepclasseswithmembernames,includedescriptorclasses class * {
     native <methods>;
