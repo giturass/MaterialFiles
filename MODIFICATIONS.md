@@ -2,6 +2,8 @@
 
 基于 [Material Files](https://github.com/zhanghai/MaterialFiles) 的 `c9b29cb3`（1.7.5）。
 
+- 新增内置 Media3 / ExoPlayer 音视频播放器，支持设备软硬解选择、循环、倍速、横竖屏、画幅、音轨、内嵌/外挂字幕、播放列表和画中画。后台使用 MediaSessionService / MediaSession，音频解码不支持时由 BASS + ALAC/FLAC/WavPack 插件兜底，仍由 ExoPlayer 统一输出。OxygenOS 15 流体云受系统媒体白名单限制，当前不承诺原生胶囊可用。实现、许可和验证范围见 [媒体播放器](docs/media-player.md)。
+
 - 文件浏览仅保留列表，移除网格入口、布局和视图类型设置；原有全局和各文件夹的排序设置继续可用。
 - 打开 Android/data、Android/obb 及其子目录时优先使用 Root，其次请求 Shizuku 授权；不可用或被拒绝时转到系统 DocumentsUI，普通模式也使用此流程。移除“添加存储空间”中的 Android/data、Android/obb 项；已有快捷方式继续使用相同的访问流程。
 - 文件与文件夹名称显示在第一行；第二行左侧显示文件夹的直接子项数量或文件大小，右侧按本地时区显示 `yyyy/MM/dd HH:mm`。文件夹项数在后台读取并缓存，无法读取时显示“—”。

@@ -18,6 +18,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.OnBackPressedCallback
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -66,6 +67,11 @@ class MediaPlayerActivity : AppActivity() {
     private var rotation = 0
     private var subtitleSize = 20f
     private var isStarted = false
+    private var fullscreen = false
+    private var subtitleMediaId: String? = null
+    private val fullscreenBack = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() { fullscreen = false; applyFullscreen() }
+    }
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) { updateUi() }
     }
@@ -84,6 +90,7 @@ class MediaPlayerActivity : AppActivity() {
                 }
                 if (mime == null) toast(getString(R.string.media_subtitle_invalid))
                 else sendSettings(Bundle().apply {
+                    putString("subtitle_media_id", subtitleMediaId)
                     putString("subtitle_uri", uri.toString())
                     putString("subtitle_mime", mime)
                     putString("subtitle_name", name)
@@ -98,8 +105,14 @@ class MediaPlayerActivity : AppActivity() {
         setContentView(R.layout.media_player_activity)
         toolbar = findViewById(R.id.media_toolbar)
         playerView = findViewById(R.id.media_player)
+        playerView.defaultArtwork = ContextCompat.getDrawable(this, R.drawable.audio_icon_white_24dp)
         status = findViewById(R.id.media_status)
         controls = findViewById(R.id.media_controls_scroll)
+        fullscreen = savedInstanceState?.getBoolean("fullscreen") ?: false
+        subtitleMediaId = savedInstanceState?.getString("subtitle_media_id")
+        onBackPressedDispatcher.addCallback(this, fullscreenBack)
+        playerView.setFullscreenButtonClickListener { fullscreen = it; applyFullscreen() }
+        applyFullscreen()
         toolbar.setNavigationOnClickListener { finish() }
         val root = findViewById<View>(R.id.media_root)
         ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
@@ -196,6 +209,8 @@ class MediaPlayerActivity : AppActivity() {
         outState.putInt("aspect", aspect)
         outState.putInt("rotation", rotation)
         outState.putFloat("subtitle_size", subtitleSize)
+        outState.putBoolean("fullscreen", fullscreen)
+        outState.putString("subtitle_media_id", subtitleMediaId)
         super.onSaveInstanceState(outState)
     }
 
@@ -286,14 +301,9 @@ class MediaPlayerActivity : AppActivity() {
         }
         playerView.forcedAspect = when (aspect) { 3 -> 16f / 9; 4 -> 4f / 3; else -> 0f }
     }
-    private fun chooseDecoder() {
-        MaterialAlertDialogBuilder(this).setTitle(R.string.media_decoder)
-            .setMessage(R.string.media_decoder_hint)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                choose(R.string.media_decoder, resources.getStringArray(R.array.media_decoder_modes), decoder) {
-                    sendSettings(Bundle().apply { putInt(MediaPlaybackService.DECODER, it) })
-                }
-            }.setNegativeButton(android.R.string.cancel, null).show()
+    private fun chooseDecoder() = choose(R.string.media_decoder,
+        resources.getStringArray(R.array.media_decoder_modes), decoder) {
+        sendSettings(Bundle().apply { putInt(MediaPlaybackService.DECODER, it) })
     }
     private fun chooseBackground() = choose(R.string.media_background,
         arrayOf(getString(R.string.media_off), getString(R.string.media_on)), if (background) 1 else 0) {
@@ -331,7 +341,10 @@ class MediaPlayerActivity : AppActivity() {
         )) { _, which ->
             when (which) {
                 0 -> chooseTrack(C.TRACK_TYPE_TEXT)
-                1 -> subtitlePicker.launch(arrayOf("*/*"))
+                1 -> {
+                    subtitleMediaId = controller?.currentMediaItem?.mediaId
+                    subtitlePicker.launch(arrayOf("*/*"))
+                }
                 2 -> choose(R.string.media_subtitle_size, arrayOf("16", "20", "24", "28", "32"),
                     listOf(16f, 20f, 24f, 28f, 32f).indexOf(subtitleSize)) {
                     subtitleSize = floatArrayOf(16f, 20f, 24f, 28f, 32f)[it]
@@ -360,9 +373,20 @@ class MediaPlayerActivity : AppActivity() {
     }
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        toolbar.visibility = if (isInPictureInPictureMode) View.GONE else View.VISIBLE
-        controls.visibility = toolbar.visibility
+        applyFullscreen()
         playerView.useController = !isInPictureInPictureMode
+    }
+    private fun applyFullscreen() {
+        val hidden = fullscreen || isInPictureInPictureMode
+        toolbar.visibility = if (hidden) View.GONE else View.VISIBLE
+        controls.visibility = toolbar.visibility
+        playerView.setFullscreenButtonState(fullscreen)
+        fullscreenBack.isEnabled = fullscreen
+        WindowInsetsControllerCompat(window, playerView).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            if (hidden) hide(WindowInsetsCompat.Type.systemBars())
+            else show(WindowInsetsCompat.Type.systemBars())
+        }
     }
     private fun showSystemControls() {
         MaterialAlertDialogBuilder(this).setTitle(R.string.media_live_alerts)

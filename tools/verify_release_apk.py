@@ -187,6 +187,11 @@ def main():
         raise RuntimeError("Sora editor activity is missing from the APK manifest")
     if "me.zhanghai.android.files.viewer.text.TextEditorActivity" in tree:
         raise RuntimeError("The old text editor activity is still registered")
+    for component in ("MediaPlayerActivity", "OpenMediaActivity", "MediaPlaybackService"):
+        if ".viewer.media." + component not in tree:
+            raise RuntimeError("Missing media component: " + component)
+    if "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" not in tree:
+        raise RuntimeError("Media playback foreground service permission is missing")
 
     assets = Path(__file__).resolve().parents[1] / "app/src/main/assets/sora"
     provenance = json.loads((assets / "sources.json").read_text(encoding="utf-8"))
@@ -196,6 +201,15 @@ def main():
         abis = sorted({name.split("/")[1] for name in names
                        if name.startswith("lib/") and name.endswith(".so")})
         min_sdk = verify_release_platform(badging, abis)
+        bass_libraries = {}
+        for library in ("bass", "bassalac", "bassflac", "basswv"):
+            name = f"lib/arm64-v8a/lib{library}.so"
+            if name not in names:
+                raise RuntimeError("Missing BASS decoder: " + name)
+            bass_libraries[library] = verify_native_library(archive.read(name), "arm64-v8a", library, ())
+        if not any(b"Lcom/un4seen/bass/BASS;" in archive.read(name)
+                   for name in names if re.fullmatch(r"classes(?:\d+)?\.dex", name)):
+            raise RuntimeError("BASS JNI bridge was removed or renamed")
         engine_libraries = {}
         property_libraries = {}
         for abi in abis:
@@ -248,6 +262,8 @@ def main():
         "archive_property_bridge_abis_checked": abis,
         "archive_property_bridge_libraries": property_libraries,
         "sora_activity_registered": True,
+        "media_components_registered": True,
+        "bass_libraries": bass_libraries,
         "old_editor_activity_removed": True,
         "source_assets_verified": len(sources),
         "pinned_asset_checksums_verified": len(provenance["files"]),

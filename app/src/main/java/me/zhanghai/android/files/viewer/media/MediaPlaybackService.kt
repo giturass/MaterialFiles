@@ -19,6 +19,7 @@ import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -45,7 +46,7 @@ class MediaPlaybackService : MediaSessionService() {
             .setEnableDecoderFallback(true)
             .setMediaCodecSelector { mime, secure, tunneling ->
                 val codecs = MediaCodecSelector.DEFAULT.getDecoderInfos(mime, secure, tunneling)
-                when (decoderMode) {
+                if (!mime.startsWith("video/")) codecs else when (decoderMode) {
                     1 -> codecs.filter { it.hardwareAccelerated }
                     2 -> codecs.filter { it.softwareOnly }
                     else -> codecs.sortedByDescending { it.hardwareAccelerated }
@@ -87,7 +88,8 @@ class MediaPlaybackService : MediaSessionService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        if (!background || !player.playWhenReady || player.mediaItemCount == 0) {
+        if (!background || !player.playWhenReady || player.mediaItemCount == 0
+            || player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) {
             player.pause()
             stopSelf()
         }
@@ -105,14 +107,19 @@ class MediaPlaybackService : MediaSessionService() {
     private fun tryBassFallback(error: PlaybackException) {
         val item = player.currentMediaItem ?: return
         val config = item.localConfiguration ?: return
-        if (item.mediaMetadata.mediaType != MediaMetadata.MEDIA_TYPE_MUSIC
+        val groups = player.currentTracks.groups
+        val audioOnly = item.mediaMetadata.mediaType == MediaMetadata.MEDIA_TYPE_MUSIC ||
+            (groups.any { it.type == C.TRACK_TYPE_AUDIO } && groups.none { it.type == C.TRACK_TYPE_VIDEO })
+        if (!audioOnly
             || config.uri.scheme == BassPcmDataSource.SCHEME
             || !PlaybackPolicy.canFallback(error.errorCode)) return
         val index = player.currentMediaItemIndex
         val position = player.currentPosition
         val play = player.playWhenReady
         val fallback = item.buildUpon().setUri(BassPcmDataSource.wrap(config.uri))
-            .setMimeType(MimeTypes.AUDIO_WAV).build()
+            .setMimeType(MimeTypes.AUDIO_WAV)
+            .setMediaMetadata(player.mediaMetadata.buildUpon().setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC).build())
+            .build()
         player.replaceMediaItem(index, fallback)
         player.seekTo(index, position)
         player.prepare()
@@ -172,11 +179,11 @@ class MediaPlaybackService : MediaSessionService() {
         override fun onCustomCommand(session: MediaSession, controller: MediaSession.ControllerInfo,
             customCommand: SessionCommand, args: Bundle): ListenableFuture<SessionResult> {
             if (controller.packageName != packageName || customCommand.customAction != SETTINGS) {
-                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED))
+                return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
             }
             if (args.containsKey(DECODER)) {
                 val mode = args.getInt(DECODER)
-                if (mode !in 0..2) return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_BAD_VALUE))
+                if (mode !in 0..2) return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
                 if (decoderMode != mode) {
                     decoderMode = mode
                     // stop/prepare releases renderers while retaining the playlist, position and session.
@@ -197,10 +204,13 @@ class MediaPlaybackService : MediaSessionService() {
                 val mime = args.getString("subtitle_mime")
                 if (uri.scheme != "content" || mime !in setOf(MimeTypes.APPLICATION_SUBRIP,
                     MimeTypes.TEXT_SSA, MimeTypes.TEXT_VTT, MimeTypes.APPLICATION_TTML)) {
-                    return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_BAD_VALUE))
+                    return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
                 }
                 val item = player.currentMediaItem
-                    ?: return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_INVALID_STATE))
+                    ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_INVALID_STATE))
+                if (args.getString("subtitle_media_id") != item.mediaId) {
+                    return Futures.immediateFuture(SessionResult(SessionError.ERROR_INVALID_STATE))
+                }
                 val subtitle = MediaItem.SubtitleConfiguration.Builder(uri).setMimeType(mime)
                     .setLabel(args.getString("subtitle_name"))
                     .setSelectionFlags(C.SELECTION_FLAG_DEFAULT).build()

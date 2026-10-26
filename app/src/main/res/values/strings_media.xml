@@ -20,13 +20,11 @@
     <string name="media_empty">没有正在播放的文件</string>
     <string name="media_connect_error">无法连接播放器：%1$s</string>
     <string name="media_error">播放失败：%1$s</string>
-    <string name="media_decoder_hint">自动优先硬解，可回退到其他可用解码器。软解和硬解均使用设备提供的 MediaCodec；格式支持取决于设备。</string>
     <string name="media_subtitle_file">加载字幕文件</string>
     <string name="media_subtitle_size">字幕大小</string>
     <string name="media_subtitle_invalid">请选择 SRT、ASS、SSA、VTT 或 TTML 字幕</string>
-    <string name="media_no_tracks">当前文件没有可用的轨道</string>
     <string name="media_live_alerts">系统媒体控制</string>
-    <string name="media_live_alerts_info">支持通知栏、锁屏和耳机播放控制。OxygenOS 的流体云展示由系统决定，可在手机的“通知与快速设置 → 实时提醒”中检查应用是否受支持。</string>
+    <string name="media_live_alerts_info">支持通知栏、锁屏和耳机播放控制。OxygenOS 15 的媒体流体云仅向系统支持列表中的应用开放；是否显示状态栏胶囊由手机系统决定，可在系统设置的“实时提醒/流体云”中查看支持情况。</string>
     <string name="media_notification_settings">通知设置</string>
     <string-array name="media_decoder_modes"><item>自动</item><item>硬件解码</item><item>软件解码</item></string-array>
     <string-array name="media_repeat_modes"><item>顺序播放</item><item>单曲循环</item><item>列表循环</item></string-array>
