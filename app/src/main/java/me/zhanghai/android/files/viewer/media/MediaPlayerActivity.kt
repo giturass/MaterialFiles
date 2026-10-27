@@ -481,8 +481,8 @@ class MediaPlayerActivity : AppActivity() {
         val actions = findViewById<LinearLayout>(R.id.media_video_actions)
         val displayActions = findViewById<LinearLayout>(R.id.media_video_display_actions)
         val speed = findViewById<View>(R.id.media_video_speed)
-        val availableWidth = videoChrome.width - videoChrome.paddingLeft - videoChrome.paddingRight
-            - bottom.paddingLeft - bottom.paddingRight
+        val availableWidth = videoChrome.width - videoChrome.paddingLeft - videoChrome.paddingRight -
+            bottom.paddingLeft - bottom.paddingRight
         // Keep all six controls reachable on narrow screens and with larger text.
         val stacked = availableWidth < speed.measuredWidth.coerceAtLeast(dp(64)) + dp(5 * 48)
         val orientation = if (stacked) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
