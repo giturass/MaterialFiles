@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.view.GestureDetector
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
@@ -42,7 +43,7 @@ import me.zhanghai.android.files.util.getColorByAttr
 import com.google.android.material.R as MaterialR
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-internal class MusicLyricsController(root: View, private val scope: CoroutineScope) {
+internal class MusicLyricsController(root: View, private val scope: CoroutineScope, private val onBlankClick: () -> Unit) {
     private val context = root.context
     private val preferences = context.getSharedPreferences("media_lyrics", android.content.Context.MODE_PRIVATE)
     private val list = root.findViewById<RecyclerView>(R.id.media_lyrics_list)
@@ -57,6 +58,20 @@ internal class MusicLyricsController(root: View, private val scope: CoroutineSco
     private var active = -1
     private var centered = -1
     private var followAfter = 0L
+    private var blankTapCandidate = false
+    private val blankTapDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
+        override fun onDown(event: MotionEvent): Boolean {
+            blankTapCandidate = list.scrollState == RecyclerView.SCROLL_STATE_IDLE && isBlankSpace(event.x, event.y)
+            return true
+        }
+
+        override fun onSingleTapUp(event: MotionEvent): Boolean {
+            if (!visible || !blankTapCandidate || list.scrollState != RecyclerView.SCROLL_STATE_IDLE
+                || !isBlankSpace(event.x, event.y)) return false
+            list.performClick()
+            return true
+        }
+    }).apply { setOnDoubleTapListener(null) }
     private val adapter = object : RecyclerView.Adapter<LineHolder>() {
         override fun onCreateViewHolder(parent: ViewGroup, type: Int) = LineHolder(
             LayoutInflater.from(parent.context).inflate(R.layout.media_lyric_line, parent, false) as TextView)
@@ -83,10 +98,15 @@ internal class MusicLyricsController(root: View, private val scope: CoroutineSco
             if (field == value) return
             field = value
             centered = -1
+            blankTapCandidate = false
+            if (!value) list.stopScroll()
             scheduleTick()
         }
 
     init {
+        root.findViewById<View>(R.id.media_music_lyrics).setOnClickListener { onBlankClick() }
+        status.setOnClickListener { onBlankClick() }
+        list.setOnClickListener { onBlankClick() }
         list.layoutManager = layout
         list.adapter = adapter
         list.itemAnimator = null
@@ -99,12 +119,13 @@ internal class MusicLyricsController(root: View, private val scope: CoroutineSco
         list.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
             override fun onInterceptTouchEvent(rv: RecyclerView, event: MotionEvent): Boolean {
                 if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-                    // The fixed-height lyrics pane scrolls independently of the music page.
+                    // Scrolling lyrics must not dismiss the player or immediately resume following.
                     rv.parent.requestDisallowInterceptTouchEvent(true)
                     followAfter = SystemClock.uptimeMillis() + 4000
                     centered = -1
                 }
-                return false
+                val handled = blankTapDetector.onTouchEvent(event)
+                return handled && event.actionMasked == MotionEvent.ACTION_UP
             }
         })
         list.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -112,6 +133,17 @@ internal class MusicLyricsController(root: View, private val scope: CoroutineSco
                 followAfter = SystemClock.uptimeMillis() + 4000
             }
         })
+    }
+
+    private fun isBlankSpace(x: Float, y: Float): Boolean {
+        val row = list.findChildViewUnder(x, y) as? TextView ?: return true
+        if (row.text.isBlank()) return true
+        val textLayout = row.layout ?: return false
+        val textX = x - row.x - row.compoundPaddingLeft + row.scrollX
+        val textY = y - row.y - row.totalPaddingTop + row.scrollY
+        if (textY < 0 || textY >= textLayout.height) return true
+        val line = textLayout.getLineForVertical(textY.toInt())
+        return textX < textLayout.getLineLeft(line) || textX > textLayout.getLineRight(line)
     }
 
     fun update(value: MediaController?) {
@@ -239,7 +271,7 @@ internal class MusicLyricsController(root: View, private val scope: CoroutineSco
         if (!visible || target < 0 || centered == target || SystemClock.uptimeMillis() < followAfter
             || list.scrollState != RecyclerView.SCROLL_STATE_IDLE
             || context.getSystemService(AccessibilityManager::class.java).isTouchExplorationEnabled) return
-        val lineHeight = layout.findViewByPosition(target)?.height ?: (48 * context.resources.displayMetrics.density).toInt()
+        val lineHeight = layout.findViewByPosition(target)?.height ?: (56 * context.resources.displayMetrics.density).toInt()
         layout.scrollToPositionWithOffset(target, (list.height - lineHeight) / 2 - list.paddingTop)
         centered = target
     }

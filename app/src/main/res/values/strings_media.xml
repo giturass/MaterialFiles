@@ -5,8 +5,8 @@
     <string name="media_video_title">视频播放器</string>
     <string name="media_now_playing">正在播放</string>
     <string name="media_local_audio">本地音频</string>
-    <string name="media_lyrics">歌词</string>
-    <string name="media_artwork">封面</string>
+    <string name="media_show_lyrics">查看全屏歌词</string>
+    <string name="media_close_lyrics">返回播放界面</string>
     <string name="media_load_lyrics">加载歌词</string>
     <string name="media_lyrics_empty">暂无歌词，可加载 LRC 或 TXT 歌词文件</string>
     <string name="media_lyrics_loading">正在读取歌词…</string>

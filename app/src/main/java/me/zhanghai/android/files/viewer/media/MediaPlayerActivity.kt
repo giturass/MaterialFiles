@@ -66,7 +66,6 @@ class MediaPlayerActivity : AppActivity() {
     private lateinit var playerView: AspectPlayerView
     private lateinit var music: MusicPlayerLayout
     private lateinit var musicLyrics: MusicLyricsController
-    private lateinit var lyricsToggle: MenuItem
     private var showLyrics = false
     private var lyricsMediaId: String? = null
     private lateinit var video: View
@@ -95,6 +94,9 @@ class MediaPlayerActivity : AppActivity() {
     private var isStarted = false
     private var fullscreen = false
     private var subtitleMediaId: String? = null
+    private val lyricsBack = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() { setLyricsVisible(false) }
+    }
     private val fullscreenBack = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
             fullscreen = false
@@ -146,8 +148,12 @@ class MediaPlayerActivity : AppActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.media_player_activity)
         music = findViewById(R.id.media_music)
-        musicLyrics = MusicLyricsController(music, lifecycleScope)
-        music.onDismiss = { if (!videoMode) finish() }
+        musicLyrics = MusicLyricsController(music, lifecycleScope) { setLyricsVisible(false) }
+        music.onDismiss = {
+            if (!videoMode) {
+                if (showLyrics) setLyricsVisible(false) else finish()
+            }
+        }
         video = findViewById(R.id.media_video)
         videoChrome = findViewById(R.id.media_video_chrome)
         playerView = findViewById(R.id.media_player)
@@ -161,17 +167,9 @@ class MediaPlayerActivity : AppActivity() {
         subtitleMediaId = savedInstanceState?.getString("subtitle_media_id")
         lyricsMediaId = savedInstanceState?.getString("lyrics_media_id")
         showLyrics = savedInstanceState?.getBoolean("show_lyrics") ?: false
+        onBackPressedDispatcher.addCallback(this, lyricsBack)
         onBackPressedDispatcher.addCallback(this, fullscreenBack)
-        val musicToolbar = findViewById<MaterialToolbar>(R.id.media_music_toolbar)
-        musicToolbar.setNavigationOnClickListener { finish() }
-        lyricsToggle = musicToolbar.menu.add(R.string.media_lyrics).apply {
-            setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
-            setOnMenuItemClickListener {
-                showLyrics = !showLyrics
-                applyLyricsVisibility()
-                true
-            }
-        }
+        findViewById<View>(R.id.media_artwork).setOnClickListener { setLyricsVisible(true) }
         findViewById<View>(R.id.media_load_lyrics).setOnClickListener {
             lyricsMediaId = controller?.currentMediaItem?.mediaId
             if (lyricsMediaId != null) lyricsPicker.launch(arrayOf("*/*"))
@@ -400,7 +398,7 @@ class MediaPlayerActivity : AppActivity() {
         findViewById<TextView>(R.id.media_music_info).text = getString(R.string.media_playback_info, state, queueInfo)
         val speed = player.playbackParameters.speed.toString().removeSuffix(".0") + "×"
         for (id in intArrayOf(R.id.media_music_speed, R.id.media_video_speed)) {
-            findViewById<MaterialButton>(id).apply {
+            findViewById<TextView>(id).apply {
                 text = speed
                 contentDescription = getString(R.string.media_speed_value, speed)
             }
@@ -436,12 +434,12 @@ class MediaPlayerActivity : AppActivity() {
     private fun updateMusicLayout(width: Int, height: Int) {
         if (width == 0 || height == 0) return
         val wide = width >= dp(600) && width > height
-        val padding = dp(if (width < dp(360)) 16 else 24)
+        val padding = dp(if (width < dp(360)) 16 else 20)
         val body = findViewById<LinearLayout>(R.id.media_music_body)
         body.orientation = if (wide) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
         body.setPadding(padding, dp(12), padding, dp(24))
-        val size = if (wide) minOf((width * 0.4f).toInt(), height - dp(36), dp(400))
-            else minOf(width - padding * 2, (height * 0.43f).toInt().coerceAtLeast(dp(180)), dp(400))
+        val size = if (wide) minOf((width * 0.4f).toInt(), height - dp(36), dp(480))
+            else minOf(width - padding * 2, (height * 0.55f).toInt().coerceAtLeast(dp(180)), dp(480))
         findViewById<View>(R.id.media_music_visual).layoutParams = LinearLayout.LayoutParams(size, size)
         findViewById<View>(R.id.media_music_details).apply {
             layoutParams = if (wide) LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
@@ -460,11 +458,20 @@ class MediaPlayerActivity : AppActivity() {
         applyFullscreen()
     }
 
+    private fun setLyricsVisible(visible: Boolean) {
+        if (showLyrics == visible) return
+        showLyrics = visible
+        music.resetSwipe()
+        applyLyricsVisibility()
+        applyFullscreen()
+    }
+
     private fun applyLyricsVisibility() {
-        findViewById<View>(R.id.media_music_lyrics).isVisible = showLyrics
-        findViewById<View>(R.id.media_artwork).isVisible = !showLyrics
-        lyricsToggle.setTitle(if (showLyrics) R.string.media_artwork else R.string.media_lyrics)
-        musicLyrics.visible = showLyrics && !videoMode
+        val visible = showLyrics && !videoMode
+        findViewById<View>(R.id.media_music_lyrics).isVisible = visible
+        findViewById<View>(R.id.media_music_scroll).isVisible = !visible
+        lyricsBack.isEnabled = visible
+        musicLyrics.visible = visible
     }
 
     private fun updateVideoLayout() {
@@ -699,7 +706,7 @@ class MediaPlayerActivity : AppActivity() {
         if (isInPictureInPictureMode) status.isVisible = false else updateUi()
     }
     private fun applyFullscreen() {
-        val hidden = (videoMode && fullscreen) || isInPictureInPictureMode
+        val hidden = (videoMode && fullscreen) || (!videoMode && showLyrics) || isInPictureInPictureMode
         findViewById<MaterialButton>(R.id.media_video_fullscreen).apply {
             setIconResource(if (fullscreen) R.drawable.media_fullscreen_exit_icon else R.drawable.media_fullscreen_icon)
             contentDescription = getString(if (fullscreen) R.string.media_exit_fullscreen else R.string.media_fullscreen)

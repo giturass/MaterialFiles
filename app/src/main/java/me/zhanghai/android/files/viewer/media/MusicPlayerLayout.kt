@@ -10,6 +10,7 @@ import android.widget.LinearLayout
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.slider.Slider
 import kotlin.math.abs
+import me.zhanghai.android.files.R
 
 /** Only take downward gestures that start outside controls and scrolled content. */
 class MusicPlayerLayout @JvmOverloads constructor(context: Context, attrs: AttributeSet? = null) : LinearLayout(context, attrs) {
@@ -87,7 +88,8 @@ class MusicPlayerLayout @JvmOverloads constructor(context: Context, attrs: Attri
     }
 
     private fun canStartSwipe(view: View, x: Float, y: Float): Boolean {
-        if (view is Slider || view is RecyclerView || view.isClickable || view.canScrollVertically(-1)) return false
+        if (view is Slider || view is RecyclerView || view.canScrollVertically(-1)
+            || (view.isClickable && view.id != R.id.media_artwork)) return false
         if (view is ViewGroup) {
             for (index in view.childCount - 1 downTo 0) {
                 val child = view.getChildAt(index)
