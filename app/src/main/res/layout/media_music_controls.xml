@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+    <include layout="@layout/media_timeline" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp"
+        android:gravity="center" android:layoutDirection="ltr" android:orientation="horizontal">
+        <com.google.android.material.button.MaterialButton android:id="@+id/media_shuffle"
+            style="@style/Widget.MaterialFiles.Media.IconButton" android:contentDescription="@string/media_shuffle" app:icon="@drawable/media_shuffle_icon" />
+        <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/media_previous"
+            style="@style/Widget.MaterialFiles.Media.IconButton" android:contentDescription="@string/media_previous"
+            app:iconSize="32dp" app:icon="@drawable/media_previous_icon" />
+        <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/media_play_pause"
+            style="@style/Widget.MaterialFiles.Media.PlayButton" android:contentDescription="@string/media_play" app:icon="@drawable/media_play_icon" />
+        <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/media_next"
+            style="@style/Widget.MaterialFiles.Media.IconButton" android:contentDescription="@string/media_next"
+            app:iconSize="32dp" app:icon="@drawable/media_next_icon" />
+        <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/media_repeat"
+            style="@style/Widget.MaterialFiles.Media.IconButton" android:contentDescription="@string/media_repeat" app:icon="@drawable/media_repeat_icon" />
+    </LinearLayout>
+</LinearLayout>

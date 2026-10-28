@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<me.zhanghai.android.files.viewer.media.MusicPlayerLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/media_music" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="?attr/colorSurface" android:orientation="vertical">
+    <FrameLayout android:layout_width="match_parent" android:layout_height="match_parent">
+        <androidx.core.widget.NestedScrollView android:id="@+id/media_music_scroll"
+            android:layout_width="match_parent" android:layout_height="match_parent"
+            android:fillViewport="true" android:clipToPadding="false" android:scrollbars="none">
+            <LinearLayout android:id="@+id/media_music_body" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:gravity="center" android:orientation="vertical" android:paddingHorizontal="20dp"
+                android:paddingTop="12dp" android:paddingBottom="24dp">
+                <FrameLayout android:id="@+id/media_music_visual" android:layout_width="320dp" android:layout_height="320dp">
+                    <com.google.android.material.imageview.ShapeableImageView android:id="@+id/media_artwork"
+                        android:layout_width="match_parent" android:layout_height="match_parent" android:focusable="true"
+                        android:contentDescription="@string/media_show_lyrics"
+                        android:scaleType="centerCrop" android:src="@drawable/media_album_placeholder"
+                        app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.MaterialFiles.Media.Artwork" />
+                </FrameLayout>
+                <LinearLayout android:id="@+id/media_music_details" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="28dp">
+                    <TextView android:id="@+id/media_music_title" android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:ellipsize="end" android:maxLines="2" android:text="@string/media_music_title"
+                        android:textAppearance="?attr/textAppearanceHeadlineSmall" android:textColor="?attr/colorOnSurface" android:textStyle="bold" />
+                    <TextView android:id="@+id/media_music_artist" android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp" android:ellipsize="end" android:maxLines="2" android:text="@string/media_local_audio"
+                        android:textAppearance="?attr/textAppearanceBodyLarge" android:textColor="?attr/colorOnSurfaceVariant" />
+                    <TextView android:id="@+id/media_music_info" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp" android:textAppearance="?attr/textAppearanceLabelMedium"
+                        android:textColor="?attr/colorPrimary" android:accessibilityLiveRegion="polite" />
+                    <include android:id="@+id/media_music_transport" layout="@layout/media_music_controls"
+                        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" />
+                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:layout_marginTop="28dp" android:gravity="center" android:orientation="horizontal">
+                        <TextView android:id="@+id/media_music_speed" style="@style/Widget.MaterialFiles.Media.Speed"
+                            android:text="@string/media_normal_speed" android:contentDescription="@string/media_speed" />
+                        <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+                        <com.google.android.material.button.MaterialButton android:id="@+id/media_music_queue"
+                            style="@style/Widget.MaterialFiles.Media.IconButton" android:contentDescription="@string/media_queue"
+                            app:icon="@drawable/media_queue_icon" />
+                        <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+                        <com.google.android.material.button.MaterialButton android:id="@+id/media_load_lyrics"
+                            style="@style/Widget.MaterialFiles.Media.IconButton" android:contentDescription="@string/media_load_lyrics"
+                            app:icon="@drawable/media_subtitles_icon" />
+                        <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+                        <com.google.android.material.button.MaterialButton android:id="@+id/media_music_settings"
+                            style="@style/Widget.MaterialFiles.Media.IconButton" android:contentDescription="@string/media_settings"
+                            app:icon="@drawable/media_tune_icon" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
+        <include layout="@layout/media_music_lyrics" />
+    </FrameLayout>
+</me.zhanghai.android.files.viewer.media.MusicPlayerLayout>

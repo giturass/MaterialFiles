@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/media_video" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@android:color/black" android:theme="@style/Theme.MaterialFiles.Material3.Immersive" android:visibility="gone">
+    <me.zhanghai.android.files.viewer.media.AspectPlayerView android:id="@+id/media_player"
+        android:layout_width="match_parent" android:layout_height="match_parent" android:keepScreenOn="false"
+        app:show_buffering="when_playing" app:use_controller="false" app:use_artwork="false" />
+    <FrameLayout android:id="@+id/media_video_chrome" android:layout_width="match_parent" android:layout_height="match_parent"
+        android:background="@drawable/media_video_scrim" android:focusable="false">
+        <com.google.android.material.appbar.MaterialToolbar android:id="@+id/media_video_toolbar"
+            android:layout_width="match_parent" android:layout_height="64dp" android:layout_gravity="top"
+            android:background="@android:color/transparent" app:navigationIcon="?attr/homeAsUpIndicator"
+            app:navigationIconTint="@android:color/white" app:navigationContentDescription="@string/media_close_player"
+            app:title="@string/media_video_title" app:titleTextColor="@android:color/white"
+            app:subtitleTextColor="@color/media_video_secondary" app:titleTextAppearance="?attr/textAppearanceTitleMedium" />
+        <LinearLayout android:id="@+id/media_video_transport" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_gravity="center" android:gravity="center" android:layoutDirection="ltr" android:orientation="horizontal">
+            <com.google.android.material.button.MaterialButton android:id="@+id/media_rewind"
+                style="@style/Widget.MaterialFiles.Media.VideoIconButton" android:layout_marginEnd="32dp"
+                android:contentDescription="@string/media_rewind" app:iconSize="32dp" app:icon="@drawable/media_replay_10_icon" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/media_play_pause"
+                style="@style/Widget.MaterialFiles.Media.PlayButton" android:contentDescription="@string/media_play"
+                app:backgroundTint="@android:color/white" app:iconTint="@android:color/black" app:cornerRadius="40dp" app:icon="@drawable/media_play_icon" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/media_forward"
+                style="@style/Widget.MaterialFiles.Media.VideoIconButton" android:layout_marginStart="32dp"
+                android:contentDescription="@string/media_forward" app:iconSize="32dp" app:icon="@drawable/media_forward_10_icon" />
+        </LinearLayout>
+        <LinearLayout android:id="@+id/media_video_bottom" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_gravity="bottom" android:orientation="vertical" android:paddingHorizontal="20dp" android:paddingBottom="12dp">
+            <include layout="@layout/media_timeline" />
+            <LinearLayout android:id="@+id/media_video_actions" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="8dp" android:gravity="center_vertical" android:orientation="horizontal">
+                <LinearLayout android:id="@+id/media_video_display_actions" android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:gravity="center_vertical" android:orientation="horizontal">
+                    <TextView android:id="@+id/media_video_speed" style="@style/Widget.MaterialFiles.Media.Speed"
+                        android:text="@string/media_normal_speed" android:textColor="@android:color/white"
+                        android:contentDescription="@string/media_speed" />
+                    <com.google.android.material.button.MaterialButton android:id="@+id/media_video_rotate"
+                        style="@style/Widget.MaterialFiles.Media.VideoIconButton" android:contentDescription="@string/media_rotation" app:icon="@drawable/media_rotate_icon" />
+                    <com.google.android.material.button.MaterialButton android:id="@+id/media_video_aspect"
+                        style="@style/Widget.MaterialFiles.Media.VideoIconButton" android:contentDescription="@string/media_aspect" app:icon="@drawable/media_aspect_icon" />
+                </LinearLayout>
+                <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_gravity="end" android:gravity="center_vertical" android:orientation="horizontal">
+                    <com.google.android.material.button.MaterialButton android:id="@+id/media_video_subtitles"
+                        style="@style/Widget.MaterialFiles.Media.VideoIconButton" android:contentDescription="@string/media_subtitle" app:icon="@drawable/media_subtitles_icon" />
+                    <com.google.android.material.button.MaterialButton android:id="@+id/media_video_queue"
+                        style="@style/Widget.MaterialFiles.Media.VideoIconButton" android:contentDescription="@string/media_queue" app:icon="@drawable/media_queue_icon" />
+                    <com.google.android.material.button.MaterialButton android:id="@+id/media_video_fullscreen"
+                        style="@style/Widget.MaterialFiles.Media.VideoIconButton" android:contentDescription="@string/media_fullscreen" app:icon="@drawable/media_fullscreen_icon" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </FrameLayout>
+</FrameLayout>

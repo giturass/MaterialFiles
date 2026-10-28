@@ -46,6 +46,8 @@ android {
         main.java.srcDir '../third_party/sevenzip/jbinding-java'
         main.java.srcDir '../third_party/apkeditor/src/main/java'
         main.resources.srcDir '../third_party/apkeditor/src/main/resources'
+        main.java.srcDir '../third_party/bass/java'
+        main.jniLibs.srcDir '../third_party/bass/jniLibs'
     }
     androidResources {
         generateLocaleConfig true
@@ -129,6 +131,14 @@ dependencies {
 
 dependencies {
     testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.17'
+
+    def media3_version = '1.11.1'
+    implementation "androidx.media3:media3-exoplayer:$media3_version"
+    implementation "androidx.media3:media3-exoplayer-hls:$media3_version"
+    implementation "androidx.media3:media3-exoplayer-dash:$media3_version"
+    implementation "androidx.media3:media3-session:$media3_version"
+    implementation "androidx.media3:media3-ui:$media3_version"
 
     // Use the same published apksig release as AGP, through its in-process Java API.
     implementation 'com.android.tools.build:apksig:9.4.1'

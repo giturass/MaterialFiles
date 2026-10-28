@@ -1517,6 +1517,7 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
         } else {
             val intent = path.createViewIntent(mimeType, useInternalEditor = !withChooser)
                 .apply { maybeAddImageViewerActivityExtras(this, path, mimeType) }
+                .apply { if (!withChooser) maybeAddMediaPlayerExtras(this, file) }
                 .let {
                     if (withChooser) {
                         it.withChooser(
@@ -1531,6 +1532,22 @@ class FileListFragment : Fragment(), BreadcrumbLayout.Listener, FileListAdapter.
                 }
             startActivitySafe(intent)
         }
+    }
+
+    private fun maybeAddMediaPlayerExtras(intent: Intent, opened: FileItem) {
+        if (intent.component?.className != me.zhanghai.android.files.viewer.media.MediaPlayerActivity::class.java.name) return
+        val audio = me.zhanghai.android.files.viewer.media.PlaybackPolicy.isAudio(opened.name, opened.mimeType.value)
+        val paths = (0 until adapter.itemCount).map { adapter.getItem(it) }.filter {
+            !it.attributes.isDirectory && !it.path.isArchivePath &&
+                me.zhanghai.android.files.viewer.media.PlaybackPolicy.isMedia(it.name, it.mimeType.value) &&
+                me.zhanghai.android.files.viewer.media.PlaybackPolicy.isAudio(it.name, it.mimeType.value) == audio
+        }.map { it.path }
+        val position = paths.indexOf(opened.path)
+        if (position < 0) return
+        val start = (position - 50).coerceIn(0, (paths.size - 100).coerceAtLeast(0))
+        me.zhanghai.android.files.viewer.media.MediaPlayerActivity.putPlaylist(
+            intent, paths.subList(start, minOf(start + 100, paths.size)), position - start
+        )
     }
 
     private fun maybeAddImageViewerActivityExtras(intent: Intent, path: Path, mimeType: MimeType) {

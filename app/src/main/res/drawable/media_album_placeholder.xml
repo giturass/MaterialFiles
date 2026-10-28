@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp" android:height="320dp" android:viewportWidth="320" android:viewportHeight="320">
+    <path android:fillColor="?attr/colorSecondaryContainer" android:pathData="M0,0h320v320h-320z" />
+    <path android:fillColor="?attr/colorTertiaryContainer" android:pathData="M190,0h130v160C230,160 160,90 190,0z" />
+    <path android:fillColor="?attr/colorPrimary" android:fillAlpha="0.08" android:pathData="M0,190C100,150 190,220 180,320H0z" />
+    <path android:fillColor="?attr/colorOnSecondaryContainer" android:fillAlpha="0.94"
+        android:pathData="M160,56a104,104 0,1 0,0 208a104,104 0,1 0,0 -208" />
+    <path android:fillColor="@android:color/transparent" android:strokeColor="?attr/colorSecondaryContainer"
+        android:strokeAlpha="0.18" android:strokeWidth="1"
+        android:pathData="M160,70a90,90 0,1 0,0 180a90,90 0,1 0,0 -180M160,82a78,78 0,1 0,0 156a78,78 0,1 0,0 -156M160,94a66,66 0,1 0,0 132a66,66 0,1 0,0 -132" />
+    <path android:fillColor="?attr/colorPrimaryContainer" android:pathData="M160,120a40,40 0,1 0,0 80a40,40 0,1 0,0 -80" />
+    <path android:fillColor="?attr/colorOnPrimaryContainer" android:pathData="M165,139v29.5a10,10 0,1 1,-5 -8.66V145h15v-6z" />
+    <path android:fillColor="?attr/colorOnSecondaryContainer" android:fillAlpha="0.3"
+        android:pathData="M268,250h4v16h-4zM278,240h4v36h-4zM288,246h4v24h-4z" />
+</vector>

@@ -6,6 +6,18 @@
   -->
 
 <notices>
+    <notice>
+        <name>AndroidX Media3 / ExoPlayer</name>
+        <url>https://github.com/androidx/media</url>
+        <copyright>Copyright The Android Open Source Project</copyright>
+        <license>Apache Software License 2.0</license>
+    </notice>
+    <notice>
+        <name>BASS / BASSALAC / BASSFLAC / BASSWV</name>
+        <url>https://www.un4seen.com/</url>
+        <copyright>Copyright Un4seen Developments Ltd.; ALAC: Apple Inc. and David Hammerton; FLAC: Josh Coalson and Xiph.Org Foundation; WavPack: David Bryant</copyright>
+        <license>BASS and add-on licences</license>
+    </notice>
 
     <notice>
         <name>APKEditor / ARSCLib / JCommand</name>

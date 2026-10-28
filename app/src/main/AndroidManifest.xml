@@ -19,6 +19,7 @@
         android:name="android.permission.FOREGROUND_SERVICE"
         tools:ignore="ForegroundServicesPolicy" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
@@ -409,6 +410,39 @@
                 <data android:mimeType="image/*" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".viewer.media.MediaPlayerActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:supportsPictureInPicture="true"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
+            android:label="@string/media_player_title"
+            android:theme="@style/Theme.MaterialFiles" />
+
+        <activity
+            android:name=".viewer.media.OpenMediaActivity"
+            android:exported="true"
+            android:label="@string/media_player_title"
+            android:theme="@style/Theme.MaterialFiles.Translucent">
+            <intent-filter tools:ignore="AppLinkUrlError">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="video/*" />
+                <data android:mimeType="application/ogg" />
+                <data android:mimeType="application/x-matroska" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".viewer.media.MediaPlaybackService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
 
         <service
             android:name="me.zhanghai.android.files.filejob.FileJobService"

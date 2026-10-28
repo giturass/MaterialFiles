@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="wrap_content" android:layoutDirection="ltr" android:orientation="vertical">
+    <com.google.android.material.slider.Slider android:id="@+id/media_seek" android:layout_width="match_parent" android:layout_height="48dp"
+        android:contentDescription="@string/media_seek" android:valueFrom="0" android:valueTo="1000"
+        app:labelBehavior="gone" app:thumbRadius="7dp" app:trackHeight="6dp" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingHorizontal="4dp">
+        <TextView android:id="@+id/media_position" style="@style/Widget.MaterialFiles.Media.Time"
+            android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="@string/media_zero_time" />
+        <TextView android:id="@+id/media_duration" style="@style/Widget.MaterialFiles.Media.Time"
+            android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/media_unknown_time" />
+    </LinearLayout>
+</LinearLayout>

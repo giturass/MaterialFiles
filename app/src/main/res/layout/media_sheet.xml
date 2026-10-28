@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent"
+    android:layout_height="wrap_content" android:orientation="vertical" android:paddingBottom="16dp">
+    <View android:layout_width="32dp" android:layout_height="4dp" android:layout_gravity="center_horizontal"
+        android:layout_marginTop="12dp" android:layout_marginBottom="20dp" android:background="@drawable/media_sheet_handle"
+        android:importantForAccessibility="no" />
+    <TextView android:id="@+id/media_sheet_title" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:paddingHorizontal="24dp" android:accessibilityHeading="true" android:textAppearance="?attr/textAppearanceHeadlineSmall" />
+    <TextView android:id="@+id/media_sheet_subtitle" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="6dp" android:paddingHorizontal="24dp" android:textAppearance="?attr/textAppearanceBodyMedium"
+        android:textColor="?attr/colorOnSurfaceVariant" />
+    <androidx.recyclerview.widget.RecyclerView android:id="@+id/media_sheet_list" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:layout_marginTop="16dp" android:clipToPadding="false"
+        android:paddingHorizontal="12dp" android:paddingBottom="8dp" />
+</LinearLayout>
