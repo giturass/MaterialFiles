@@ -61,6 +61,7 @@
     <string name="media_subtitle_file">加载字幕文件</string>
     <string name="media_subtitle_size">字幕大小</string>
     <string name="media_subtitle_invalid">请选择 SRT、ASS、SSA、VTT 或 TTML 字幕</string>
+    <string name="media_tracks_changed">播放曲目或轨道已变化，请重新选择</string>
     <string-array name="media_decoder_modes"><item>自动</item><item>硬件解码</item><item>软件解码</item></string-array>
     <string-array name="media_repeat_modes"><item>顺序播放</item><item>单曲循环</item><item>列表循环</item></string-array>
     <string-array name="media_aspect_modes"><item>适应屏幕</item><item>裁切填满</item><item>拉伸填满</item><item>16:9</item><item>4:3</item></string-array>

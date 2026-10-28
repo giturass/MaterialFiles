@@ -414,7 +414,7 @@
         <activity
             android:name=".viewer.media.MediaPlayerActivity"
             android:exported="false"
-            android:launchMode="singleTop"
+            android:launchMode="singleTask"
             android:supportsPictureInPicture="true"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:label="@string/media_player_title"

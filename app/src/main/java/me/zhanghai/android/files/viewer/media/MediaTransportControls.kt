@@ -58,8 +58,8 @@ internal class MediaTransportControls(
 
     init {
         play.setOnClickListener { player?.let(Util::handlePlayPauseButtonAction); onInteraction(false) }
-        previous?.setOnClickListener { player?.seekToPreviousMediaItem(); onInteraction(false) }
-        next?.setOnClickListener { player?.seekToNextMediaItem(); onInteraction(false) }
+        previous?.setOnClickListener { player?.let { PlaybackActions.seekToAdjacentMediaItem(it, false) }; onInteraction(false) }
+        next?.setOnClickListener { player?.let { PlaybackActions.seekToAdjacentMediaItem(it, true) }; onInteraction(false) }
         rewind?.setOnClickListener { player?.seekBack(); onInteraction(false) }
         forward?.setOnClickListener { player?.seekForward(); onInteraction(false) }
         shuffle?.setOnClickListener {

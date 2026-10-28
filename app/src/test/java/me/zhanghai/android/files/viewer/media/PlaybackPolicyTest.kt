@@ -5,6 +5,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PlaybackPolicyTest {
+    @Test fun actualTracksOverrideTheMediaTypeHintForThePlayerLayout() {
+        for (isMusic in listOf(false, true)) {
+            assertTrue(PlaybackPolicy.isVideo(isMusic, hasAudioTrack = true, hasVideoTrack = true))
+            assertTrue(PlaybackPolicy.isVideo(isMusic, hasAudioTrack = false, hasVideoTrack = true))
+            assertFalse(PlaybackPolicy.isVideo(isMusic, hasAudioTrack = true, hasVideoTrack = false))
+        }
+        assertFalse(PlaybackPolicy.isVideo(isMusic = true, hasAudioTrack = false, hasVideoTrack = false))
+        assertTrue(PlaybackPolicy.isVideo(isMusic = false, hasAudioTrack = false, hasVideoTrack = false))
+    }
+
     private fun canFallback(
         code: Int = PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
         scheme: String? = "content",

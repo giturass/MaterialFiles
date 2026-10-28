@@ -230,23 +230,12 @@ class MediaPlaybackService : MediaSessionService() {
                     MimeTypes.TEXT_SSA, MimeTypes.TEXT_VTT, MimeTypes.APPLICATION_TTML)) {
                     return Futures.immediateFuture(SessionResult(SessionError.ERROR_BAD_VALUE))
                 }
-                val item = player.currentMediaItem
-                    ?: return Futures.immediateFuture(SessionResult(SessionError.ERROR_INVALID_STATE))
-                if (args.getString("subtitle_media_id") != item.mediaId) {
-                    return Futures.immediateFuture(SessionResult(SessionError.ERROR_INVALID_STATE))
-                }
                 val subtitle = MediaItem.SubtitleConfiguration.Builder(uri).setMimeType(mime)
                     .setLabel(args.getString("subtitle_name"))
                     .setSelectionFlags(C.SELECTION_FLAG_DEFAULT).build()
-                val position = player.currentPosition
-                val index = player.currentMediaItemIndex
-                val play = player.playWhenReady
-                player.replaceMediaItem(index, item.buildUpon().setSubtitleConfigurations(listOf(subtitle)).build())
-                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                    .clearOverridesOfType(C.TRACK_TYPE_TEXT).setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
-                player.seekTo(index, position)
-                player.prepare()
-                player.playWhenReady = play
+                if (!PlaybackActions.applySubtitle(player, args.getString("subtitle_media_id").orEmpty(), subtitle)) {
+                    return Futures.immediateFuture(SessionResult(SessionError.ERROR_INVALID_STATE))
+                }
             }
             getSharedPreferences(PREFERENCES, MODE_PRIVATE).edit()
                 .putInt(DECODER, decoderMode).putBoolean(BACKGROUND, background).apply()

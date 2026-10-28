@@ -41,6 +41,8 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionError
+import androidx.media3.session.SessionResult
 import androidx.media3.session.SessionToken
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.DefaultTrackNameProvider
@@ -50,10 +52,14 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import coil.load
 import com.google.common.util.concurrent.ListenableFuture
 import java8.nio.file.Path
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.Dispatchers
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import me.zhanghai.android.files.R
 import me.zhanghai.android.files.app.AppActivity
 import me.zhanghai.android.files.file.fileProviderUri
@@ -77,6 +83,7 @@ class MediaPlayerActivity : AppActivity() {
     private var videoControlsVisible = true
     private var videoScrubbing = false
     private var dialog: Dialog? = null
+    private var trackDialog: Dialog? = null
     private var artworkMediaId: String? = null
     private var artworkBytes: ByteArray? = null
     private var artworkUri: Uri? = null
@@ -84,6 +91,9 @@ class MediaPlayerActivity : AppActivity() {
     private var controller: MediaController? = null
     private var connection: ListenableFuture<MediaController>? = null
     private var openJob: Job? = null
+    private var subtitleJob: Job? = null
+    private var pendingSubtitle: Bundle? = null
+    private var playbackSnapshot: PlaybackSnapshot? = null
     private var pendingOpen = false
     private var background = true
     private var decoder = 0
@@ -105,7 +115,12 @@ class MediaPlayerActivity : AppActivity() {
         }
     }
     private val listener = object : Player.Listener {
-        override fun onEvents(player: Player, events: Player.Events) { updateUi() }
+        override fun onEvents(player: Player, events: Player.Events) {
+            if (events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION) || events.contains(Player.EVENT_TRACKS_CHANGED)) {
+                trackDialog?.dismiss()
+            }
+            updateUi()
+        }
     }
     private val lyricsPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         val target = lyricsMediaId
@@ -120,26 +135,17 @@ class MediaPlayerActivity : AppActivity() {
         }
     }
     private val subtitlePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
+        val target = subtitleMediaId
+        subtitleMediaId = null
+        if (uri != null && target != null) {
             try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
             catch (_: SecurityException) { /* A provider may only offer a transient grant. */ }
-            lifecycleScope.launch {
-                val name = withContext(Dispatchers.IO) { displayName(uri) }
-                val mime = when (name.substringAfterLast('.', "").lowercase()) {
-                    "srt" -> MimeTypes.APPLICATION_SUBRIP
-                    "ass", "ssa" -> MimeTypes.TEXT_SSA
-                    "vtt" -> MimeTypes.TEXT_VTT
-                    "ttml", "xml" -> MimeTypes.APPLICATION_TTML
-                    else -> null
-                }
-                if (mime == null) toast(getString(R.string.media_subtitle_invalid))
-                else sendSettings(Bundle().apply {
-                    putString("subtitle_media_id", subtitleMediaId)
-                    putString("subtitle_uri", uri.toString())
-                    putString("subtitle_mime", mime)
-                    putString("subtitle_name", name)
-                })
+            subtitleJob?.cancel()
+            pendingSubtitle = Bundle().apply {
+                putString("subtitle_media_id", target)
+                putString("subtitle_uri", uri.toString())
             }
+            applyPendingSubtitle()
         }
     }
 
@@ -165,6 +171,8 @@ class MediaPlayerActivity : AppActivity() {
         }
         fullscreen = savedInstanceState?.getBoolean("fullscreen") ?: false
         subtitleMediaId = savedInstanceState?.getString("subtitle_media_id")
+        pendingSubtitle = savedInstanceState?.getBundle("pending_subtitle")
+        playbackSnapshot = savedInstanceState?.getBundle("playback_snapshot")?.let(PlaybackSnapshot::fromBundle)
         lyricsMediaId = savedInstanceState?.getString("lyrics_media_id")
         showLyrics = savedInstanceState?.getBoolean("show_lyrics") ?: false
         onBackPressedDispatcher.addCallback(this, lyricsBack)
@@ -238,7 +246,7 @@ class MediaPlayerActivity : AppActivity() {
         rotation = savedInstanceState?.getInt("rotation") ?: 0
         subtitleSize = savedInstanceState?.getFloat("subtitle_size") ?: 20f
         applyAspect()
-        playerView.subtitleView?.setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, subtitleSize)
+        applySubtitleSize()
         pendingOpen = savedInstanceState?.getBoolean("pending_open") ?: (intent.data != null)
         videoMode = savedInstanceState?.getBoolean("video_mode")
             ?: (intent.data != null && !PlaybackPolicy.isAudio(intent.data?.lastPathSegment.orEmpty(), intent.type))
@@ -259,8 +267,13 @@ class MediaPlayerActivity : AppActivity() {
                     background = it.sessionExtras.getBoolean(MediaPlaybackService.BACKGROUND, background)
                     decoder = it.sessionExtras.getInt(MediaPlaybackService.DECODER, decoder)
                 }
-                updateUi()
+                val player = checkNotNull(controller)
                 if (pendingOpen) openIntent()
+                else if (player.mediaItemCount == 0 && playbackSnapshot?.restore(player) != true && intent.data != null) {
+                    pendingOpen = true
+                    openIntent()
+                }
+                updateUi()
             } catch (e: Exception) { showError(getString(R.string.media_connect_error, e.cause?.message ?: e.message)) }
         }, ContextCompat.getMainExecutor(this))
     }
@@ -269,6 +282,11 @@ class MediaPlayerActivity : AppActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         if (intent.data != null) {
+            dialog?.dismiss()
+            subtitleJob?.cancel()
+            pendingSubtitle = null
+            subtitleMediaId = null
+            playbackSnapshot = null
             pendingOpen = true
             if (controller != null) openIntent()
         }
@@ -277,11 +295,14 @@ class MediaPlayerActivity : AppActivity() {
     override fun onStop() {
         isStarted = false
         openJob?.cancel()
+        subtitleJob?.cancel()
         dialog?.dismiss()
         aspectToast?.cancel()
         aspectToast = null
         videoChrome.removeCallbacks(hideVideoControls)
-        if (!background && !isChangingConfigurations && !isInPictureInPictureMode) controller?.pause()
+        // Entering PiP calls onPause, not onStop. A stopped/closed PiP must obey background policy.
+        if (!background && !isChangingConfigurations) controller?.pause()
+        capturePlaybackSnapshot()
         playerView.player = null
         musicTransport.player = null
         musicLyrics.update(null)
@@ -305,6 +326,9 @@ class MediaPlayerActivity : AppActivity() {
         outState.putString("subtitle_media_id", subtitleMediaId)
         outState.putString("lyrics_media_id", lyricsMediaId)
         outState.putBoolean("show_lyrics", showLyrics)
+        outState.putBundle("pending_subtitle", pendingSubtitle)
+        capturePlaybackSnapshot()
+        outState.putBundle("playback_snapshot", playbackSnapshot?.toBundle())
         super.onSaveInstanceState(outState)
     }
 
@@ -332,6 +356,7 @@ class MediaPlayerActivity : AppActivity() {
                             .setMimeType(mime)
                             .setMediaMetadata(MediaMetadata.Builder().setTitle(name)
                                 .setExtras(Bundle().apply {
+                                    putString(PlaybackSnapshot.SOURCE_MIME, mime)
                                     paths.getOrNull(index)?.let { putString(MusicLyricsController.SOURCE_PATH, it.toUri().toString()) }
                                 })
                                 .setIsPlayable(true).setIsBrowsable(false)
@@ -345,6 +370,7 @@ class MediaPlayerActivity : AppActivity() {
                 player.prepare()
                 player.play()
                 pendingOpen = false
+                applyPendingSubtitle()
             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
             catch (e: Exception) { showError(getString(R.string.media_error, e.message)) }
         }
@@ -364,7 +390,12 @@ class MediaPlayerActivity : AppActivity() {
     private fun updateUi() {
         val player = controller ?: return
         if (player.mediaItemCount > 0) {
-            val isVideo = player.mediaMetadata.mediaType != MediaMetadata.MEDIA_TYPE_MUSIC
+            val groups = player.currentTracks.groups
+            val isVideo = PlaybackPolicy.isVideo(
+                isMusic = player.mediaMetadata.mediaType == MediaMetadata.MEDIA_TYPE_MUSIC,
+                hasAudioTrack = groups.any { it.type == C.TRACK_TYPE_AUDIO },
+                hasVideoTrack = groups.any { it.type == C.TRACK_TYPE_VIDEO }
+            )
             if (videoMode != isVideo) {
                 videoMode = isVideo
                 fullscreen = false
@@ -413,6 +444,79 @@ class MediaPlayerActivity : AppActivity() {
             error != null -> showError(getString(R.string.media_error, error.cause?.message ?: error.errorCodeName))
             player.mediaItemCount == 0 -> showError(getString(R.string.media_empty))
             else -> status.visibility = View.GONE
+        }
+        applyPendingSubtitle()
+    }
+
+    private fun capturePlaybackSnapshot() {
+        if (!pendingOpen) controller?.let { PlaybackSnapshot.capture(it) }?.let { playbackSnapshot = it }
+    }
+
+    private fun applyPendingSubtitle() {
+        val request = pendingSubtitle ?: return
+        val player = controller ?: return
+        if (!isStarted || pendingOpen || player.mediaItemCount == 0 || subtitleJob?.isActive == true) return
+        if (request.getString("subtitle_media_id") != player.currentMediaItem?.mediaId) {
+            pendingSubtitle = null
+            toast(getString(R.string.media_tracks_changed))
+            return
+        }
+        subtitleJob = lifecycleScope.launch {
+            try {
+                val uri = Uri.parse(request.getString("subtitle_uri"))
+                val name = withContext(Dispatchers.IO) { displayName(uri) }
+                if (controller !== player || !isStarted || pendingSubtitle !== request) return@launch
+                val mime = when (name.substringAfterLast('.', "").lowercase()) {
+                    "srt" -> MimeTypes.APPLICATION_SUBRIP
+                    "ass", "ssa" -> MimeTypes.TEXT_SSA
+                    "vtt" -> MimeTypes.TEXT_VTT
+                    "ttml", "xml" -> MimeTypes.APPLICATION_TTML
+                    else -> null
+                }
+                if (mime == null) {
+                    pendingSubtitle = null
+                    toast(getString(R.string.media_subtitle_invalid))
+                    return@launch
+                }
+                if (request.getString("subtitle_media_id") != player.currentMediaItem?.mediaId) {
+                    pendingSubtitle = null
+                    toast(getString(R.string.media_tracks_changed))
+                    return@launch
+                }
+                val args = Bundle(request).apply {
+                    putString("subtitle_mime", mime)
+                    putString("subtitle_name", name)
+                }
+                val future = player.sendCustomCommand(SessionCommand(MediaPlaybackService.SETTINGS, Bundle.EMPTY), args)
+                val result = suspendCancellableCoroutine<SessionResult> { continuation ->
+                    future.addListener({
+                        if (continuation.isActive) {
+                            try { continuation.resume(future.get()) }
+                            catch (e: Exception) { continuation.resumeWithException(e) }
+                        }
+                    }, ContextCompat.getMainExecutor(this@MediaPlayerActivity))
+                    continuation.invokeOnCancellation { future.cancel(false) }
+                }
+                if (controller !== player || pendingSubtitle !== request || !isStarted
+                    || result.resultCode == SessionError.ERROR_SESSION_DISCONNECTED) return@launch
+                pendingSubtitle = null
+                if (result.resultCode != SessionResult.RESULT_SUCCESS) {
+                    toast(getString(R.string.media_error, result.resultCode.toString()))
+                }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                if (controller === player && pendingSubtitle === request && isStarted) {
+                    pendingSubtitle = null
+                    toast(getString(R.string.media_error, e.message))
+                }
+            }
+        }
+    }
+
+    private fun applySubtitleSize() {
+        playerView.subtitleView?.apply {
+            setApplyEmbeddedFontSizes(false)
+            setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, subtitleSize)
         }
     }
 
@@ -539,6 +643,7 @@ class MediaPlayerActivity : AppActivity() {
         videoChrome.removeCallbacks(hideVideoControls)
         value.setOnDismissListener {
             if (dialog === value) dialog = null
+            if (trackDialog === value) trackDialog = null
             scheduleVideoControlsHide()
         }
         value.show()
@@ -622,7 +727,9 @@ class MediaPlayerActivity : AppActivity() {
 
     private fun chooseTrack(type: Int) {
         val player = controller ?: return
-        val tracks = player.currentTracks.groups.filter { it.type == type }.flatMap { group ->
+        val mediaId = player.currentMediaItem?.mediaId
+        val snapshot = player.currentTracks
+        val tracks = snapshot.groups.filter { it.type == type }.flatMap { group ->
             (0 until group.length).filter { group.isTrackSupported(it) }.map { group to it }
         }
         val names = mutableListOf(getString(R.string.media_auto), getString(R.string.media_off))
@@ -635,7 +742,11 @@ class MediaPlayerActivity : AppActivity() {
             else -> 0
         }
         choose(if (type == C.TRACK_TYPE_AUDIO) R.string.media_audio_track else R.string.media_subtitle,
-            names.toTypedArray(), selected) { choice ->
+            names.toTypedArray(), selected, forTracks = true) { choice ->
+            if (controller !== player || player.currentMediaItem?.mediaId != mediaId || player.currentTracks != snapshot) {
+                toast(getString(R.string.media_tracks_changed))
+                return@choose
+            }
             val parameters = player.trackSelectionParameters.buildUpon()
                 .clearOverridesOfType(type).setTrackTypeDisabled(type, choice == 1)
             if (choice >= 2) {
@@ -658,7 +769,7 @@ class MediaPlayerActivity : AppActivity() {
                 2 -> choose(R.string.media_subtitle_size, arrayOf("16", "20", "24", "28", "32"),
                     listOf(16f, 20f, 24f, 28f, 32f).indexOf(subtitleSize)) {
                     subtitleSize = floatArrayOf(16f, 20f, 24f, 28f, 32f)[it]
-                    playerView.subtitleView?.setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, subtitleSize)
+                    applySubtitleSize()
                 }
             }
         }.create())
@@ -679,7 +790,7 @@ class MediaPlayerActivity : AppActivity() {
                     player.getMediaItemAt(it).mediaId == item.mediaId
                 } ?: return@MediaOption
                 player.seekToDefaultPosition(currentIndex)
-                if (player.playbackState == Player.STATE_IDLE) player.prepare()
+                PlaybackActions.prepareIfIdle(player)
                 player.play()
             }
         }
@@ -690,7 +801,7 @@ class MediaPlayerActivity : AppActivity() {
     private fun enterPip() {
         val player = controller ?: return
         if (!packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
-            || player.mediaMetadata.mediaType == MediaMetadata.MEDIA_TYPE_MUSIC) return
+            || !videoMode) return
         val size = player.videoSize
         val ratio = if (size.height > 0) (size.width * size.pixelWidthHeightRatio / size.height).coerceIn(0.42f, 2.39f) else 16f / 9
         try {
@@ -734,10 +845,12 @@ class MediaPlayerActivity : AppActivity() {
             } catch (e: Exception) { toast(getString(R.string.media_error, e.message)) }
         }, ContextCompat.getMainExecutor(this))
     }
-    private fun choose(title: Int, items: Array<String>, selected: Int, action: (Int) -> Unit) {
-        showDialog(MaterialAlertDialogBuilder(playerContext).setTitle(title).setSingleChoiceItems(items, selected) { dialog, which ->
+    private fun choose(title: Int, items: Array<String>, selected: Int, forTracks: Boolean = false, action: (Int) -> Unit) {
+        val value = MaterialAlertDialogBuilder(playerContext).setTitle(title).setSingleChoiceItems(items, selected) { dialog, which ->
             dialog.dismiss(); action(which)
-        }.setNegativeButton(android.R.string.cancel, null).create())
+        }.setNegativeButton(android.R.string.cancel, null).create()
+        showDialog(value)
+        if (forTracks) trackDialog = value
     }
     private fun showError(message: String) {
         status.text = message

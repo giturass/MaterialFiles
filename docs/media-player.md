@@ -9,6 +9,7 @@
 ## 播放界面
 
 音乐与视频使用独立的 Material Design 3 布局，切换媒体时自动选择对应界面。
+轨道解析后以实际音视频轨道决定布局，避免文件扩展名或 MIME 类型误标时只播放声音。
 
 - 音乐页跟随应用的浅色、深色与系统动态配色。大圆角封面支持媒体内嵌图片，缺少封面时
   显示随主题着色的唱片插画；封面尺寸增大，移除顶部“正在播放”、向下按钮和右上角切换。
@@ -58,10 +59,25 @@
 | 全屏 | 使用播放器全屏按钮切换，返回键先退出全屏 |
 | 音轨、字幕 | Media3 `Tracks` 和 `TrackSelectionOverride`；自动、关闭或指定轨道 |
 | 外挂字幕 | 系统文件选择器加载 SRT、ASS/SSA、WebVTT、TTML，保留播放位置；字幕显示以 Media3 支持范围为准 |
-| 字幕大小 | 16–32sp，保留界面状态 |
+| 字幕大小 | 16–32sp，覆盖内嵌字号，保留界面状态及其他字幕样式 |
 | 后台播放 | `MediaSessionService` + `MediaSession`，界面用 `MediaController`；前台服务类型 `mediaPlayback` |
 | 系统控制 | MediaStyle 通知、锁屏、耳机/蓝牙媒体按键、音频焦点与拔耳机暂停 |
-| 画中画 | 视频手动进入系统 PiP；系统是否允许由设备设置决定 |
+| 画中画 | 视频手动进入系统 PiP；复用现有播放器页面，系统是否允许由设备设置决定 |
+| 页面状态恢复 | 服务列表为空时恢复系统保存的列表、位置、倍速、循环、随机、暂停状态及外挂字幕；仍在运行的服务状态优先 |
+
+播放错误后使用上一曲、下一曲会重新准备所选曲目，并保留暂停或播放意图。
+从列表明确选曲时继续播放。音轨或字幕选择面板在换曲、轨道更新时关闭，提交前再次检查
+对应曲目与轨道，避免把旧 TrackGroup 应用到新的媒体。
+
+外挂字幕选择结果先保留在页面状态中，控制器连接后再提交；处理期间停止页面时保留请求，
+重连后重发。服务检查目标曲目，相同字幕重复提交不会重新定位或加载视频。固定字幕字号
+关闭 Media3 的内嵌字号覆盖，字幕颜色等其他样式继续保留。
+
+系统重建页面且服务列表为空时，从界面保存状态恢复最多 100 项；MediaController 不提供
+LocalConfiguration，因此通过稳定 mediaId 和来源元数据恢复原始 URI、MIME 及外挂字幕，
+BASS 兜底项也恢复原始来源。保存时排除封面和无关元数据。新的打开请求优先于旧状态；
+已存活服务的列表和进度优先于界面快照。关闭 PiP 或页面进入停止状态时，禁用后台播放
+会暂停；进入 PiP 的 onPause 保持播放。
 
 软解仍依赖设备公开的软件 MediaCodec，不代表任意视频格式均可软解。未加入 FFmpeg/VLC
 视频解码扩展。强制解码模式找不到可用解码器时显示播放错误。
@@ -115,6 +131,10 @@ Fluid Cloud 支持指定服务和应用，功能因国家、地区而异。另�
 三个媒体组件、BASS JNI 桥和四个 ARM64 库的 16 KiB 对齐。
 
 单元测试覆盖 RF64 大文件头、无效帧参数、兜底错误边界、视频误分类、来源与 DRM 限制和扩展名识别。
+2026-10-28 回归增加错误后前后曲准备与暂停意图、命令可用性、实际轨道决定布局、外挂字幕
+重复提交及过期结果、界面快照 Parcel 往返、原始 URI/MIME/字幕恢复、存活服务优先与旧轨道
+覆盖清理。Bundle、Uri 和 Parcel 使用仅测试依赖 Robolectric 4.17（API 35），不加入 APK。
+这些测试使用记录调用的 Player，不模拟真实解码或系统 Activity / PiP 生命周期。
 歌词测试新增多时间戳、offset、前后定位、译文合并、空歌词、编码、ID3 USLT 及异常输入；
 本地仅检查资源 XML、引用和差异格式，单元测试由 GitHub Actions 编译运行。歌词滚动与
 下滑退出仍需 APK 实机交互验收。
@@ -158,6 +178,10 @@ MediaItem，使无扩展名的 HLS / DASH 地址选择正确的媒体源；播�
 - [Media3 支持格式](https://developer.android.com/media/media3/exoplayer/supported-formats)
 - [MediaSessionService 后台播放](https://developer.android.com/media/media3/session/background-playback)
 - [Media3 轨道选择](https://developer.android.com/media/media3/exoplayer/track-selection)
+- [Android PiP：singleTask 与 onStop 播放控制](https://developer.android.com/develop/ui/views/picture-in-picture)
+- [Media3 1.11.1 MediaItem：控制器省略 LocalConfiguration 与完整 Bundle 保存](https://github.com/androidx/media/blob/1.11.1/libraries/common/src/main/java/androidx/media3/common/MediaItem.java)
+- [Media3 1.11.1 TrackSelectionOverride：相等的 TrackGroup 才能应用选择](https://github.com/androidx/media/blob/1.11.1/libraries/common/src/main/java/androidx/media3/common/TrackSelectionOverride.java)
+- [Media3 1.11.1 SubtitleView：内嵌字号覆盖](https://github.com/androidx/media/blob/1.11.1/libraries/ui/src/main/java/androidx/media3/ui/SubtitleView.java)
 - [Media3 播放控制行为](https://github.com/androidx/media/blob/1.11.1/libraries/common/src/main/java/androidx/media3/common/util/Util.java)
 - [Material Slider 属性](https://github.com/material-components/material-components-android/blob/1.14.0/lib/java/com/google/android/material/slider/res/values/attrs.xml)
 - [Media3 1.11.1 WAV/RF64 读取实现](https://github.com/androidx/media/blob/1.11.1/libraries/extractor/src/main/java/androidx/media3/extractor/wav/WavHeaderReader.java)
